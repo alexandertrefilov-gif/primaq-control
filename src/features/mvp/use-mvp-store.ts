@@ -32,6 +32,7 @@ import {
   withoutMachinePrefix
 } from "./calculations";
 import { loadSettingsFromCloud, syncSettingsToCloud } from "./settings-sync";
+import { loadInventoryFromCloud, syncInventoryToCloud } from "./inventory-sync";
 import type {
   DayReport,
   CurrentOrder,
@@ -1753,6 +1754,7 @@ function persistState(nextState: MvpState) {
   window.localStorage.setItem(completedOrdersStorageKey, JSON.stringify(nextState.completedOrders));
 
   void syncSettingsToCloud(nextState);
+  void syncInventoryToCloud(nextState);
 }
 
 function createSalesResetState(current: MvpState): MvpState {
@@ -1806,6 +1808,23 @@ export function useMvpStore() {
         recipeTemplates: cloudSettings.recipeTemplates ?? current.recipeTemplates,
         sumupSettings: cloudSettings.sumupSettings ?? current.sumupSettings,
         favorites: cloudSettings.favorites ?? current.favorites
+      }));
+    });
+
+    void loadInventoryFromCloud().then((cloudInventory) => {
+      if (!cloudInventory) {
+        return;
+      }
+
+      setState((current) => ({
+        ...current,
+        inventory: cloudInventory.inventory ?? current.inventory,
+        generalStock: cloudInventory.generalStock ?? current.generalStock,
+        generalStockMovements: cloudInventory.generalStockMovements ?? current.generalStockMovements,
+        inventoryMovements: cloudInventory.inventoryMovements ?? current.inventoryMovements,
+        materialCategories: cloudInventory.materialCategories ?? current.materialCategories,
+        materialItems: cloudInventory.materialItems ?? current.materialItems,
+        shiftMaterialAssignments: cloudInventory.shiftMaterialAssignments ?? current.shiftMaterialAssignments
       }));
     });
   }, []);
