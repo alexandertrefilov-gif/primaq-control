@@ -31,7 +31,7 @@ import {
   parsePriceToCents,
   withoutMachinePrefix
 } from "./calculations";
-import { syncSettingsToCloud } from "./settings-sync";
+import { loadSettingsFromCloud, syncSettingsToCloud } from "./settings-sync";
 import type {
   DayReport,
   CurrentOrder,
@@ -1783,11 +1783,31 @@ export function useMvpStore() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    try {
-      setState(readStoredState());
-    } finally {
-      setHydrated(true);
-    }
+    const localState = readStoredState();
+    setState(localState);
+    setHydrated(true);
+
+    void loadSettingsFromCloud().then((cloudSettings) => {
+      if (!cloudSettings) {
+        return;
+      }
+
+      setState((current) => ({
+        ...current,
+        machines: cloudSettings.machines ?? current.machines,
+        softServeItems: cloudSettings.softServeItems ?? current.softServeItems,
+        stockFlavors: cloudSettings.stockFlavors ?? current.stockFlavors,
+        portionWeights: cloudSettings.portionWeights ?? current.portionWeights,
+        aromas: cloudSettings.aromas ?? current.aromas,
+        packagingSizes: cloudSettings.packagingSizes ?? current.packagingSizes,
+        productSettings: cloudSettings.productSettings ?? current.productSettings,
+        salesLayout: cloudSettings.salesLayout ?? current.salesLayout,
+        toppings: cloudSettings.toppings ?? current.toppings,
+        recipeTemplates: cloudSettings.recipeTemplates ?? current.recipeTemplates,
+        sumupSettings: cloudSettings.sumupSettings ?? current.sumupSettings,
+        favorites: cloudSettings.favorites ?? current.favorites
+      }));
+    });
   }, []);
 
   useEffect(() => {

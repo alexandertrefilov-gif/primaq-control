@@ -38,3 +38,24 @@ export async function syncSettingsToCloud(state: MvpState) {
     console.warn("Supabase settings sync unavailable", error);
   }
 }
+
+
+export async function loadSettingsFromCloud(): Promise<Partial<MvpState> | null> {
+  try {
+    const { data, error } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", SETTINGS_ROW_KEY)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("Supabase settings load failed", error);
+      return null;
+    }
+
+    return (data?.value as Partial<MvpState>) ?? null;
+  } catch (error) {
+    console.warn("Supabase settings load unavailable", error);
+    return null;
+  }
+}
