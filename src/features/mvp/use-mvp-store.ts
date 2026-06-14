@@ -31,6 +31,7 @@ import {
   parsePriceToCents,
   withoutMachinePrefix
 } from "./calculations";
+import { syncSettingsToCloud } from "./settings-sync";
 import type {
   DayReport,
   CurrentOrder,
@@ -1750,6 +1751,8 @@ function persistState(nextState: MvpState) {
   window.localStorage.setItem(activeOrderIdStorageKey, JSON.stringify(nextState.activeOrderId));
   window.localStorage.setItem(dailySalesStorageKey, JSON.stringify(nextState.dailySales));
   window.localStorage.setItem(completedOrdersStorageKey, JSON.stringify(nextState.completedOrders));
+
+  void syncSettingsToCloud(nextState);
 }
 
 function createSalesResetState(current: MvpState): MvpState {
