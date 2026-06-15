@@ -33,6 +33,7 @@ import {
 } from "./calculations";
 import { loadSettingsFromCloud, syncSettingsToCloud } from "./settings-sync";
 import { loadInventoryFromCloud, syncInventoryToCloud } from "./inventory-sync";
+import { loadShiftStateFromCloud, syncShiftStateToCloud } from "./shift-sync";
 import type {
   DayReport,
   CurrentOrder,
@@ -1755,6 +1756,7 @@ function persistState(nextState: MvpState) {
 
   void syncSettingsToCloud(nextState);
   void syncInventoryToCloud(nextState);
+  void syncShiftStateToCloud(nextState);
 }
 
 function createSalesResetState(current: MvpState): MvpState {
@@ -1825,6 +1827,21 @@ export function useMvpStore() {
         materialCategories: cloudInventory.materialCategories ?? current.materialCategories,
         materialItems: cloudInventory.materialItems ?? current.materialItems,
         shiftMaterialAssignments: cloudInventory.shiftMaterialAssignments ?? current.shiftMaterialAssignments
+      }));
+    });
+
+    void loadShiftStateFromCloud().then((cloudShift) => {
+      if (!cloudShift) {
+        return;
+      }
+
+      setState((current) => ({
+        ...current,
+        activeShift: cloudShift.activeShift ?? current.activeShift,
+        consumptionEntries: cloudShift.consumptionEntries ?? current.consumptionEntries,
+        mixStocks: cloudShift.mixStocks ?? current.mixStocks,
+        mixStockMovements: cloudShift.mixStockMovements ?? current.mixStockMovements,
+        dayReport: cloudShift.dayReport ?? current.dayReport
       }));
     });
   }, []);
