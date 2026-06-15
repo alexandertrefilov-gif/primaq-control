@@ -71,8 +71,15 @@ export function SalesCounter({
   salesCount = 0,
 }: SalesCounterProps) {
   const mixLineLookup = useMemo(
-    () => new Map(mixLines.map((line) => [line.productId, line] as const)),
-    [mixLines]
+    () =>
+      new Map(
+        mixLines.map((line) => [
+          line.productId,
+          // Ohne aktiven Einsatz darf kein Bestand aus alten mixStocks-Daten im Verkauf erscheinen.
+          active ? line : { ...line, remainingLiters: 0, estimatedRemainingPortions: 0, status: "Leer" as const, isEmergencyMode: false }
+        ] as const)
+      ),
+    [mixLines, active]
   );
   const visibleMachines = useMemo(
     () =>
