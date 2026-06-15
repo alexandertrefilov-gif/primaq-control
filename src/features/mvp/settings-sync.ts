@@ -3,9 +3,30 @@ import type { MvpState } from "./types";
 
 const SETTINGS_ROW_KEY = "primaq-settings";
 
+type CloudSettings = Partial<MvpState> & {
+  updatedAt?: string;
+};
+
+function mergeSettings(next: CloudSettings, existing: CloudSettings | null): CloudSettings {
+  if (!existing) return next;
+
+  const keepMachines =
+    Array.isArray(next.machines) &&
+    next.machines.length === 0 &&
+    Array.isArray(existing.machines) &&
+    existing.machines.length > 0;
+
+  return {
+    ...existing,
+    ...next,
+    machines: keepMachines ? existing.machines : next.machines,
+    updatedAt: new Date().toISOString()
+  };
+}
+
 export async function syncSettingsToCloud(state: MvpState) {
   try {
-    const value = {
+    const nextValue: CloudSettings = {
       machines: state.machines,
       softServeItems: state.softServeItems,
       stockFlavors: state.stockFlavors,
@@ -20,6 +41,14 @@ export async function syncSettingsToCloud(state: MvpState) {
       favorites: state.favorites,
       updatedAt: new Date().toISOString()
     };
+
+    const { data } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", SETTINGS_ROW_KEY)
+      .maybeSingle();
+
+    const value = mergeSettings(nextValue, (data?.value as CloudSettings | null) ?? null);
 
     const { error } = await supabase
       .from("settings")
@@ -38,7 +67,6 @@ export async function syncSettingsToCloud(state: MvpState) {
     console.warn("Supabase settings sync unavailable", error);
   }
 }
-
 
 export async function loadSettingsFromCloud(): Promise<Partial<MvpState> | null> {
   try {
