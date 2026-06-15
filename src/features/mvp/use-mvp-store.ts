@@ -34,6 +34,7 @@ import {
 import { loadSettingsFromCloud, syncSettingsToCloud } from "./settings-sync";
 import { loadInventoryFromCloud, syncInventoryToCloud } from "./inventory-sync";
 import { loadShiftStateFromCloud, syncShiftStateToCloud } from "./shift-sync";
+import { loadSalesStateFromCloud, syncSalesStateToCloud } from "./sales-sync";
 import type {
   DayReport,
   CurrentOrder,
@@ -1757,6 +1758,7 @@ function persistState(nextState: MvpState) {
   void syncSettingsToCloud(nextState);
   void syncInventoryToCloud(nextState);
   void syncShiftStateToCloud(nextState);
+  void syncSalesStateToCloud(nextState);
 }
 
 function createSalesResetState(current: MvpState): MvpState {
@@ -1842,6 +1844,23 @@ export function useMvpStore() {
         mixStocks: cloudShift.mixStocks ?? current.mixStocks,
         mixStockMovements: cloudShift.mixStockMovements ?? current.mixStockMovements,
         dayReport: cloudShift.dayReport ?? current.dayReport
+      }));
+    });
+
+    void loadSalesStateFromCloud().then((cloudSales) => {
+      if (!cloudSales) {
+        return;
+      }
+
+      setState((current) => ({
+        ...current,
+        currentOrder: cloudSales.currentOrder ?? current.currentOrder,
+        openOrders: cloudSales.openOrders ?? current.openOrders,
+        activeOrderId: cloudSales.activeOrderId ?? current.activeOrderId,
+        dailySales: cloudSales.dailySales ?? current.dailySales,
+        completedOrders: cloudSales.completedOrders ?? current.completedOrders,
+        transactions: cloudSales.transactions ?? current.transactions,
+        dayReport: cloudSales.dayReport ?? current.dayReport
       }));
     });
   }, []);
