@@ -34,7 +34,7 @@ function mergeInventory(next: CloudInventory, existing: CloudInventory | null): 
   };
 }
 
-export async function syncInventoryToCloud(state: MvpState) {
+export async function syncInventoryToCloud(state: MvpState, options?: { forceOverwrite?: boolean }) {
   try {
     const nextValue: CloudInventory = {
       inventory: state.inventory,
@@ -47,13 +47,20 @@ export async function syncInventoryToCloud(state: MvpState) {
       updatedAt: new Date().toISOString()
     };
 
-    const { data } = await supabase
-      .from("inventory")
-      .select("value")
-      .eq("key", INVENTORY_ROW_KEY)
-      .maybeSingle();
+    let value: CloudInventory;
+    if (options?.forceOverwrite) {
+      // Beim Reset direkt überschreiben, ohne mergeInventory – dadurch können
+      // auch leere Objekte ({}) dauerhaft in der Cloud gesetzt werden.
+      value = nextValue;
+    } else {
+      const { data } = await supabase
+        .from("inventory")
+        .select("value")
+        .eq("key", INVENTORY_ROW_KEY)
+        .maybeSingle();
 
-    const value = mergeInventory(nextValue, (data?.value as CloudInventory | null) ?? null);
+      value = mergeInventory(nextValue, (data?.value as CloudInventory | null) ?? null);
+    }
 
     const { error } = await supabase
       .from("inventory")

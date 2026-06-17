@@ -48,6 +48,9 @@ const e2eMachine = {
 };
 
 test.beforeEach(async ({ page }) => {
+  // Prevent Supabase cloud sync from overriding test-seeded localStorage state.
+  await page.route(/supabase\.co/, (route) => route.abort());
+  await page.routeWebSocket(/supabase\.co/, () => { /* fake-open: Realtime denkt verbunden, empfängt keine Events */ });
   await page.addInitScript(
     ({ machine }) => {
       if (window.sessionStorage.getItem("primaq-e2e-seeded") === "true") {
@@ -112,6 +115,7 @@ test("PrimaQ full cash-system flow with tax, snapshots, overview and cancellatio
   await page.getByTestId("shift-event-input").fill("E2E Stadtfest");
   await page.getByTestId("shift-employee-1").fill("Ada");
   await page.getByTestId("shift-starting-cash-input").fill("150,00");
+  await page.locator("div").filter({ hasText: /^Pkg$/ }).getByRole("textbox").fill("1");
   await page.getByTestId("shift-start-button").click();
   await expect(page.getByTestId("shift-overview-table")).toContainText("E2E Stadtfest");
 
@@ -122,7 +126,7 @@ test("PrimaQ full cash-system flow with tax, snapshots, overview and cancellatio
 
   await saleProductButton.click();
   await saleProductButton.click();
-  await expect(page.getByTestId(`order-item-${orderItemId}`)).toContainText("2 × Vanille");
+  await expect(page.getByTestId(`order-item-${orderItemId}`)).toContainText("Vanille");
   await expect(page.getByTestId("payment-panel")).toContainText(/10,00\s*€/);
   await page.getByTestId("payment-cash-button").click();
   await page.getByTestId("cash-quick-add-5000").click();

@@ -498,11 +498,13 @@ function MachineStockStatus({
           {stockState.emoji} {stockState.label}
         </span>
       </div>
-      <div className={`rounded-lg border px-2 py-2 ${stockState.restClass}`}>
-        <p className="text-sm font-black">Rest {formatQuantityForSale(line.remainingLiters)}</p>
-        {line.estimatedRemainingPortions !== null ? (
-          <p className="text-[11px] font-semibold opacity-70">ca. {line.estimatedRemainingPortions} Port.</p>
-        ) : null}
+      <div className={`rounded-lg border px-2 py-1.5 ${stockState.restClass}`}>
+        <p className="text-sm font-black">
+          Rest {formatQuantityForSale(line.remainingLiters)}
+          {line.estimatedRemainingPortions !== null ? (
+            <span className="ml-1.5 text-[10px] font-semibold opacity-60">· ca. {line.estimatedRemainingPortions} Port.</span>
+          ) : null}
+        </p>
       </div>
       {line.status === "Leer" && line.startLiters === 0 && line.remainingLiters <= 0 && !line.isEmergencyMode ? (
         <p className="rounded border border-yellow-200 bg-yellow-50 px-2 py-1 text-[10px] font-bold text-yellow-800">
@@ -768,7 +770,7 @@ function SaleProductButton({
 
   const sizeClass = compact
     ? "h-[90px] max-h-[100px] min-h-[90px] w-[90px] min-w-[90px] max-w-[100px]"
-    : "h-[130px] max-h-[140px] min-h-[130px] w-[130px] min-w-[130px] max-w-[140px]";
+    : "h-[190px] max-h-[210px] min-h-[190px] w-[190px] min-w-[190px] max-w-[210px]";
 
   return (
     <div className="relative">
@@ -793,7 +795,7 @@ function SaleProductButton({
           });
         }}
         title={isStockBlocked ? stockIssue.message : `${displayName} · ${packagingType} · ${formatCurrency(product.priceCents)}`}
-        className={`pointer-events-auto flex aspect-square ${sizeClass} flex-col items-start justify-between overflow-hidden rounded-xl border p-2.5 text-left shadow-md transition active:scale-[0.97] ${isStockBlocked ? "ring-2 ring-red-400 ring-offset-1" : ""}`}
+        className={`pointer-events-auto flex aspect-square ${sizeClass} flex-col items-start justify-between overflow-hidden rounded-xl border p-3 text-left shadow-md transition active:scale-[0.97] ${isStockBlocked ? "ring-2 ring-red-400 ring-offset-1" : ""}`}
         style={{
           background: isStockBlocked ? "#fee2e2" : tone.background,
           borderColor: isStockBlocked ? "#fca5a5" : tone.borderColor,
@@ -802,12 +804,12 @@ function SaleProductButton({
           opacity: isStockBlocked ? 0.85 : undefined
         }}
       >
-        <span className="line-clamp-2 w-full min-w-0 text-sm font-black leading-tight [overflow-wrap:anywhere]">
+        <span className="line-clamp-3 w-full min-w-0 text-base font-black leading-tight [overflow-wrap:anywhere]">
           {isStockBlocked ? "🔴 " : ""}{displayName}
         </span>
-        <span className="grid w-full min-w-0 gap-0.5 text-xs font-bold leading-tight">
-          <span className="truncate">{isStockBlocked ? "Sorte leer" : packagingType}</span>
-          <span className="truncate text-sm tabular-nums">{formatCurrency(product.priceCents)}</span>
+        <span className="grid w-full min-w-0 gap-1 text-sm font-bold leading-tight">
+          <span className="truncate text-sm">{isStockBlocked ? "Sorte leer" : packagingType}</span>
+          <span className="truncate text-xl tabular-nums">{formatCurrency(product.priceCents)}</span>
         </span>
       </button>
 
@@ -865,7 +867,7 @@ function ToppingButton({
         })
       }
       title={`Topping ${displayName} · ${formatCurrency(product.toppingPriceCents)}`}
-      className="pointer-events-auto flex aspect-square h-[130px] max-h-[140px] min-h-[130px] w-[130px] min-w-[130px] max-w-[140px] flex-col items-start justify-between overflow-hidden rounded-xl border p-2.5 text-left shadow-md transition active:scale-[0.97]"
+      className="pointer-events-auto flex aspect-square h-[190px] max-h-[210px] min-h-[190px] w-[190px] min-w-[190px] max-w-[210px] flex-col items-start justify-between overflow-hidden rounded-xl border p-3 text-left shadow-md transition active:scale-[0.97]"
       style={{
         background: tone.background,
         borderColor: tone.borderColor,
@@ -873,10 +875,10 @@ function ToppingButton({
         textShadow: tone.textShadow
       }}
     >
-      <span className="w-full min-w-0 truncate text-sm font-black leading-tight">Topping</span>
-      <span className="grid w-full min-w-0 gap-0.5 text-xs font-bold leading-tight">
-        <span className="line-clamp-2 [overflow-wrap:anywhere]">{displayName}</span>
-        <span className="truncate text-sm tabular-nums">{formatCurrency(product.toppingPriceCents)}</span>
+      <span className="w-full min-w-0 truncate text-base font-black leading-tight">Topping</span>
+      <span className="grid w-full min-w-0 gap-1 text-sm font-bold leading-tight">
+        <span className="line-clamp-2 text-sm [overflow-wrap:anywhere]">{displayName}</span>
+        <span className="truncate text-xl tabular-nums">{formatCurrency(product.toppingPriceCents)}</span>
       </span>
     </button>
   );
@@ -1055,7 +1057,7 @@ function PaymentPanel({
               type="button"
               data-testid="payment-cash-button"
               onClick={() => onPaymentMethodChange("cash")}
-              className={`min-h-11 rounded-lg border px-3 text-sm font-bold ${
+              className={`min-h-16 rounded-lg border px-3 text-base font-bold ${
                 order.paymentMethod === "cash"
                   ? "border-primaq-500 bg-primaq-50 text-primaq-700"
                   : "border-black/10 bg-white text-black/65"
@@ -1067,7 +1069,7 @@ function PaymentPanel({
               type="button"
               data-testid="payment-card-button"
               onClick={() => onPaymentMethodChange("card")}
-              className={`min-h-11 rounded-lg border px-3 text-sm font-bold ${
+              className={`min-h-16 rounded-lg border px-3 text-base font-bold ${
                 order.paymentMethod === "card"
                   ? "border-primaq-500 bg-primaq-50 text-primaq-700"
                   : "border-black/10 bg-white text-black/65"
@@ -1080,7 +1082,7 @@ function PaymentPanel({
                 type="button"
                 data-testid="payment-qr-button"
                 onClick={() => onPaymentMethodChange("qr")}
-                className={`min-h-11 rounded-lg border px-3 text-sm font-bold ${
+                className={`min-h-16 rounded-lg border px-3 text-base font-bold ${
                   order.paymentMethod === "qr"
                     ? "border-primaq-500 bg-primaq-50 text-primaq-700"
                     : "border-black/10 bg-white text-black/65"
@@ -1111,19 +1113,19 @@ function PaymentPanel({
             </p>
             {order.paymentMethod === "cash" ? (
               <>
-                <div className="flex min-h-12 items-center rounded-lg border border-black/15 bg-white focus-within:border-primaq-500">
+                <div className="flex min-h-16 items-center rounded-lg border border-black/15 bg-white focus-within:border-primaq-500">
                   <input
                     inputMode="decimal"
                     data-testid="cash-received-input"
                     value={order.cashReceivedCents ? (order.cashReceivedCents / 100).toString().replace(".", ",") : ""}
                     onChange={(event) => onCashReceivedChange(toCents(event.target.value))}
-                    className="min-h-12 min-w-0 flex-1 rounded-lg bg-transparent px-3 text-base font-bold outline-none"
+                    className="min-h-16 min-w-0 flex-1 rounded-lg bg-transparent px-3 text-xl font-bold outline-none"
                   />
                   <button
                     type="button"
                     data-testid="cash-received-reset-button"
                     onClick={() => onCashReceivedChange(0)}
-                    className="mr-2 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-yellow-100 text-base font-black text-yellow-900 ring-1 ring-yellow-200"
+                    className="mr-2 grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-yellow-100 text-lg font-black text-yellow-900 ring-1 ring-yellow-200"
                     aria-label="Gegeben leeren"
                     title="Gegeben leeren"
                   >
@@ -1137,7 +1139,7 @@ function PaymentPanel({
                       type="button"
                       data-testid={`cash-quick-add-${amount}`}
                       onClick={() => onCashReceivedChange(order.cashReceivedCents + amount)}
-                      className="min-h-11 rounded-lg bg-white text-sm font-bold text-ink ring-1 ring-yellow-200"
+                      className="min-h-16 rounded-lg bg-white text-sm font-bold text-ink ring-1 ring-yellow-200"
                     >
                       {amount / 100} €
                     </button>
@@ -1199,8 +1201,8 @@ function PaymentPanel({
           </p>
         </div>
 
-        <div className="grid content-start gap-3 rounded-lg border border-green-200 bg-green-50 p-3 min-[1100px]:col-span-2 min-[1100px]:col-start-2">
-          <p className="text-xs font-black uppercase tracking-wide text-green-800">Buchen</p>
+        <div className="grid content-start gap-4 rounded-lg border-2 border-green-400 bg-green-50 p-4 min-[1100px]:col-start-3 min-[1100px]:row-start-1 min-[1100px]:row-span-2">
+          <p className="text-sm font-black uppercase tracking-wide text-green-800">Bestellung</p>
           {!active ? (
             <p data-testid="checkout-shift-warning" className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm font-bold text-orange-900">
               Kein aktiver Einsatz. Bitte unter Einsätze einen Einsatz starten.
@@ -1222,9 +1224,9 @@ function PaymentPanel({
                 onCheckout();
                 onCheckoutComplete?.();
               }}
-              className={`min-h-16 w-full rounded-lg px-4 text-xl font-black text-white transition ${
+              className={`min-h-20 w-full rounded-xl px-4 text-2xl font-black text-white transition ${
                 canBook
-                  ? "bg-green-600 shadow-sm active:scale-[0.99]"
+                  ? "bg-green-600 shadow-md active:scale-[0.99]"
                   : "cursor-not-allowed bg-black/25"
               }`}
             >

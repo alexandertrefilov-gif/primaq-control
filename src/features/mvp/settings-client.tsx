@@ -198,11 +198,11 @@ export function SettingsClient() {
         <ResetConfirmationDialog
           resetKind={activeReset}
           onCancel={() => setActiveReset(null)}
-          onConfirm={() => {
+          onConfirm={async () => {
             if (activeReset === "sales") {
-              resetSalesData();
+              await resetSalesData();
             } else {
-              factoryReset();
+              await factoryReset();
             }
             window.location.reload();
           }}
@@ -219,10 +219,11 @@ function ResetConfirmationDialog({
 }: {
   resetKind: ResetKind;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void>;
 }) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [confirmation, setConfirmation] = useState("");
+  const [isPending, setIsPending] = useState(false);
   const details = resetDetails[resetKind];
   const canConfirm = confirmation === details.requiredText;
 
@@ -295,15 +296,15 @@ function ResetConfirmationDialog({
                 </button>
                 <button
                   type="button"
-                  disabled={!canConfirm}
-                  onClick={() => {
-                    if (canConfirm) {
-                      onConfirm();
-                    }
+                  disabled={!canConfirm || isPending}
+                  onClick={async () => {
+                    if (!canConfirm || isPending) return;
+                    setIsPending(true);
+                    await onConfirm();
                   }}
                   className="min-h-12 rounded-lg bg-red-700 px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-red-200 disabled:text-red-500"
                 >
-                  Endgültig löschen
+                  {isPending ? "Wird gespeichert…" : "Endgültig löschen"}
                 </button>
               </div>
             </div>

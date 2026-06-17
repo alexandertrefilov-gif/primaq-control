@@ -37,6 +37,7 @@ export function InventoryClient() {
     addMaterialItemWithMovement,
     updateMaterialItem,
     addMaterialMovement,
+    resetFlavorStockOnly,
   } = useMvpStore();
 
   // Verwaiste Artikel: existieren in materialItems aber in keiner Kategorie
@@ -90,6 +91,7 @@ export function InventoryClient() {
         onReceipt={addGeneralStockReceipt}
         onDeduction={addGeneralStockDeduction}
         onReactivate={reactivateGeneralStockItem}
+        onResetMixStock={(flavorId) => resetFlavorStockOnly(flavorId, true)}
       />
 
       {orphanedItems.length > 0 && (
@@ -145,6 +147,7 @@ function GeneralStockPanel({
   onReceipt,
   onDeduction,
   onReactivate,
+  onResetMixStock,
 }: {
   items: Record<string, GeneralStockItem>;
   movements: Record<string, import("./types").GeneralStockMovement[]>;
@@ -155,6 +158,7 @@ function GeneralStockPanel({
   onReceipt: (itemId: string, input: ReceiptInput) => void;
   onDeduction: (itemId: string, input: DeductionInput) => void;
   onReactivate: (itemId: string) => void;
+  onResetMixStock: (flavorId: string) => void;
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -233,6 +237,7 @@ function GeneralStockPanel({
                 onReactivate={() => onReactivate(item.id)}
                 onReceipt={(input) => onReceipt(item.id, input)}
                 onDeduction={(input) => onDeduction(item.id, input)}
+                onResetMixStock={item.flavorId ? () => onResetMixStock(item.flavorId!) : undefined}
               />
             );
           })}
@@ -262,6 +267,7 @@ function WarenCard({
   onReactivate,
   onReceipt,
   onDeduction,
+  onResetMixStock,
 }: {
   item: GeneralStockItem;
   mixLine: import("./types").MixInventoryLine | undefined;
@@ -272,9 +278,11 @@ function WarenCard({
   onReactivate: () => void;
   onReceipt: (input: ReceiptInput) => void;
   onDeduction: (input: DeductionInput) => void;
+  onResetMixStock?: () => void;
 }) {
   const [panel, setPanel] = useState<"receipt" | "deduction" | "correction" | null>(null);
   const [confirmZero, setConfirmZero] = useState(false);
+  const [confirmMixReset, setConfirmMixReset] = useState(false);
 
   // receipt fields
   const [qty, setQty] = useState("");
@@ -349,6 +357,7 @@ function WarenCard({
   function togglePanel(p: "receipt" | "deduction" | "correction") {
     setPanel(panel === p ? null : p);
     setConfirmZero(false);
+    setConfirmMixReset(false);
   }
 
   return (
@@ -449,12 +458,37 @@ function WarenCard({
                 <button type="button" onClick={commitZero} className="min-h-9 rounded-lg bg-red-600 px-2 text-xs font-black text-white">Ja</button>
               </>
             ) : (
-              <button type="button" onClick={() => { setConfirmZero(true); setPanel(null); }}
+              <button type="button" onClick={() => { setConfirmZero(true); setPanel(null); setConfirmMixReset(false); }}
                 className="min-h-9 rounded-lg border border-red-200 bg-white px-3 text-xs font-black text-red-700">
                 Auf 0 setzen
               </button>
             )}
           </div>
+
+          {/* Mixbestand zurücksetzen – löscht mixStocks/remainingLiters/Refills dieser Sorte */}
+          {onResetMixStock ? (
+            <div className="flex items-center gap-1.5 border-t border-black/5 px-3 pb-3 pt-2">
+              {confirmMixReset ? (
+                <>
+                  <span className="flex-1 text-xs font-semibold text-orange-700">Mixbestand zurücksetzen?</span>
+                  <button type="button" onClick={() => setConfirmMixReset(false)}
+                    className="min-h-9 rounded-lg border border-black/15 bg-white px-2 text-xs font-black text-black/60">
+                    Nein
+                  </button>
+                  <button type="button" onClick={() => { onResetMixStock(); setConfirmMixReset(false); }}
+                    className="min-h-9 rounded-lg bg-orange-600 px-2 text-xs font-black text-white">
+                    Ja, zurücksetzen
+                  </button>
+                </>
+              ) : (
+                <button type="button"
+                  onClick={() => { setConfirmMixReset(true); setPanel(null); setConfirmZero(false); }}
+                  className="min-h-9 rounded-lg border border-orange-200 bg-white px-3 text-xs font-black text-orange-700">
+                  Mixbestand zurücksetzen
+                </button>
+              )}
+            </div>
+          ) : null}
         </>
       ) : null}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildSoftServeName,
   createBlankMachine,
@@ -31,7 +31,8 @@ import {
   parsePriceToCents,
   withoutMachinePrefix
 } from "./calculations";
-import { loadSettingsFromCloud, syncSettingsToCloud } from "./settings-sync";
+import { loadSettingsFromCloud, subscribeToSettingsRealtime, syncSettingsToCloud } from "./settings-sync";
+import type { CloudSettings } from "./settings-sync";
 import { loadInventoryFromCloud, syncInventoryToCloud } from "./inventory-sync";
 import { loadShiftStateFromCloud, syncShiftStateToCloud } from "./shift-sync";
 import { loadSalesStateFromCloud, syncSalesStateToCloud } from "./sales-sync";
@@ -75,6 +76,50 @@ const openOrdersStorageKey = "primaq-control-open-orders";
 const activeOrderIdStorageKey = "primaq-control-active-order-id";
 const dailySalesStorageKey = "primaq-control-daily-sales";
 const completedOrdersStorageKey = "primaq-control-completed-orders";
+// Wird nur von deleteMachine gesetzt. Schützt vor der Race Condition:
+// Maschine löschen → Reload bevor Cloud-Sync abgeschlossen → loadSettingsFromCloud
+// liefert alte Maschinenliste → Maschine erscheint wieder.
+// Bewusst kein breiteres "settingsLocalAt": Verkäufe/Einsätze dürfen diesen Key
+// nicht überschreiben, weil das den Cross-Device-Sync (Mac → iPad) blockieren würde.
+const machinesLocalAtKey = "primaq-machines-local-at";
+
+// Verhindert, dass persistState während eines Resets (factoryReset/resetSalesData)
+// alten State in localStorage schreibt. Da mehrere Komponenten useMvpStore() aufrufen,
+// haben sie jeweils eigene React-Instanzen. Ohne dieses Flag würde z. B.
+// SumupSettingsSection (eigener useMvpStore-Aufruf) nach dem setState(nextState)
+// im SettingsClient noch seinen alten State in localStorage schreiben.
+// Nach window.location.reload() wird das Modul neu initialisiert und das Flag ist false.
+let persistStateLocked = false;
+
+// Zentrale Liste aller bekannten PrimaQ localStorage-Keys.
+// Wird von clearAllPrimaqLocalStorage() und Tests verwendet.
+export const ALL_PRIMAQ_STORAGE_KEYS = [
+  storageKey,
+  machinesStorageKey,
+  currentOrderStorageKey,
+  openOrdersStorageKey,
+  activeOrderIdStorageKey,
+  dailySalesStorageKey,
+  completedOrdersStorageKey,
+  machinesLocalAtKey
+] as const;
+
+// Löscht alle PrimaQ localStorage-Einträge (bekannte Keys + alle "primaq-"-Prefixed Keys).
+// Muss vor persistResetState aufgerufen werden, damit kein useEffect-Trigger
+// (via persistState) alte Daten nach dem Löschen zurückschreibt.
+function clearAllPrimaqLocalStorage() {
+  if (typeof window === "undefined") return;
+  for (const key of ALL_PRIMAQ_STORAGE_KEYS) {
+    window.localStorage.removeItem(key);
+  }
+  // Legacy- oder zukünftige Keys mit "primaq-"-Prefix ebenfalls entfernen
+  const extra: string[] = [];
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const k = window.localStorage.key(i);
+    if (k?.startsWith("primaq-")) extra.push(k);
+  }
+  for (const k of extra) window.localStorage.removeItem(k);
+}
 
 const createInitialInventory = () =>
   inventoryItems.reduce(
@@ -1747,6 +1792,10 @@ function persistState(nextState: MvpState) {
     return;
   }
 
+  if (persistStateLocked) {
+    return;
+  }
+
   window.localStorage.setItem(storageKey, JSON.stringify(nextState));
   window.localStorage.setItem(machinesStorageKey, JSON.stringify(nextState.machines));
   window.localStorage.setItem(currentOrderStorageKey, JSON.stringify(nextState.currentOrder));
@@ -1755,10 +1804,38 @@ function persistState(nextState: MvpState) {
   window.localStorage.setItem(dailySalesStorageKey, JSON.stringify(nextState.dailySales));
   window.localStorage.setItem(completedOrdersStorageKey, JSON.stringify(nextState.completedOrders));
 
+  // Merge (kein forceOverwrite): liest Cloud-State, merged und schreibt zurück.
+  // forceOverwrite würde auf dem iPad die Maschinenliste des Mac aus der Cloud löschen,
+  // weil iPad die neue Maschine noch nicht geladen hat.
   void syncSettingsToCloud(nextState);
   void syncInventoryToCloud(nextState);
   void syncShiftStateToCloud(nextState);
   void syncSalesStateToCloud(nextState);
+}
+
+// Wie persistState, aber für Resets: schreibt synchron ins localStorage und
+// WARTET auf den Abschluss aller Cloud-Syncs (mit forceOverwrite, ohne Merge),
+// damit ein anschließendes window.location.reload() keine alten Cloud-Daten
+// mehr zurückholen kann.
+async function persistResetState(nextState: MvpState) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(storageKey, JSON.stringify(nextState));
+  window.localStorage.setItem(machinesStorageKey, JSON.stringify(nextState.machines));
+  window.localStorage.setItem(currentOrderStorageKey, JSON.stringify(nextState.currentOrder));
+  window.localStorage.setItem(openOrdersStorageKey, JSON.stringify(nextState.openOrders));
+  window.localStorage.setItem(activeOrderIdStorageKey, JSON.stringify(nextState.activeOrderId));
+  window.localStorage.setItem(dailySalesStorageKey, JSON.stringify(nextState.dailySales));
+  window.localStorage.setItem(completedOrdersStorageKey, JSON.stringify(nextState.completedOrders));
+
+  await Promise.all([
+    syncSettingsToCloud(nextState, { forceOverwrite: true }),
+    syncInventoryToCloud(nextState, { forceOverwrite: true }),
+    syncShiftStateToCloud(nextState),
+    syncSalesStateToCloud(nextState)
+  ]);
 }
 
 function createSalesResetState(current: MvpState): MvpState {
@@ -1787,6 +1864,10 @@ function createSalesResetState(current: MvpState): MvpState {
 export function useMvpStore() {
   const [state, setState] = useState<MvpState>(initialState);
   const [hydrated, setHydrated] = useState(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const lastBroadcastHashRef = useRef<string | null>(null);
 
   useEffect(() => {
     const localState = readStoredState();
@@ -1798,9 +1879,18 @@ export function useMvpStore() {
         return;
       }
 
+      // Nur den machines-Eintrag aus der Cloud übernehmen, wenn er neuer ist als
+      // unser letztes lokales Maschinen-Löschen. Schützt vor der Race Condition:
+      // Maschine löschen → Reload vor Cloud-Sync-Ende → alte Maschinenliste kommt zurück.
+      // Absichtlich auf "machines" beschränkt – andere Settings (softServeItems, Aromen …)
+      // sollen immer vom Mac / der Cloud übernommen werden können.
+      const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
+      const cloudAt = cloudSettings.updatedAt;
+      const skipMachines = !!(machinesLocalAt && cloudAt && cloudAt <= machinesLocalAt);
+
       setState((current) => ({
         ...current,
-        machines: cloudSettings.machines ?? current.machines,
+        machines: skipMachines ? current.machines : (cloudSettings.machines ?? current.machines),
         softServeItems: cloudSettings.softServeItems ?? current.softServeItems,
         stockFlavors: cloudSettings.stockFlavors ?? current.stockFlavors,
         portionWeights: cloudSettings.portionWeights ?? current.portionWeights,
@@ -1864,6 +1954,192 @@ export function useMvpStore() {
       }));
     });
   }, []);
+
+  // Supabase Realtime: Einstellungen automatisch übernehmen, wenn ein anderes Gerät
+  // (z. B. Mac) die Cloud-Settings ändert – ohne Reload des iPad.
+  // Scope: nur CloudSettings-Felder (machines, softServeItems, Aromen …).
+  // Bewusst ausgeschlossen: activeShift, currentOrder, openOrders, dailySales,
+  // completedOrders, transactions – Verkaufs- und Einsatzdaten bleiben lokal.
+  useEffect(() => {
+    if (!hydrated) return;
+
+    return subscribeToSettingsRealtime((cloudSettings: CloudSettings) => {
+      const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
+      const cloudAt = cloudSettings.updatedAt;
+      const skipMachines = !!(machinesLocalAt && cloudAt && cloudAt <= machinesLocalAt);
+
+      // noChange-Guard: verhindert den Realtime-Echo-Loop (Mac schreibt → Realtime feuert auf
+      // Mac → persistState → Cloud-Write → Realtime → …). Ohne diesen Guard steigt updatedAt
+      // in der Cloud bei jedem Loop-Durchlauf, sodass machinesLocalAt früher oder später
+      // kleiner als cloudAt ist – der Write-side-Guard in mergeSettings schlägt fehl und
+      // gelöschte Maschinen kehren nach dem nächsten persistState zurück.
+      const current = stateRef.current;
+      const effectiveMachines = skipMachines ? current.machines : (cloudSettings.machines ?? current.machines);
+      const noChange =
+        JSON.stringify(effectiveMachines) === JSON.stringify(current.machines) &&
+        JSON.stringify(cloudSettings.softServeItems ?? current.softServeItems) === JSON.stringify(current.softServeItems) &&
+        JSON.stringify(cloudSettings.stockFlavors ?? current.stockFlavors) === JSON.stringify(current.stockFlavors) &&
+        JSON.stringify(cloudSettings.portionWeights ?? current.portionWeights) === JSON.stringify(current.portionWeights) &&
+        JSON.stringify(cloudSettings.aromas ?? current.aromas) === JSON.stringify(current.aromas) &&
+        JSON.stringify(cloudSettings.packagingSizes ?? current.packagingSizes) === JSON.stringify(current.packagingSizes) &&
+        JSON.stringify(cloudSettings.productSettings ?? current.productSettings) === JSON.stringify(current.productSettings) &&
+        JSON.stringify(cloudSettings.salesLayout ?? current.salesLayout) === JSON.stringify(current.salesLayout) &&
+        JSON.stringify(cloudSettings.toppings ?? current.toppings) === JSON.stringify(current.toppings) &&
+        JSON.stringify(cloudSettings.recipeTemplates ?? current.recipeTemplates) === JSON.stringify(current.recipeTemplates) &&
+        JSON.stringify(cloudSettings.sumupSettings ?? current.sumupSettings) === JSON.stringify(current.sumupSettings) &&
+        JSON.stringify(cloudSettings.favorites ?? current.favorites) === JSON.stringify(current.favorites);
+      if (noChange) return;
+
+      setState((c) => ({
+        ...c,
+        machines: skipMachines ? c.machines : (cloudSettings.machines ?? c.machines),
+        softServeItems: cloudSettings.softServeItems ?? c.softServeItems,
+        stockFlavors: cloudSettings.stockFlavors ?? c.stockFlavors,
+        portionWeights: cloudSettings.portionWeights ?? c.portionWeights,
+        aromas: cloudSettings.aromas ?? c.aromas,
+        packagingSizes: cloudSettings.packagingSizes ?? c.packagingSizes,
+        productSettings: cloudSettings.productSettings ?? c.productSettings,
+        salesLayout: cloudSettings.salesLayout ?? c.salesLayout,
+        toppings: cloudSettings.toppings ?? c.toppings,
+        recipeTemplates: cloudSettings.recipeTemplates ?? c.recipeTemplates,
+        sumupSettings: cloudSettings.sumupSettings ?? c.sumupSettings,
+        favorites: cloudSettings.favorites ?? c.favorites
+      }));
+    });
+  }, [hydrated]);
+
+  // ── BroadcastChannel: Settings-Updates anderer Tabs/Fenster im selben Browser empfangen ──
+  // Kein Reload nötig – Maschinen, Sorten, Preise usw. erscheinen sofort im anderen Tab.
+  // Nicht synchronisiert: activeShift, currentOrder, dailySales, completedOrders (Verkaufsdaten).
+  useEffect(() => {
+    if (!hydrated) return;
+
+    let channel: BroadcastChannel;
+    try {
+      channel = new BroadcastChannel("primaq-settings");
+      broadcastChannelRef.current = channel;
+    } catch {
+      return; // BroadcastChannel in manchen Umgebungen nicht verfügbar
+    }
+
+    channel.onmessage = (event: MessageEvent<unknown>) => {
+      const settings = event.data as CloudSettings;
+      if (!settings || typeof settings !== "object") return;
+
+      const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
+      const cloudAt = settings.updatedAt;
+      const skipMachines = !!(machinesLocalAt && cloudAt && cloudAt <= machinesLocalAt);
+
+      // Vor dem setState prüfen, ob sich tatsächlich etwas ändert (verhindert unnötige
+      // persistState-Aufrufe durch Echo-Broadcasts, die identische Daten tragen).
+      const current = stateRef.current;
+      const effectiveMachines = skipMachines ? current.machines : (settings.machines ?? current.machines);
+      const noChange =
+        JSON.stringify(effectiveMachines) === JSON.stringify(current.machines) &&
+        JSON.stringify(settings.softServeItems ?? current.softServeItems) === JSON.stringify(current.softServeItems) &&
+        JSON.stringify(settings.sumupSettings ?? current.sumupSettings) === JSON.stringify(current.sumupSettings) &&
+        JSON.stringify(settings.stockFlavors ?? current.stockFlavors) === JSON.stringify(current.stockFlavors);
+      if (noChange) return;
+
+      setState((c) => ({
+        ...c,
+        machines: skipMachines ? c.machines : (settings.machines ?? c.machines),
+        softServeItems: settings.softServeItems ?? c.softServeItems,
+        stockFlavors: settings.stockFlavors ?? c.stockFlavors,
+        portionWeights: settings.portionWeights ?? c.portionWeights,
+        aromas: settings.aromas ?? c.aromas,
+        packagingSizes: settings.packagingSizes ?? c.packagingSizes,
+        productSettings: settings.productSettings ?? c.productSettings,
+        salesLayout: settings.salesLayout ?? c.salesLayout,
+        toppings: settings.toppings ?? c.toppings,
+        recipeTemplates: settings.recipeTemplates ?? c.recipeTemplates,
+        sumupSettings: settings.sumupSettings ?? c.sumupSettings,
+        favorites: settings.favorites ?? c.favorites
+      }));
+    };
+
+    return () => {
+      channel.close();
+      broadcastChannelRef.current = null;
+    };
+  }, [hydrated]);
+
+  // ── BroadcastChannel: eigene Settings-Änderungen an andere Tabs senden ──
+  // Nur senden, wenn sich tatsächlich etwas geändert hat (Hash-Vergleich), damit
+  // Verkaufsänderungen (dailySales, completedOrders) keinen unnötigen Broadcast auslösen.
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const hash = JSON.stringify({
+      machines: state.machines,
+      softServeItems: state.softServeItems,
+      stockFlavors: state.stockFlavors,
+      portionWeights: state.portionWeights,
+      aromas: state.aromas,
+      packagingSizes: state.packagingSizes,
+      productSettings: state.productSettings,
+      salesLayout: state.salesLayout,
+      toppings: state.toppings,
+      recipeTemplates: state.recipeTemplates,
+      sumupSettings: state.sumupSettings,
+      favorites: state.favorites
+    });
+
+    if (hash === lastBroadcastHashRef.current) return;
+    lastBroadcastHashRef.current = hash;
+
+    const msg: CloudSettings = {
+      ...(JSON.parse(hash) as CloudSettings),
+      updatedAt: new Date().toISOString()
+    };
+    broadcastChannelRef.current?.postMessage(msg);
+  }, [hydrated, state]);
+
+  // ── visibilitychange: Supabase-Daten beim Tab-Wechsel nachladen ──
+  // Sicherheitsnetz für cross-device (Mac → iPad), falls die Realtime-Verbindung
+  // kurz unterbrochen war (z. B. Gerät gesperrt / aus dem Standby).
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) return;
+
+      void loadSettingsFromCloud().then((cloudSettings) => {
+        if (!cloudSettings) return;
+
+        const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
+        const cloudAt = cloudSettings.updatedAt;
+        const skipMachines = !!(machinesLocalAt && cloudAt && cloudAt <= machinesLocalAt);
+
+        const current = stateRef.current;
+        const effectiveMachines = skipMachines ? current.machines : (cloudSettings.machines ?? current.machines);
+        const noChange =
+          JSON.stringify(effectiveMachines) === JSON.stringify(current.machines) &&
+          JSON.stringify(cloudSettings.softServeItems ?? current.softServeItems) === JSON.stringify(current.softServeItems) &&
+          JSON.stringify(cloudSettings.sumupSettings ?? current.sumupSettings) === JSON.stringify(current.sumupSettings);
+        if (noChange) return;
+
+        setState((c) => ({
+          ...c,
+          machines: skipMachines ? c.machines : (cloudSettings.machines ?? c.machines),
+          softServeItems: cloudSettings.softServeItems ?? c.softServeItems,
+          stockFlavors: cloudSettings.stockFlavors ?? c.stockFlavors,
+          portionWeights: cloudSettings.portionWeights ?? c.portionWeights,
+          aromas: cloudSettings.aromas ?? c.aromas,
+          packagingSizes: cloudSettings.packagingSizes ?? c.packagingSizes,
+          productSettings: cloudSettings.productSettings ?? c.productSettings,
+          salesLayout: cloudSettings.salesLayout ?? c.salesLayout,
+          toppings: cloudSettings.toppings ?? c.toppings,
+          recipeTemplates: cloudSettings.recipeTemplates ?? c.recipeTemplates,
+          sumupSettings: cloudSettings.sumupSettings ?? c.sumupSettings,
+          favorites: cloudSettings.favorites ?? c.favorites
+        }));
+      });
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [hydrated]);
 
   useEffect(() => {
     if (!hydrated) {
@@ -2505,8 +2781,6 @@ export function useMvpStore() {
 
   const resetStockFlavor = useCallback((productId: ProductId) => {
     setState((current) => {
-      if (current.dayReport) return current;
-
       const flavor = current.stockFlavors[productId];
 
       if (!flavor) return current;
@@ -3737,21 +4011,36 @@ export function useMvpStore() {
     }));
   }, []);
 
-  const resetSalesData = useCallback(() => {
-    setState((current) => {
-      const nextState = createSalesResetState(current);
+  // Setzt Verkaufs-/Einsatz-/Lagerdaten zurück (Einstellungen wie Maschinen/Sorten
+  // bleiben erhalten). Wartet auf den vollständigen Cloud-Sync, damit ein direkt
+  // anschließender Reload (window.location.reload()) keine alten Cloud-Daten
+  // (z. B. mixStocks/generalStock) zurückholt.
+  const resetSalesData = useCallback(async () => {
+    const nextState = createSalesResetState(stateRef.current);
+    setState(nextState);
+    persistStateLocked = true;
 
-      try {
-        persistState(nextState);
-      } catch {
-        // The in-memory reset still happens even if localStorage is unavailable.
-      }
-
-      return nextState;
-    });
+    try {
+      await persistResetState(nextState);
+    } catch {
+      // persistence failure is non-fatal — in-memory reset still follows
+    }
+    // Lock is intentionally NOT released here.
+    // The caller (settings-client) calls window.location.reload() immediately
+    // after, which reinitializes the module and resets persistStateLocked to false.
   }, []);
 
-  const factoryReset = useCallback(() => {
+  // Kompletter Werksreset: alle Daten inkl. Einstellungen, Maschinen, Sorten,
+  // Mix-/Pulverlagerbestände werden gelöscht. Wartet auf den vollständigen
+  // Cloud-Sync (forceOverwrite), bevor der Aufrufer reload() ausführen darf.
+  //
+  // Reihenfolge ist kritisch:
+  // 1. setState(nextState)          — zuerst, damit persistState (useEffect) den
+  //    sauberen State schreibt, falls es während des await auslöst.
+  // 2. clearAllPrimaqLocalStorage() — entfernt alle Keys sofort
+  // 3. await persistResetState()   — schreibt Reset-State in LS + Cloud (forceOverwrite)
+  //    Cloud-Datum zurückschreibt (Race Condition verhindert).
+  const factoryReset = useCallback(async () => {
     const cleanOrder = createBlankOrder("order_1", "Bestellung 1");
     const nextState: MvpState = {
       ...initialState,
@@ -3762,16 +4051,22 @@ export function useMvpStore() {
       softServeItems: [createBlankSoftServeProduct()]
     };
 
-    try {
-      persistState(nextState);
-    } catch {
-      // The in-memory reset still happens even if localStorage is unavailable.
-    }
-
     setState(nextState);
+    persistStateLocked = true;
+    clearAllPrimaqLocalStorage();
+
+    try {
+      await persistResetState(nextState);
+    } catch {
+      // persistence failure is non-fatal — in-memory reset still follows
+    }
+    // Lock intentionally NOT released — reload follows immediately and resets the module.
   }, []);
 
   const addMachine = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(machinesLocalAtKey, new Date().toISOString());
+    }
     setState((current) => {
       const nextNumber = getNextMachineNumber(current.machines);
 
@@ -3788,6 +4083,9 @@ export function useMvpStore() {
   }, []);
 
   const copyMachine = useCallback((machineId: string) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(machinesLocalAtKey, new Date().toISOString());
+    }
     let copiedMachineName: string | null = null;
 
     setState((current) => {
@@ -3963,6 +4261,11 @@ export function useMvpStore() {
   }, []);
 
   const deleteMachine = useCallback((machineId: string) => {
+    // Timestamp VOR setState setzen, damit loadSettingsFromCloud() beim nächsten Reload
+    // die nun veralteten Cloud-Daten (Maschine noch vorhanden) ignoriert.
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(machinesLocalAtKey, new Date().toISOString());
+    }
     setState((current) => {
       const nextMachines = current.machines.filter((machine) => machine.id !== machineId);
 
@@ -4369,7 +4672,6 @@ export function useMvpStore() {
 
   const resetMachineStock = useCallback((machineId: string, withSalesData = false) => {
     setState((current) => {
-      if (current.dayReport) return current;
       const machine = current.machines.find((m) => m.id === machineId);
       if (!machine) return current;
 
@@ -4463,7 +4765,6 @@ export function useMvpStore() {
 
   const resetFlavorStockOnly = useCallback((productId: ProductId, withConsumption = false) => {
     setState((current) => {
-      if (current.dayReport) return current;
       const flavor = current.stockFlavors[productId];
       if (!flavor) return current;
       const nextMixStocks = { ...current.mixStocks };

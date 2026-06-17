@@ -58,6 +58,8 @@ const materialCategory = {
 };
 
 test.beforeEach(async ({ page }) => {
+  await page.route(/supabase\.co/, (route) => route.abort());
+  await page.routeWebSocket(/supabase\.co/, () => { /* fake-open: Realtime denkt verbunden, empfängt keine Events */ });
   await page.addInitScript(
     ({ machine, materialItem, materialCategory }) => {
       if (window.sessionStorage.getItem("primaq-p2-punkt1-seeded") === "true") {
