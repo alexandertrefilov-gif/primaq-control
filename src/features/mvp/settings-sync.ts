@@ -6,13 +6,13 @@ export const SETTINGS_ROW_KEY = "primaq-settings";
 export type CloudSettings = Partial<MvpState> & {
   updatedAt?: string;
   // Zeitstempel des letzten lokalen Maschinen-Schreibvorgangs zum Zeitpunkt des Uploads.
-  // Identisch mit localStorage["primaq-machines-local-at"] beim Aufruf von syncSettingsToCloud.
-  // Wird von loadSettingsFromCloud und den BroadcastChannel-Empfängern genutzt, um zu
-  // entscheiden, ob lokale oder Cloud-Maschinen neuer sind (skipMachines-Logik).
   machinesWrittenAt?: string;
+  // Zeitstempel des letzten lokalen Settings-Schreibvorgangs (stockFlavors, Aromen …).
+  settingsWrittenAt?: string;
 };
 
 const MACHINES_LOCAL_AT_KEY = "primaq-machines-local-at";
+const SETTINGS_LOCAL_AT_KEY = "primaq-settings-local-at";
 
 // Schreibt den kompletten Settings-Block direkt in Supabase – kein GET, kein Merge.
 // Lokale Daten sind immer autoritativ; die Queue (settingsSyncQueue) stellt sicher,
@@ -22,6 +22,9 @@ export async function syncSettingsToCloud(state: MvpState, options?: { forceOver
   try {
     const machinesWrittenAt = typeof window !== "undefined"
       ? (window.localStorage.getItem(MACHINES_LOCAL_AT_KEY) ?? undefined)
+      : undefined;
+    const settingsWrittenAt = typeof window !== "undefined"
+      ? (window.localStorage.getItem(SETTINGS_LOCAL_AT_KEY) ?? undefined)
       : undefined;
 
     const value: CloudSettings = {
@@ -38,6 +41,7 @@ export async function syncSettingsToCloud(state: MvpState, options?: { forceOver
       sumupSettings: state.sumupSettings,
       favorites: state.favorites,
       machinesWrittenAt,
+      settingsWrittenAt,
       updatedAt: new Date().toISOString()
     };
 

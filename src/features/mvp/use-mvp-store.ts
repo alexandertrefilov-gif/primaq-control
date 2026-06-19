@@ -79,12 +79,13 @@ const completedOrdersStorageKey = "primaq-control-completed-orders";
 // Wird nur von deleteMachine gesetzt. Schützt vor der Race Condition:
 // Maschine löschen → Reload bevor Cloud-Sync abgeschlossen → loadSettingsFromCloud
 // liefert alte Maschinenliste → Maschine erscheint wieder.
-// Bewusst kein breiteres "settingsLocalAt": Verkäufe/Einsätze dürfen diesen Key
-// nicht überschreiben, weil das den Cross-Device-Sync (Mac → iPad) blockieren würde.
 const machinesLocalAtKey = "primaq-machines-local-at";
 // Analog zu machinesLocalAtKey, aber für Lagerdaten (generalStock, materialCategories, materialItems).
 // Schützt vor Race: Lagerware anlegen/löschen → Reload → loadInventoryFromCloud liefert alte Liste.
 const inventoryLocalAtKey = "primaq-inventory-local-at";
+// Analog zu machinesLocalAtKey, aber für Settings-Daten (stockFlavors, Aromen, Rezepte …).
+// Schützt vor Race: Sorte anlegen/löschen → Reload vor Cloud-Sync-Ende → alte Cloud überschreibt.
+const settingsLocalAtKey = "primaq-settings-local-at";
 
 // Verhindert, dass persistState während eines Resets (factoryReset/resetSalesData)
 // alten State in localStorage schreibt. Da mehrere Komponenten useMvpStore() aufrufen,
@@ -105,7 +106,8 @@ export const ALL_PRIMAQ_STORAGE_KEYS = [
   dailySalesStorageKey,
   completedOrdersStorageKey,
   machinesLocalAtKey,
-  inventoryLocalAtKey
+  inventoryLocalAtKey,
+  settingsLocalAtKey
 ] as const;
 
 // Löscht alle PrimaQ localStorage-Einträge (bekannte Keys + alle "primaq-"-Prefixed Keys).
@@ -1880,29 +1882,30 @@ export function useMvpStore() {
         return;
       }
 
-      // Nur den machines-Eintrag aus der Cloud übernehmen, wenn er neuer ist als
-      // unser letztes lokales Maschinen-Löschen. Schützt vor der Race Condition:
-      // Maschine löschen → Reload vor Cloud-Sync-Ende → alte Maschinenliste kommt zurück.
-      // Absichtlich auf "machines" beschränkt – andere Settings (softServeItems, Aromen …)
-      // sollen immer vom Mac / der Cloud übernommen werden können.
       const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
       const cloudMachinesAt = cloudSettings.machinesWrittenAt;
       const skipMachines = !!(machinesLocalAt && (!cloudMachinesAt || cloudMachinesAt <= machinesLocalAt));
 
+      // Schützt alle nicht-maschinen Settings (stockFlavors, Aromen …) vor dem gleichen Race:
+      // Sorte anlegen/löschen → Reload vor Cloud-Sync-Ende → alte Cloud überschreibt lokale Änderung.
+      const settingsLocalAt = window.localStorage.getItem(settingsLocalAtKey);
+      const cloudSettingsAt = cloudSettings.settingsWrittenAt;
+      const skipSettings = !!(settingsLocalAt && (!cloudSettingsAt || cloudSettingsAt <= settingsLocalAt));
+
       setState((current) => ({
         ...current,
         machines: skipMachines ? current.machines : (cloudSettings.machines ?? current.machines),
-        softServeItems: cloudSettings.softServeItems ?? current.softServeItems,
-        stockFlavors: cloudSettings.stockFlavors ?? current.stockFlavors,
-        portionWeights: cloudSettings.portionWeights ?? current.portionWeights,
-        aromas: cloudSettings.aromas ?? current.aromas,
-        packagingSizes: cloudSettings.packagingSizes ?? current.packagingSizes,
-        productSettings: cloudSettings.productSettings ?? current.productSettings,
-        salesLayout: cloudSettings.salesLayout ?? current.salesLayout,
-        toppings: cloudSettings.toppings ?? current.toppings,
-        recipeTemplates: cloudSettings.recipeTemplates ?? current.recipeTemplates,
-        sumupSettings: cloudSettings.sumupSettings ?? current.sumupSettings,
-        favorites: cloudSettings.favorites ?? current.favorites
+        softServeItems: skipSettings ? current.softServeItems : (cloudSettings.softServeItems ?? current.softServeItems),
+        stockFlavors: skipSettings ? current.stockFlavors : (cloudSettings.stockFlavors ?? current.stockFlavors),
+        portionWeights: skipSettings ? current.portionWeights : (cloudSettings.portionWeights ?? current.portionWeights),
+        aromas: skipSettings ? current.aromas : (cloudSettings.aromas ?? current.aromas),
+        packagingSizes: skipSettings ? current.packagingSizes : (cloudSettings.packagingSizes ?? current.packagingSizes),
+        productSettings: skipSettings ? current.productSettings : (cloudSettings.productSettings ?? current.productSettings),
+        salesLayout: skipSettings ? current.salesLayout : (cloudSettings.salesLayout ?? current.salesLayout),
+        toppings: skipSettings ? current.toppings : (cloudSettings.toppings ?? current.toppings),
+        recipeTemplates: skipSettings ? current.recipeTemplates : (cloudSettings.recipeTemplates ?? current.recipeTemplates),
+        sumupSettings: skipSettings ? current.sumupSettings : (cloudSettings.sumupSettings ?? current.sumupSettings),
+        favorites: skipSettings ? current.favorites : (cloudSettings.favorites ?? current.favorites)
       }));
     });
 
@@ -1977,37 +1980,40 @@ export function useMvpStore() {
       const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
       const cloudMachinesAt = cloudSettings.machinesWrittenAt;
       const skipMachines = !!(machinesLocalAt && (!cloudMachinesAt || cloudMachinesAt <= machinesLocalAt));
+      const settingsLocalAt = window.localStorage.getItem(settingsLocalAtKey);
+      const cloudSettingsAt = cloudSettings.settingsWrittenAt;
+      const skipSettings = !!(settingsLocalAt && (!cloudSettingsAt || cloudSettingsAt <= settingsLocalAt));
       const current = stateRef.current;
       const effectiveMachines = skipMachines ? current.machines : (cloudSettings.machines ?? current.machines);
       const noChange =
         JSON.stringify(effectiveMachines) === JSON.stringify(current.machines) &&
-        JSON.stringify(cloudSettings.softServeItems ?? current.softServeItems) === JSON.stringify(current.softServeItems) &&
-        JSON.stringify(cloudSettings.stockFlavors ?? current.stockFlavors) === JSON.stringify(current.stockFlavors) &&
-        JSON.stringify(cloudSettings.portionWeights ?? current.portionWeights) === JSON.stringify(current.portionWeights) &&
-        JSON.stringify(cloudSettings.aromas ?? current.aromas) === JSON.stringify(current.aromas) &&
-        JSON.stringify(cloudSettings.packagingSizes ?? current.packagingSizes) === JSON.stringify(current.packagingSizes) &&
-        JSON.stringify(cloudSettings.productSettings ?? current.productSettings) === JSON.stringify(current.productSettings) &&
-        JSON.stringify(cloudSettings.salesLayout ?? current.salesLayout) === JSON.stringify(current.salesLayout) &&
-        JSON.stringify(cloudSettings.toppings ?? current.toppings) === JSON.stringify(current.toppings) &&
-        JSON.stringify(cloudSettings.recipeTemplates ?? current.recipeTemplates) === JSON.stringify(current.recipeTemplates) &&
-        JSON.stringify(cloudSettings.sumupSettings ?? current.sumupSettings) === JSON.stringify(current.sumupSettings) &&
-        JSON.stringify(cloudSettings.favorites ?? current.favorites) === JSON.stringify(current.favorites);
+        JSON.stringify(skipSettings ? current.softServeItems : (cloudSettings.softServeItems ?? current.softServeItems)) === JSON.stringify(current.softServeItems) &&
+        JSON.stringify(skipSettings ? current.stockFlavors : (cloudSettings.stockFlavors ?? current.stockFlavors)) === JSON.stringify(current.stockFlavors) &&
+        JSON.stringify(skipSettings ? current.portionWeights : (cloudSettings.portionWeights ?? current.portionWeights)) === JSON.stringify(current.portionWeights) &&
+        JSON.stringify(skipSettings ? current.aromas : (cloudSettings.aromas ?? current.aromas)) === JSON.stringify(current.aromas) &&
+        JSON.stringify(skipSettings ? current.packagingSizes : (cloudSettings.packagingSizes ?? current.packagingSizes)) === JSON.stringify(current.packagingSizes) &&
+        JSON.stringify(skipSettings ? current.productSettings : (cloudSettings.productSettings ?? current.productSettings)) === JSON.stringify(current.productSettings) &&
+        JSON.stringify(skipSettings ? current.salesLayout : (cloudSettings.salesLayout ?? current.salesLayout)) === JSON.stringify(current.salesLayout) &&
+        JSON.stringify(skipSettings ? current.toppings : (cloudSettings.toppings ?? current.toppings)) === JSON.stringify(current.toppings) &&
+        JSON.stringify(skipSettings ? current.recipeTemplates : (cloudSettings.recipeTemplates ?? current.recipeTemplates)) === JSON.stringify(current.recipeTemplates) &&
+        JSON.stringify(skipSettings ? current.sumupSettings : (cloudSettings.sumupSettings ?? current.sumupSettings)) === JSON.stringify(current.sumupSettings) &&
+        JSON.stringify(skipSettings ? current.favorites : (cloudSettings.favorites ?? current.favorites)) === JSON.stringify(current.favorites);
       if (noChange) return;
 
       setState((c) => ({
         ...c,
         machines: skipMachines ? c.machines : (cloudSettings.machines ?? c.machines),
-        softServeItems: cloudSettings.softServeItems ?? c.softServeItems,
-        stockFlavors: cloudSettings.stockFlavors ?? c.stockFlavors,
-        portionWeights: cloudSettings.portionWeights ?? c.portionWeights,
-        aromas: cloudSettings.aromas ?? c.aromas,
-        packagingSizes: cloudSettings.packagingSizes ?? c.packagingSizes,
-        productSettings: cloudSettings.productSettings ?? c.productSettings,
-        salesLayout: cloudSettings.salesLayout ?? c.salesLayout,
-        toppings: cloudSettings.toppings ?? c.toppings,
-        recipeTemplates: cloudSettings.recipeTemplates ?? c.recipeTemplates,
-        sumupSettings: cloudSettings.sumupSettings ?? c.sumupSettings,
-        favorites: cloudSettings.favorites ?? c.favorites
+        softServeItems: skipSettings ? c.softServeItems : (cloudSettings.softServeItems ?? c.softServeItems),
+        stockFlavors: skipSettings ? c.stockFlavors : (cloudSettings.stockFlavors ?? c.stockFlavors),
+        portionWeights: skipSettings ? c.portionWeights : (cloudSettings.portionWeights ?? c.portionWeights),
+        aromas: skipSettings ? c.aromas : (cloudSettings.aromas ?? c.aromas),
+        packagingSizes: skipSettings ? c.packagingSizes : (cloudSettings.packagingSizes ?? c.packagingSizes),
+        productSettings: skipSettings ? c.productSettings : (cloudSettings.productSettings ?? c.productSettings),
+        salesLayout: skipSettings ? c.salesLayout : (cloudSettings.salesLayout ?? c.salesLayout),
+        toppings: skipSettings ? c.toppings : (cloudSettings.toppings ?? c.toppings),
+        recipeTemplates: skipSettings ? c.recipeTemplates : (cloudSettings.recipeTemplates ?? c.recipeTemplates),
+        sumupSettings: skipSettings ? c.sumupSettings : (cloudSettings.sumupSettings ?? c.sumupSettings),
+        favorites: skipSettings ? c.favorites : (cloudSettings.favorites ?? c.favorites)
       }));
     });
   }, [hydrated]);
@@ -2033,6 +2039,9 @@ export function useMvpStore() {
       const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
       const cloudAt = settings.updatedAt;
       const skipMachines = !!(machinesLocalAt && cloudAt && cloudAt <= machinesLocalAt);
+      const settingsLocalAt = window.localStorage.getItem(settingsLocalAtKey);
+      const cloudSettingsAt = settings.settingsWrittenAt;
+      const skipSettings = !!(settingsLocalAt && (!cloudSettingsAt || cloudSettingsAt <= settingsLocalAt));
 
       // Vor dem setState prüfen, ob sich tatsächlich etwas ändert (verhindert unnötige
       // persistState-Aufrufe durch Echo-Broadcasts, die identische Daten tragen).
@@ -2040,25 +2049,25 @@ export function useMvpStore() {
       const effectiveMachines = skipMachines ? current.machines : (settings.machines ?? current.machines);
       const noChange =
         JSON.stringify(effectiveMachines) === JSON.stringify(current.machines) &&
-        JSON.stringify(settings.softServeItems ?? current.softServeItems) === JSON.stringify(current.softServeItems) &&
-        JSON.stringify(settings.sumupSettings ?? current.sumupSettings) === JSON.stringify(current.sumupSettings) &&
-        JSON.stringify(settings.stockFlavors ?? current.stockFlavors) === JSON.stringify(current.stockFlavors);
+        JSON.stringify(skipSettings ? current.softServeItems : (settings.softServeItems ?? current.softServeItems)) === JSON.stringify(current.softServeItems) &&
+        JSON.stringify(skipSettings ? current.sumupSettings : (settings.sumupSettings ?? current.sumupSettings)) === JSON.stringify(current.sumupSettings) &&
+        JSON.stringify(skipSettings ? current.stockFlavors : (settings.stockFlavors ?? current.stockFlavors)) === JSON.stringify(current.stockFlavors);
       if (noChange) return;
 
       setState((c) => ({
         ...c,
         machines: skipMachines ? c.machines : (settings.machines ?? c.machines),
-        softServeItems: settings.softServeItems ?? c.softServeItems,
-        stockFlavors: settings.stockFlavors ?? c.stockFlavors,
-        portionWeights: settings.portionWeights ?? c.portionWeights,
-        aromas: settings.aromas ?? c.aromas,
-        packagingSizes: settings.packagingSizes ?? c.packagingSizes,
-        productSettings: settings.productSettings ?? c.productSettings,
-        salesLayout: settings.salesLayout ?? c.salesLayout,
-        toppings: settings.toppings ?? c.toppings,
-        recipeTemplates: settings.recipeTemplates ?? c.recipeTemplates,
-        sumupSettings: settings.sumupSettings ?? c.sumupSettings,
-        favorites: settings.favorites ?? c.favorites
+        softServeItems: skipSettings ? c.softServeItems : (settings.softServeItems ?? c.softServeItems),
+        stockFlavors: skipSettings ? c.stockFlavors : (settings.stockFlavors ?? c.stockFlavors),
+        portionWeights: skipSettings ? c.portionWeights : (settings.portionWeights ?? c.portionWeights),
+        aromas: skipSettings ? c.aromas : (settings.aromas ?? c.aromas),
+        packagingSizes: skipSettings ? c.packagingSizes : (settings.packagingSizes ?? c.packagingSizes),
+        productSettings: skipSettings ? c.productSettings : (settings.productSettings ?? c.productSettings),
+        salesLayout: skipSettings ? c.salesLayout : (settings.salesLayout ?? c.salesLayout),
+        toppings: skipSettings ? c.toppings : (settings.toppings ?? c.toppings),
+        recipeTemplates: skipSettings ? c.recipeTemplates : (settings.recipeTemplates ?? c.recipeTemplates),
+        sumupSettings: skipSettings ? c.sumupSettings : (settings.sumupSettings ?? c.sumupSettings),
+        favorites: skipSettings ? c.favorites : (settings.favorites ?? c.favorites)
       }));
     };
 
@@ -2094,6 +2103,7 @@ export function useMvpStore() {
 
     const msg: CloudSettings = {
       ...(JSON.parse(hash) as CloudSettings),
+      settingsWrittenAt: window.localStorage.getItem(settingsLocalAtKey) ?? undefined,
       updatedAt: new Date().toISOString()
     };
     broadcastChannelRef.current?.postMessage(msg);
@@ -2114,29 +2124,32 @@ export function useMvpStore() {
         const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
         const cloudMachinesAt = cloudSettings.machinesWrittenAt;
         const skipMachines = !!(machinesLocalAt && (!cloudMachinesAt || cloudMachinesAt <= machinesLocalAt));
+        const settingsLocalAt = window.localStorage.getItem(settingsLocalAtKey);
+        const cloudSettingsAt = cloudSettings.settingsWrittenAt;
+        const skipSettings = !!(settingsLocalAt && (!cloudSettingsAt || cloudSettingsAt <= settingsLocalAt));
 
         const current = stateRef.current;
         const effectiveMachines = skipMachines ? current.machines : (cloudSettings.machines ?? current.machines);
         const noChange =
           JSON.stringify(effectiveMachines) === JSON.stringify(current.machines) &&
-          JSON.stringify(cloudSettings.softServeItems ?? current.softServeItems) === JSON.stringify(current.softServeItems) &&
-          JSON.stringify(cloudSettings.sumupSettings ?? current.sumupSettings) === JSON.stringify(current.sumupSettings);
+          JSON.stringify(skipSettings ? current.softServeItems : (cloudSettings.softServeItems ?? current.softServeItems)) === JSON.stringify(current.softServeItems) &&
+          JSON.stringify(skipSettings ? current.sumupSettings : (cloudSettings.sumupSettings ?? current.sumupSettings)) === JSON.stringify(current.sumupSettings);
         if (noChange) return;
 
         setState((c) => ({
           ...c,
           machines: skipMachines ? c.machines : (cloudSettings.machines ?? c.machines),
-          softServeItems: cloudSettings.softServeItems ?? c.softServeItems,
-          stockFlavors: cloudSettings.stockFlavors ?? c.stockFlavors,
-          portionWeights: cloudSettings.portionWeights ?? c.portionWeights,
-          aromas: cloudSettings.aromas ?? c.aromas,
-          packagingSizes: cloudSettings.packagingSizes ?? c.packagingSizes,
-          productSettings: cloudSettings.productSettings ?? c.productSettings,
-          salesLayout: cloudSettings.salesLayout ?? c.salesLayout,
-          toppings: cloudSettings.toppings ?? c.toppings,
-          recipeTemplates: cloudSettings.recipeTemplates ?? c.recipeTemplates,
-          sumupSettings: cloudSettings.sumupSettings ?? c.sumupSettings,
-          favorites: cloudSettings.favorites ?? c.favorites
+          softServeItems: skipSettings ? c.softServeItems : (cloudSettings.softServeItems ?? c.softServeItems),
+          stockFlavors: skipSettings ? c.stockFlavors : (cloudSettings.stockFlavors ?? c.stockFlavors),
+          portionWeights: skipSettings ? c.portionWeights : (cloudSettings.portionWeights ?? c.portionWeights),
+          aromas: skipSettings ? c.aromas : (cloudSettings.aromas ?? c.aromas),
+          packagingSizes: skipSettings ? c.packagingSizes : (cloudSettings.packagingSizes ?? c.packagingSizes),
+          productSettings: skipSettings ? c.productSettings : (cloudSettings.productSettings ?? c.productSettings),
+          salesLayout: skipSettings ? c.salesLayout : (cloudSettings.salesLayout ?? c.salesLayout),
+          toppings: skipSettings ? c.toppings : (cloudSettings.toppings ?? c.toppings),
+          recipeTemplates: skipSettings ? c.recipeTemplates : (cloudSettings.recipeTemplates ?? c.recipeTemplates),
+          sumupSettings: skipSettings ? c.sumupSettings : (cloudSettings.sumupSettings ?? c.sumupSettings),
+          favorites: skipSettings ? c.favorites : (cloudSettings.favorites ?? c.favorites)
         }));
       });
     };
@@ -3629,6 +3642,9 @@ export function useMvpStore() {
       return;
     }
 
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(settingsLocalAtKey, new Date().toISOString());
+    }
     setState((current) => {
       const stockKey = createStockFlavorId(trimmedName);
       const existingFlavor = current.stockFlavors[stockKey];
@@ -3792,6 +3808,9 @@ export function useMvpStore() {
       };
     }
 
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(settingsLocalAtKey, new Date().toISOString());
+    }
     setState((current) => {
       const currentFlavor = current.stockFlavors[flavorId];
 
@@ -4338,6 +4357,9 @@ export function useMvpStore() {
       return;
     }
 
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(settingsLocalAtKey, new Date().toISOString());
+    }
     setState((current) => ({
       ...current,
       aromas: current.aromas.includes(trimmed) ? current.aromas : [...current.aromas, trimmed]
@@ -4351,6 +4373,9 @@ export function useMvpStore() {
       return;
     }
 
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(settingsLocalAtKey, new Date().toISOString());
+    }
     setState((current) => ({
       ...current,
       packagingSizes: {
@@ -4373,6 +4398,9 @@ export function useMvpStore() {
   }, []);
 
   const updateTopping = useCallback((toppingId: string, patch: Partial<Topping>) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(settingsLocalAtKey, new Date().toISOString());
+    }
     setState((current) => ({
       ...current,
       toppings: current.toppings.map((item) => (item.id === toppingId ? { ...item, ...patch } : item)),
@@ -4381,6 +4409,9 @@ export function useMvpStore() {
   }, []);
 
   const deleteTopping = useCallback((toppingId: string) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(settingsLocalAtKey, new Date().toISOString());
+    }
     setState((current) => ({
       ...current,
       toppings: current.toppings.filter((item) => item.id !== toppingId),
@@ -4401,6 +4432,9 @@ export function useMvpStore() {
       return;
     }
 
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(settingsLocalAtKey, new Date().toISOString());
+    }
     setState((current) => ({
       ...current,
       recipeTemplates: [
@@ -4425,6 +4459,9 @@ export function useMvpStore() {
     mixLitersPerBatch?: number;
     note?: string;
   }) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(settingsLocalAtKey, new Date().toISOString());
+    }
     setState((current) => {
       const template = current.recipeTemplates.find((t) => t.id === id);
 
@@ -4480,6 +4517,9 @@ export function useMvpStore() {
       };
     }
 
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(settingsLocalAtKey, new Date().toISOString());
+    }
     setState((current) => ({
       ...current,
       recipeTemplates: current.recipeTemplates.filter((t) => t.id !== id)
@@ -4489,6 +4529,9 @@ export function useMvpStore() {
   }, [state.stockFlavors]);
 
   const assignRecipeTemplateToFlavor = useCallback((flavorId: string, templateId: string | null) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(settingsLocalAtKey, new Date().toISOString());
+    }
     setState((current) => {
       const flavor = current.stockFlavors[flavorId];
 
@@ -4862,6 +4905,9 @@ export function useMvpStore() {
   }, []);
 
   const updateStockFlavorRecipe = useCallback((flavorId: string, recipe: import("./types").SoftServeRecipe) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(settingsLocalAtKey, new Date().toISOString());
+    }
     setState((current) => {
       const existing = current.stockFlavors[flavorId];
       if (!existing) return current;
@@ -4881,6 +4927,9 @@ export function useMvpStore() {
   }, []);
 
   const updateStockFlavorPortionWeights = useCallback((flavorId: string, weights: Partial<Record<PackagingType, number>>) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(settingsLocalAtKey, new Date().toISOString());
+    }
     setState((current) => {
       const existing = current.stockFlavors[flavorId];
       if (!existing) return current;

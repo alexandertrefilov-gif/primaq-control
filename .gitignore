@@ -11,3 +11,10 @@ yarn-error.log*
 pnpm-debug.log*
 .DS_Store
 .claude/*.lock
+
+# PWA build outputs – Vercel generates these fresh during `npm run build`.
+# The dev stub (public/sw.js) is managed by scripts/dev-sw-stub.cjs via `predev`.
+# Committing locally-built production SWs causes stale cache bugs on other devices.
+public/sw.js
+public/workbox-*.js
+public/swe-worker-*.js
