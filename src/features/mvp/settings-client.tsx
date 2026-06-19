@@ -59,9 +59,11 @@ export function SettingsClient() {
     resetSalesData,
     factoryReset,
     addPackagingSize,
+    forceReloadSettingsFromCloud,
   } = useMvpStore();
   const [activeReset, setActiveReset] = useState<ResetKind | null>(null);
   const [highlightedMachineId, setHighlightedMachineId] = useState<string | null>(null);
+  const [syncState, setSyncState] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const copyRequestedRef = useRef(false);
   const prevMachineCountRef = useRef(machines.length);
 
@@ -161,6 +163,33 @@ export function SettingsClient() {
       </section>
 
       <SumupSettingsSection />
+
+      <section className="grid gap-3">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 shadow-sm">
+          <div className="flex flex-col gap-3 min-[600px]:flex-row min-[600px]:items-center min-[600px]:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-blue-900">Einstellungen vom Server neu laden</p>
+              <p className="mt-0.5 text-xs text-blue-700">
+                Überschreibt lokale Maschinen, Sorten und Konfiguration mit dem aktuellen Supabase-Stand.
+                Offene Bestellungen bleiben erhalten.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={syncState === "loading"}
+              onClick={async () => {
+                setSyncState("loading");
+                const ok = await forceReloadSettingsFromCloud();
+                setSyncState(ok ? "ok" : "error");
+                setTimeout(() => setSyncState("idle"), 3000);
+              }}
+              className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {syncState === "loading" ? "Wird geladen…" : syncState === "ok" ? "Erfolgreich ✓" : syncState === "error" ? "Fehler – Retry?" : "Jetzt synchronisieren"}
+            </button>
+          </div>
+        </div>
+      </section>
 
       <section className="grid gap-3">
         <div className="rounded-lg border-2 border-red-300 bg-red-50 p-4 shadow-sm">

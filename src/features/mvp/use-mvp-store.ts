@@ -1884,13 +1884,13 @@ export function useMvpStore() {
 
       const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
       const cloudMachinesAt = cloudSettings.machinesWrittenAt;
-      const skipMachines = !!(machinesLocalAt && (!cloudMachinesAt || cloudMachinesAt <= machinesLocalAt));
+      const skipMachines = !!(machinesLocalAt && (cloudMachinesAt && cloudMachinesAt <= machinesLocalAt));
 
       // Schützt alle nicht-maschinen Settings (stockFlavors, Aromen …) vor dem gleichen Race:
       // Sorte anlegen/löschen → Reload vor Cloud-Sync-Ende → alte Cloud überschreibt lokale Änderung.
       const settingsLocalAt = window.localStorage.getItem(settingsLocalAtKey);
       const cloudSettingsAt = cloudSettings.settingsWrittenAt;
-      const skipSettings = !!(settingsLocalAt && (!cloudSettingsAt || cloudSettingsAt <= settingsLocalAt));
+      const skipSettings = !!(settingsLocalAt && (cloudSettingsAt && cloudSettingsAt <= settingsLocalAt));
 
       setState((current) => ({
         ...current,
@@ -1979,10 +1979,10 @@ export function useMvpStore() {
     return subscribeToSettingsRealtime((cloudSettings: CloudSettings) => {
       const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
       const cloudMachinesAt = cloudSettings.machinesWrittenAt;
-      const skipMachines = !!(machinesLocalAt && (!cloudMachinesAt || cloudMachinesAt <= machinesLocalAt));
+      const skipMachines = !!(machinesLocalAt && (cloudMachinesAt && cloudMachinesAt <= machinesLocalAt));
       const settingsLocalAt = window.localStorage.getItem(settingsLocalAtKey);
       const cloudSettingsAt = cloudSettings.settingsWrittenAt;
-      const skipSettings = !!(settingsLocalAt && (!cloudSettingsAt || cloudSettingsAt <= settingsLocalAt));
+      const skipSettings = !!(settingsLocalAt && (cloudSettingsAt && cloudSettingsAt <= settingsLocalAt));
       const current = stateRef.current;
       const effectiveMachines = skipMachines ? current.machines : (cloudSettings.machines ?? current.machines);
       const noChange =
@@ -2041,7 +2041,7 @@ export function useMvpStore() {
       const skipMachines = !!(machinesLocalAt && cloudAt && cloudAt <= machinesLocalAt);
       const settingsLocalAt = window.localStorage.getItem(settingsLocalAtKey);
       const cloudSettingsAt = settings.settingsWrittenAt;
-      const skipSettings = !!(settingsLocalAt && (!cloudSettingsAt || cloudSettingsAt <= settingsLocalAt));
+      const skipSettings = !!(settingsLocalAt && (cloudSettingsAt && cloudSettingsAt <= settingsLocalAt));
 
       // Vor dem setState prüfen, ob sich tatsächlich etwas ändert (verhindert unnötige
       // persistState-Aufrufe durch Echo-Broadcasts, die identische Daten tragen).
@@ -2123,10 +2123,10 @@ export function useMvpStore() {
 
         const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
         const cloudMachinesAt = cloudSettings.machinesWrittenAt;
-        const skipMachines = !!(machinesLocalAt && (!cloudMachinesAt || cloudMachinesAt <= machinesLocalAt));
+        const skipMachines = !!(machinesLocalAt && (cloudMachinesAt && cloudMachinesAt <= machinesLocalAt));
         const settingsLocalAt = window.localStorage.getItem(settingsLocalAtKey);
         const cloudSettingsAt = cloudSettings.settingsWrittenAt;
-        const skipSettings = !!(settingsLocalAt && (!cloudSettingsAt || cloudSettingsAt <= settingsLocalAt));
+        const skipSettings = !!(settingsLocalAt && (cloudSettingsAt && cloudSettingsAt <= settingsLocalAt));
 
         const current = stateRef.current;
         const effectiveMachines = skipMachines ? current.machines : (cloudSettings.machines ?? current.machines);
@@ -4943,6 +4943,33 @@ export function useMvpStore() {
     });
   }, []);
 
+  // Löscht lokale Timestamp-Guards und übernimmt alle Settings frisch aus Supabase.
+  // Aktive Bestellungen / Verkaufsdaten werden nicht berührt.
+  const forceReloadSettingsFromCloud = useCallback(async (): Promise<boolean> => {
+    if (typeof window === "undefined") return false;
+    window.localStorage.removeItem(machinesLocalAtKey);
+    window.localStorage.removeItem(settingsLocalAtKey);
+    const cloudSettings = await loadSettingsFromCloud();
+    if (!cloudSettings) return false;
+
+    setState((current) => ({
+      ...current,
+      machines: cloudSettings.machines ?? current.machines,
+      softServeItems: cloudSettings.softServeItems ?? current.softServeItems,
+      stockFlavors: cloudSettings.stockFlavors ?? current.stockFlavors,
+      portionWeights: cloudSettings.portionWeights ?? current.portionWeights,
+      aromas: cloudSettings.aromas ?? current.aromas,
+      packagingSizes: cloudSettings.packagingSizes ?? current.packagingSizes,
+      productSettings: cloudSettings.productSettings ?? current.productSettings,
+      salesLayout: cloudSettings.salesLayout ?? current.salesLayout,
+      toppings: cloudSettings.toppings ?? current.toppings,
+      recipeTemplates: cloudSettings.recipeTemplates ?? current.recipeTemplates,
+      sumupSettings: cloudSettings.sumupSettings ?? current.sumupSettings,
+      favorites: cloudSettings.favorites ?? current.favorites
+    }));
+    return true;
+  }, []);
+
   return {
     ...state,
     hydrated,
@@ -5036,6 +5063,7 @@ export function useMvpStore() {
     assignMaterialToShift,
     returnMaterialFromShift,
     returnPowderToStock,
+    forceReloadSettingsFromCloud,
   };
 }
 
