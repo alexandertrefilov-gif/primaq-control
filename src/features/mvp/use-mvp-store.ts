@@ -1804,9 +1804,6 @@ function persistState(nextState: MvpState) {
   window.localStorage.setItem(dailySalesStorageKey, JSON.stringify(nextState.dailySales));
   window.localStorage.setItem(completedOrdersStorageKey, JSON.stringify(nextState.completedOrders));
 
-  // Merge (kein forceOverwrite): liest Cloud-State, merged und schreibt zurück.
-  // forceOverwrite würde auf dem iPad die Maschinenliste des Mac aus der Cloud löschen,
-  // weil iPad die neue Maschine noch nicht geladen hat.
   void syncSettingsToCloud(nextState);
   void syncInventoryToCloud(nextState);
   void syncShiftStateToCloud(nextState);
@@ -1885,8 +1882,8 @@ export function useMvpStore() {
       // Absichtlich auf "machines" beschränkt – andere Settings (softServeItems, Aromen …)
       // sollen immer vom Mac / der Cloud übernommen werden können.
       const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
-      const cloudAt = cloudSettings.updatedAt;
-      const skipMachines = !!(machinesLocalAt && cloudAt && cloudAt <= machinesLocalAt);
+      const cloudMachinesAt = cloudSettings.machinesWrittenAt;
+      const skipMachines = !!(machinesLocalAt && (!cloudMachinesAt || cloudMachinesAt <= machinesLocalAt));
 
       setState((current) => ({
         ...current,
@@ -1965,14 +1962,8 @@ export function useMvpStore() {
 
     return subscribeToSettingsRealtime((cloudSettings: CloudSettings) => {
       const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
-      const cloudAt = cloudSettings.updatedAt;
-      const skipMachines = !!(machinesLocalAt && cloudAt && cloudAt <= machinesLocalAt);
-
-      // noChange-Guard: verhindert den Realtime-Echo-Loop (Mac schreibt → Realtime feuert auf
-      // Mac → persistState → Cloud-Write → Realtime → …). Ohne diesen Guard steigt updatedAt
-      // in der Cloud bei jedem Loop-Durchlauf, sodass machinesLocalAt früher oder später
-      // kleiner als cloudAt ist – der Write-side-Guard in mergeSettings schlägt fehl und
-      // gelöschte Maschinen kehren nach dem nächsten persistState zurück.
+      const cloudMachinesAt = cloudSettings.machinesWrittenAt;
+      const skipMachines = !!(machinesLocalAt && (!cloudMachinesAt || cloudMachinesAt <= machinesLocalAt));
       const current = stateRef.current;
       const effectiveMachines = skipMachines ? current.machines : (cloudSettings.machines ?? current.machines);
       const noChange =
@@ -2108,8 +2099,8 @@ export function useMvpStore() {
         if (!cloudSettings) return;
 
         const machinesLocalAt = window.localStorage.getItem(machinesLocalAtKey);
-        const cloudAt = cloudSettings.updatedAt;
-        const skipMachines = !!(machinesLocalAt && cloudAt && cloudAt <= machinesLocalAt);
+        const cloudMachinesAt = cloudSettings.machinesWrittenAt;
+        const skipMachines = !!(machinesLocalAt && (!cloudMachinesAt || cloudMachinesAt <= machinesLocalAt));
 
         const current = stateRef.current;
         const effectiveMachines = skipMachines ? current.machines : (cloudSettings.machines ?? current.machines);
@@ -4205,6 +4196,9 @@ export function useMvpStore() {
   }, []);
 
   const addMachineProduct = useCallback((machineId: string) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(machinesLocalAtKey, new Date().toISOString());
+    }
     setState((current) => ({
       ...current,
       productConfigVersion: 4,
@@ -4245,6 +4239,9 @@ export function useMvpStore() {
   }, []);
 
   const deleteMachineProduct = useCallback((machineId: string, productId: ProductId) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(machinesLocalAtKey, new Date().toISOString());
+    }
     setState((current) => ({
       ...current,
       productConfigVersion: 4,

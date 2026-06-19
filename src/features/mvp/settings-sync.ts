@@ -5,33 +5,26 @@ export const SETTINGS_ROW_KEY = "primaq-settings";
 
 export type CloudSettings = Partial<MvpState> & {
   updatedAt?: string;
+  // Zeitstempel des letzten lokalen Maschinen-Schreibvorgangs zum Zeitpunkt des Uploads.
+  // Identisch mit localStorage["primaq-machines-local-at"] beim Aufruf von syncSettingsToCloud.
+  // Wird von loadSettingsFromCloud und den BroadcastChannel-Empfängern genutzt, um zu
+  // entscheiden, ob lokale oder Cloud-Maschinen neuer sind (skipMachines-Logik).
+  machinesWrittenAt?: string;
 };
 
-// machinesLocalAtKey muss identisch mit dem Wert in use-mvp-store.ts sein.
-// Kein Re-Export dort möglich (zirkuläre Abhängigkeit), daher hier hartcodiert.
 const MACHINES_LOCAL_AT_KEY = "primaq-machines-local-at";
 
-// machinesLocalAt wird als Snapshot von syncSettingsToCloud übergeben – gelesen VOR dem
-// async Supabase-Read, damit parallel laufende Aufrufe nicht den Wert eines später
-// gesetzten machinesLocalAtKey (z. B. durch deleteMachine) lesen und irrtümlich
-// useLocalMachines = true mit veralteten Maschinen auslösen.
-function mergeSettings(next: CloudSettings, existing: CloudSettings | null, machinesLocalAt: string | null): CloudSettings {
-  if (!existing) return next;
-
-  const cloudAt = existing.updatedAt;
-  const useLocalMachines = !!(machinesLocalAt && (!cloudAt || machinesLocalAt >= cloudAt));
-
-  return {
-    ...existing,
-    ...next,
-    machines: useLocalMachines ? next.machines : (existing.machines ?? next.machines),
-    updatedAt: new Date().toISOString()
-  };
-}
-
+// Schreibt den kompletten Settings-Block direkt in Supabase – kein GET, kein Merge.
+// Lokale Daten sind immer autoritativ; die Queue (settingsSyncQueue) stellt sicher,
+// dass parallele Aufrufe sequenziell ausgeführt werden.
+// forceOverwrite=true (Werksreset): führt zusätzlich eine Lese-Verifikation durch.
 export async function syncSettingsToCloud(state: MvpState, options?: { forceOverwrite?: boolean }) {
   try {
-    const nextValue: CloudSettings = {
+    const machinesWrittenAt = typeof window !== "undefined"
+      ? (window.localStorage.getItem(MACHINES_LOCAL_AT_KEY) ?? undefined)
+      : undefined;
+
+    const value: CloudSettings = {
       machines: state.machines,
       softServeItems: state.softServeItems,
       stockFlavors: state.stockFlavors,
@@ -44,45 +37,35 @@ export async function syncSettingsToCloud(state: MvpState, options?: { forceOver
       recipeTemplates: state.recipeTemplates,
       sumupSettings: state.sumupSettings,
       favorites: state.favorites,
+      machinesWrittenAt,
       updatedAt: new Date().toISOString()
     };
 
-    let value: CloudSettings;
-    if (options?.forceOverwrite) {
-      // Beim Reset direkt überschreiben, ohne mergeSettings – dadurch können
-      // z. B. nach einem Werksreset auch leere Maschinenlisten ([]) dauerhaft
-      // in der Cloud gesetzt werden.
-      value = nextValue;
-    } else {
-      // Snapshot VOR dem async Supabase-Read: spätere Änderungen an machinesLocalAt
-      // (z. B. durch deleteMachine während dieses Calls noch läuft) dürfen diesen
-      // Aufruf nicht beeinflussen.
-      const machinesLocalAt = typeof window !== "undefined" ? window.localStorage.getItem(MACHINES_LOCAL_AT_KEY) : null;
+    const { error } = await supabase
+      .from("settings")
+      .upsert({ key: SETTINGS_ROW_KEY, value }, { onConflict: "key" });
 
-      const { data } = await supabase
+    if (error) {
+      console.warn("Supabase settings sync failed", error);
+    }
+
+    if (options?.forceOverwrite) {
+      const { data, error: verifyError } = await supabase
         .from("settings")
         .select("value")
         .eq("key", SETTINGS_ROW_KEY)
         .maybeSingle();
 
-      value = mergeSettings(nextValue, (data?.value as CloudSettings | null) ?? null, machinesLocalAt);
-    }
+      if (verifyError) throw verifyError;
 
-    const { error } = await supabase
-      .from("settings")
-      .upsert(
-        {
-          key: SETTINGS_ROW_KEY,
-          value
-        },
-        { onConflict: "key" }
-      );
-
-    if (error) {
-      console.warn("Supabase settings sync failed", error);
+      const persistedMachines = (data?.value as CloudSettings | null)?.machines;
+      if (JSON.stringify(persistedMachines ?? null) !== JSON.stringify(value.machines ?? null)) {
+        throw new Error("Supabase settings reset verification failed");
+      }
     }
   } catch (error) {
     console.warn("Supabase settings sync unavailable", error);
+    if (options?.forceOverwrite) throw error;
   }
 }
 
@@ -106,46 +89,11 @@ export async function loadSettingsFromCloud(): Promise<CloudSettings | null> {
   }
 }
 
-// Abonniert Echtzeit-Änderungen der settings-Zeile in Supabase Realtime.
-// Nur Einstellungsfelder werden synchronisiert – keine Verkaufs- oder Einsatzdaten.
-// Gibt eine Cleanup-Funktion zurück (für React useEffect return).
+// Realtime für Settings deaktiviert – verhindert Echo-Loop und Auto-Overwrite während
+// der Bearbeitung. Settings werden beim Mount einmalig aus der Cloud geladen
+// (loadSettingsFromCloud) und bei Tab-Wechsel nachgeladen (visibilitychange-Handler).
 export function subscribeToSettingsRealtime(
-  onUpdate: (settings: CloudSettings) => void
+  _onUpdate: (settings: CloudSettings) => void
 ): () => void {
-  try {
-    const channel = supabase
-      .channel("primaq-settings-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "settings",
-          filter: `key=eq.${SETTINGS_ROW_KEY}`
-        },
-        (payload) => {
-          try {
-            const row = payload.new as { value?: unknown };
-            const settings = row.value as CloudSettings | null | undefined;
-            if (settings) {
-              onUpdate(settings);
-            }
-          } catch (err) {
-            console.warn("[Realtime] Error processing settings update:", err);
-          }
-        }
-      )
-      .subscribe((status, err) => {
-        if (err) {
-          console.warn("[Realtime] Channel status:", status, err);
-        }
-      });
-
-    return () => {
-      void supabase.removeChannel(channel).catch(() => {});
-    };
-  } catch (err) {
-    console.warn("[Realtime] Could not subscribe to settings:", err);
-    return () => {};
-  }
+  return () => {};
 }

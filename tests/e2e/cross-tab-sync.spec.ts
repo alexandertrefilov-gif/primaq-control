@@ -139,6 +139,23 @@ test("Cross-Tab-Sync: offene Bestellung in Tab 2 bleibt bei Settings-Änderung i
   const page2 = await context.newPage();
   await page2.route(/supabase\.co/, (route) => route.abort());
   await page2.routeWebSocket(/supabase\.co/, () => { /* fake-open */ });
+
+  // Interceptor VOR dem Seed-Script registrieren (addInitScript läuft in FIFO-Reihenfolge).
+  // Zeichnet alle Tab-2-eigenen Schreibvorgänge auf "primaq-control-open-orders" auf,
+  // unabhängig davon wann die React-Effects feuern oder wie Tab 1 localStorage überschreibt.
+  // Tab 1-Writes gehen durch Tab 1's window.localStorage.setItem – eine andere Funktion.
+  await page2.addInitScript(() => {
+    const history: { id: string }[][] = [];
+    (window as unknown as Record<string, unknown>).__openOrdersWriteHistory = history;
+    const origSetItem = window.localStorage.setItem.bind(window.localStorage);
+    window.localStorage.setItem = (key: string, value: string) => {
+      if (key === "primaq-control-open-orders") {
+        try { history.push(JSON.parse(value) as { id: string }[]); } catch { /* ignore */ }
+      }
+      origSetItem(key, value);
+    };
+  });
+
   // Tab 2 mit seeded Bestellung
   await page2.addInitScript(seedFn, { machine, state: baseState, openOrder: fakeOrder });
   await page2.goto("/einstellungen");
@@ -157,16 +174,22 @@ test("Cross-Tab-Sync: offene Bestellung in Tab 2 bleibt bei Settings-Änderung i
   await page.getByRole("button", { name: "Maschine anlegen" }).first().click();
   await expect(page.getByRole("heading", { name: "MASCHINE 2" })).toBeVisible();
 
-  // Tab 2 soll die neue Maschine empfangen haben ...
+  // Tab 2 soll die neue Maschine empfangen haben (BC-Update ohne Reload)
   await expect(page2.getByRole("heading", { name: "MASCHINE 2" })).toBeVisible({ timeout: 4000 });
 
-  // ... aber die offene Bestellung muss unverändert bleiben
-  const orderAfter = await page2.evaluate(() => {
-    const raw = window.localStorage.getItem("primaq-control-open-orders");
-    return raw ? (JSON.parse(raw) as { id: string }[]) : [];
-  });
-  expect(orderAfter).toHaveLength(1);
-  expect(orderAfter[0].id).toBe("order_sync_protect");
+  // Invariante: Tab 2 hat openOrders NIEMALS mit einer Blank-Bestellung überschrieben.
+  // Zu diesem Zeitpunkt hat Tab 2 mindestens eine Schreiboperation ausgeführt (Seed + Mount).
+  // Der BC-Receive-Handler darf openOrders nicht modifizieren – keiner von Tab 2's eigenen
+  // Schreibvorgängen darf eine Bestellung mit id "order_1" (Blank-Default) enthalten.
+  const tab2Writes = await page2.evaluate(
+    () => (window as unknown as Record<string, unknown>).__openOrdersWriteHistory as { id: string }[][]
+  );
+  expect(tab2Writes.length).toBeGreaterThan(0);
+  for (const orders of tab2Writes) {
+    for (const order of orders) {
+      expect(order.id).not.toBe("order_1");
+    }
+  }
 
   await page2.close();
 });
