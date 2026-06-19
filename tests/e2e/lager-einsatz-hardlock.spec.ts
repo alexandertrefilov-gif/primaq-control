@@ -332,3 +332,79 @@ test("6: Lager 0 Pkg im aktiven Einsatz → + Button gesperrt, kein Abzug", asyn
     await expect(plusButtons.first()).toBeDisabled();
   }
 });
+
+// ── Test D: Pulver zurückbuchen erhöht Lagerbestand ───────────────────────────
+
+test("D: Pulver zurückbuchen → Lagerbestand steigt", async ({ page }) => {
+  // 1 Pkg entspricht 1 Batch × 5 L laut Rezept (packageKg = powderKgPerBatch = 2)
+  const state = buildState({
+    activeShift,
+    mixStocks: { [FLAVOR_ID]: mixStockLine }, // startLiters = 5 L
+    mixStockMovements: {},
+    generalStock: { [STOCK_ITEM_ID]: stockEntry(0) } // Lager leer, aber Eintrag vorhanden
+  });
+
+  await page.addInitScript(seedScript, { state });
+  await blockSupabase(page);
+
+  await page.goto("/einsatz");
+  await page.waitForFunction(() => !document.body.textContent?.includes("Laden…"));
+
+  // Einsatz zurücksetzen → PowderReturnDialog öffnet sich (5 L restbestand)
+  await page.getByText("Einsatz zuruecksetzen").click();
+
+  // Dialog: "Pulver zurückbuchen" sichtbar
+  await expect(page.getByText("Pulver zurückbuchen")).toBeVisible();
+
+  // Rückgabe: alle 1 Pkg zurück (5 L = 1 Pkg laut Rezept)
+  await page.getByPlaceholder("1").fill("1");
+
+  // Weiter → onReturn(FLAVOR_ID, 1) wird aufgerufen, Lager soll auf 1 steigen
+  await page.getByRole("button", { name: "Weiter" }).click();
+
+  // Lagerbestand muss von 0 auf 1 gestiegen sein
+  await expect
+    .poll(() => readGeneralStockQty(page), { timeout: 4000 })
+    .toBe(1);
+});
+
+// ── Test E: Einsatz beenden – mixStocks geleert, Abschlussdata korrekt ────────
+
+test("E: Einsatz vollständig beenden → activeShift null, Lager korrekt", async ({ page }) => {
+  // Einsatz mit 5 L Startbestand, Lager 0 Pkg (komplett aufgebraucht)
+  const state = buildState({
+    activeShift,
+    mixStocks: { [FLAVOR_ID]: { ...mixStockLine, startLiters: 0, refilledLiters: 0 } }, // 0 L restbestand
+    mixStockMovements: {},
+    generalStock: { [STOCK_ITEM_ID]: stockEntry(0) }
+  });
+
+  await page.addInitScript(seedScript, { state });
+  await blockSupabase(page);
+
+  await page.goto("/einsatz");
+  await page.waitForFunction(() => !document.body.textContent?.includes("Laden…"));
+
+  // Kein Pulver-Restbestand → direkt Abschluss-Dialog
+  await page.getByText("Einsatz zuruecksetzen").click();
+
+  // Abschluss-Dialog öffnet sich
+  await expect(page.getByText("Einsatz beenden")).toBeVisible({ timeout: 3000 });
+
+  // Einsatz bestätigen
+  await page.getByRole("button", { name: "Einsatz jetzt beenden" }).click();
+
+  // activeShift muss null sein
+  const activeShiftAfter = await page.evaluate(() => {
+    const raw = window.localStorage.getItem("primaq-control-mvp-state");
+    if (!raw) return "NOT_FOUND";
+    const s = JSON.parse(raw) as { activeShift?: unknown };
+    return s.activeShift ?? null;
+  });
+  expect(activeShiftAfter).toBeNull();
+
+  // Lager bleibt unverändert bei 0 Pkg (kein Pulver zurückgebucht)
+  await expect
+    .poll(() => readGeneralStockQty(page), { timeout: 4000 })
+    .toBe(0);
+});

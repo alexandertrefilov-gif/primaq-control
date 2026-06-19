@@ -3507,6 +3507,29 @@ export function useMvpStore() {
 
       if (liters < 0) return current;
 
+      // Hard Lock: Lager-Check identisch zu startShift – verhindert virtuellen Bestand
+      let nextGeneralStock = current.generalStock;
+      if (liters > 0) {
+        const recipe = flavor.recipe;
+        const packageKgVal = typeof recipe.packageKg === "number" && recipe.packageKg > 0
+          ? recipe.packageKg
+          : recipe.powderKgPerBatch;
+        let packagesNeeded = 0;
+        if (input.mode === "packages") {
+          packagesNeeded = typeof input.value === "number" && input.value > 0 ? Math.ceil(input.value) : 0;
+        } else {
+          const batches = input.mode === "batches"
+            ? (typeof input.value === "number" && input.value > 0 ? input.value : 0)
+            : recipe.mixLitersPerBatch > 0 ? liters / recipe.mixLitersPerBatch : 0;
+          packagesNeeded = batches > 0 ? Math.ceil(batches * (recipe.powderKgPerBatch / packageKgVal)) : 0;
+        }
+        if (packagesNeeded > 0) {
+          const existing = findGeneralStockItemForFlavor(current.generalStock, flavor.id);
+          if (!existing || existing.quantityOnHand < packagesNeeded) return current;
+          nextGeneralStock = { ...current.generalStock, [existing.id]: { ...existing, quantityOnHand: existing.quantityOnHand - packagesNeeded, lastUpdatedAt: new Date().toISOString() } };
+        }
+      }
+
       const currentLine = current.mixStocks[flavor.id] ?? createMixStockLine(flavor.id, 0, 0, 0, {
         name: flavor.name,
         recipe: flavor.recipe
@@ -3523,6 +3546,7 @@ export function useMvpStore() {
 
       return {
         ...current,
+        generalStock: nextGeneralStock,
         mixStocks: {
           ...current.mixStocks,
           [flavor.id]: createMixStockLine(flavor.id, liters, currentLine.refilledLiters, currentLine.correctedLiters ?? 0, {

@@ -519,6 +519,18 @@ export function ShiftStartForm({
                         : undefined;
                       const stockAvailable = powderEntry?.quantityOnHand ?? null;
                       const stockInsufficient = stockAvailable !== null && packagesNeeded > stockAvailable;
+                      const stockDotClass =
+                        stockAvailable === null || stockAvailable <= 0
+                          ? "bg-red-500"
+                          : packagesNeeded > 0
+                            ? packagesNeeded > stockAvailable
+                              ? "bg-red-500"
+                              : packagesNeeded === stockAvailable
+                                ? "bg-yellow-400"
+                                : "bg-green-500"
+                            : stockAvailable <= 2
+                              ? "bg-yellow-400"
+                              : "bg-green-500";
                       const slotLabel = `Slot ${slot}`;
                       const flavorName = flavor?.name || slotLabel;
 
@@ -531,6 +543,7 @@ export function ShiftStartForm({
                             <div>
                               <p className="font-black text-ink">
                                 <span className="mr-2 text-xs font-bold text-primaq-700">{slotLabel}</span>
+                                <span className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${stockDotClass}`} />
                                 {flavorName}
                               </p>
                               {litersPerPkg > 0 ? (
