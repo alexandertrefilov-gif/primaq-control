@@ -169,7 +169,13 @@ test.beforeEach(async ({ page }) => {
           materialCategories: [materialCategory],
           materialItems,
           shiftMaterialAssignments: [],
-          sumupSettings: { enabled: true, paymentLink: "https://pay.sumup.com/abnahme", hintText: "Bitte QR-Code mit SumUp scannen und bestaetigen" }
+          sumupSettings: { enabled: true, paymentLink: "https://pay.sumup.com/abnahme", hintText: "Bitte QR-Code mit SumUp scannen und bestaetigen" },
+          generalStock: {
+            gs_vanille: { id: "gs_vanille", flavorId: "vanille", productName: "Vanille", flavorName: "Vanille", recipe: { powderKgPerBatch: 2, waterLitersPerBatch: 4, mixLitersPerBatch: 6, packageKg: 2 }, unit: "Pkg", quantityOnHand: 100, purchasePriceCents: null, active: true, createdAt: "2026-01-01T00:00:00.000Z", lastUpdatedAt: "2026-01-01T00:00:00.000Z" },
+            gs_schoko: { id: "gs_schoko", flavorId: "schoko", productName: "Schoko", flavorName: "Schoko", recipe: { powderKgPerBatch: 2, waterLitersPerBatch: 4, mixLitersPerBatch: 6, packageKg: 2 }, unit: "Pkg", quantityOnHand: 100, purchasePriceCents: null, active: true, createdAt: "2026-01-01T00:00:00.000Z", lastUpdatedAt: "2026-01-01T00:00:00.000Z" },
+            gs_erdbeer: { id: "gs_erdbeer", flavorId: "erdbeer", productName: "Erdbeer", flavorName: "Erdbeer", recipe: { powderKgPerBatch: 2, waterLitersPerBatch: 4, mixLitersPerBatch: 6, packageKg: 2 }, unit: "Pkg", quantityOnHand: 100, purchasePriceCents: null, active: true, createdAt: "2026-01-01T00:00:00.000Z", lastUpdatedAt: "2026-01-01T00:00:00.000Z" },
+            gs_zitrone: { id: "gs_zitrone", flavorId: "zitrone", productName: "Zitrone", flavorName: "Zitrone", recipe: { powderKgPerBatch: 2, waterLitersPerBatch: 4, mixLitersPerBatch: 6, packageKg: 2 }, unit: "Pkg", quantityOnHand: 100, purchasePriceCents: null, active: true, createdAt: "2026-01-01T00:00:00.000Z", lastUpdatedAt: "2026-01-01T00:00:00.000Z" }
+          }
         })
       );
       window.localStorage.setItem(

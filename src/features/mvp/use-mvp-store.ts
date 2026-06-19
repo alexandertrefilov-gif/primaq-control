@@ -2216,29 +2216,18 @@ export function useMvpStore() {
     };
 
     setState((current) => {
-      const mixStocks = Object.values(current.stockFlavors).filter((flavor) => flavor.active !== false).reduce((acc, flavor) => {
-        const startLiters = calculateMixInputLiters(formData.mixStartInputs?.[flavor.id], flavor);
-
-        if (startLiters > 0) {
-          const currentLine = acc[flavor.id] ?? createMixStockLine(flavor.id);
-          acc[flavor.id] = createMixStockLine(flavor.id, currentLine.startLiters + startLiters, 0, 0, {
-            name: flavor.name,
-            recipe: flavor.recipe
-          });
-        }
-
-        return acc;
-      }, {} as MvpState["mixStocks"]);
-
       const now = new Date().toISOString();
       const nextGeneralStock = { ...current.generalStock };
-      Object.values(current.stockFlavors)
-        .filter((flavor) => flavor.active !== false)
-        .forEach((flavor) => {
-          const input = formData.mixStartInputs?.[flavor.id];
-          if (!input?.value || input.value <= 0) return;
 
-          let packagesNeeded = 0;
+      // Einzel-Pass: Startbestand berechnen, Hard Lock prüfen, Lager abziehen.
+      // Sorte wird nur in mixStocks aufgenommen wenn Lager-Eintrag vorhanden und ausreichend.
+      const mixStocks = Object.values(current.stockFlavors).filter((flavor) => flavor.active !== false).reduce((acc, flavor) => {
+        const input = formData.mixStartInputs?.[flavor.id];
+        const startLiters = calculateMixInputLiters(input, flavor);
+        if (startLiters <= 0) return acc;
+
+        let packagesNeeded = 0;
+        if (input?.value && input.value > 0) {
           if (input.mode === "packages") {
             packagesNeeded = Math.ceil(input.value);
           } else {
@@ -2250,18 +2239,26 @@ export function useMvpStore() {
               : flavor.recipe.powderKgPerBatch;
             packagesNeeded = batches > 0 ? Math.ceil(batches * (flavor.recipe.powderKgPerBatch / packageKgVal)) : 0;
           }
+        }
 
-          if (packagesNeeded <= 0) return;
-
+        if (packagesNeeded > 0) {
           const existing = findGeneralStockItemForFlavor(current.generalStock, flavor.id);
-          if (existing) {
-            nextGeneralStock[existing.id] = {
-              ...existing,
-              quantityOnHand: Math.max(0, existing.quantityOnHand - packagesNeeded),
-              lastUpdatedAt: now
-            };
-          }
+          // Hard Lock: kein Lager-Eintrag oder Bestand zu gering → Sorte nicht übernehmen
+          if (!existing || existing.quantityOnHand < packagesNeeded) return acc;
+          nextGeneralStock[existing.id] = {
+            ...existing,
+            quantityOnHand: existing.quantityOnHand - packagesNeeded,
+            lastUpdatedAt: now
+          };
+        }
+
+        const currentLine = acc[flavor.id] ?? createMixStockLine(flavor.id);
+        acc[flavor.id] = createMixStockLine(flavor.id, currentLine.startLiters + startLiters, 0, 0, {
+          name: flavor.name,
+          recipe: flavor.recipe
         });
+        return acc;
+      }, {} as MvpState["mixStocks"]);
 
       // Apply slot assignments to machine products so Verkauf reads the correct flavors.
       // Filter deployments to only those that match an existing machine (prevents synthetic machines).
@@ -3588,11 +3585,9 @@ export function useMvpStore() {
         const packagesNeeded = batches > 0 ? Math.ceil(batches * (recipe.powderKgPerBatch / packageKg)) : 0;
         if (packagesNeeded > 0) {
           const existing = findGeneralStockItemForFlavor(current.generalStock, flavor.id);
-          // Hard block: never allow stock to go negative
-          if (existing && existing.quantityOnHand < packagesNeeded) return current;
-          if (existing) {
-            nextGeneralStock = { ...current.generalStock, [existing.id]: { ...existing, quantityOnHand: Math.max(0, existing.quantityOnHand - packagesNeeded), lastUpdatedAt: new Date().toISOString() } };
-          }
+          // Hard Lock: kein Lager-Eintrag oder Bestand zu gering → Buchung abgelehnt
+          if (!existing || existing.quantityOnHand < packagesNeeded) return current;
+          nextGeneralStock = { ...current.generalStock, [existing.id]: { ...existing, quantityOnHand: existing.quantityOnHand - packagesNeeded, lastUpdatedAt: new Date().toISOString() } };
         }
         nextStart = roundQuantity(nextStart + actualLiters);
       } else if (type === "initial_minus") {
@@ -3604,11 +3599,9 @@ export function useMvpStore() {
         const packagesNeeded = batches > 0 ? Math.ceil(batches * (recipe.powderKgPerBatch / packageKg)) : 0;
         if (packagesNeeded > 0) {
           const existing = findGeneralStockItemForFlavor(current.generalStock, flavor.id);
-          // Hard block: never allow stock to go negative
-          if (existing && existing.quantityOnHand < packagesNeeded) return current;
-          if (existing) {
-            nextGeneralStock = { ...current.generalStock, [existing.id]: { ...existing, quantityOnHand: Math.max(0, existing.quantityOnHand - packagesNeeded), lastUpdatedAt: new Date().toISOString() } };
-          }
+          // Hard Lock: kein Lager-Eintrag oder Bestand zu gering → Buchung abgelehnt
+          if (!existing || existing.quantityOnHand < packagesNeeded) return current;
+          nextGeneralStock = { ...current.generalStock, [existing.id]: { ...existing, quantityOnHand: existing.quantityOnHand - packagesNeeded, lastUpdatedAt: new Date().toISOString() } };
         }
         nextRefill = roundQuantity(nextRefill + actualLiters);
       } else if (type === "refill_minus") {
@@ -3647,7 +3640,7 @@ export function useMvpStore() {
         aroma: trimmedName,
         recipe
       };
-      const addedLiters = calculateMixInputLiters(flavorInput.stockInput, stockProduct);
+      const rawAddedLiters = calculateMixInputLiters(flavorInput.stockInput, stockProduct);
       const currentLine = current.mixStocks[stockKey] ?? createMixStockLine(stockKey, 0, 0, 0, {
         name: trimmedName,
         recipe
@@ -3656,8 +3649,31 @@ export function useMvpStore() {
         ? flavorInput.portionWeights as Record<PackagingType, number>
         : existingFlavor?.portionWeights;
 
+      // Hard Lock: Initialbestand nur wenn Lager-Eintrag vorhanden und ausreichend
+      let addedLiters = 0;
+      let nextGeneralStockForFlavor = current.generalStock;
+      if (rawAddedLiters > 0) {
+        const existingStock = findGeneralStockItemForFlavor(current.generalStock, stockKey);
+        if (existingStock) {
+          const pkgKg = typeof recipe.packageKg === "number" && recipe.packageKg > 0 ? recipe.packageKg : recipe.powderKgPerBatch;
+          const batches = recipe.mixLitersPerBatch > 0 ? rawAddedLiters / recipe.mixLitersPerBatch : 0;
+          const packagesNeeded = batches > 0 ? Math.ceil(batches * (recipe.powderKgPerBatch / pkgKg)) : 0;
+          if (packagesNeeded === 0 || existingStock.quantityOnHand >= packagesNeeded) {
+            addedLiters = rawAddedLiters;
+            if (packagesNeeded > 0) {
+              nextGeneralStockForFlavor = {
+                ...current.generalStock,
+                [existingStock.id]: { ...existingStock, quantityOnHand: existingStock.quantityOnHand - packagesNeeded, lastUpdatedAt: new Date().toISOString() }
+              };
+            }
+          }
+        }
+        // Kein Lager-Eintrag → addedLiters bleibt 0, keine Buchung
+      }
+
       const baseState = {
         ...current,
+        generalStock: nextGeneralStockForFlavor,
         stockFlavors: {
           ...current.stockFlavors,
           [stockKey]: {
@@ -4979,4 +4995,5 @@ export const _mvpInternals = {
   normalizeMixProductLinks,
   createStockFlavorId,
   findGeneralStockItemForFlavor,
+  calculateMixInputLiters,
 };

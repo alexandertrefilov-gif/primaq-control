@@ -82,7 +82,10 @@ test.beforeEach(async ({ page }) => {
           dayReport: null,
           materialCategories: [materialCategory],
           materialItems: { [materialItem.id]: materialItem },
-          shiftMaterialAssignments: []
+          shiftMaterialAssignments: [],
+          generalStock: {
+            gs_vanille_p2: { id: "gs_vanille_p2", flavorId: "vanille-p2", productName: "Vanille P2", flavorName: "Vanille P2", recipe: { powderKgPerBatch: 2, waterLitersPerBatch: 4, mixLitersPerBatch: 6, packageKg: 2 }, unit: "Pkg", quantityOnHand: 100, purchasePriceCents: null, active: true, createdAt: "2026-01-01T00:00:00.000Z", lastUpdatedAt: "2026-01-01T00:00:00.000Z" }
+          }
         })
       );
       window.localStorage.setItem(

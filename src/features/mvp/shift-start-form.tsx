@@ -81,18 +81,45 @@ export function ShiftStartForm({
   const activeMachines = machines.filter((machine) => machine.active !== false && machine.visibleInSale !== false);
   const activeFlavors = Object.values(stockFlavors).filter((f) => f.active !== false);
 
-  const insufficientStockFlavors = useMemo(() => {
+  // Sorten ohne Lager-Eintrag (Hard Lock: Eintrag fehlt komplett)
+  const missingLagerFlavors = useMemo(() => {
     if (!generalStock) return [] as string[];
+    const seen = new Set<string>();
     const names: string[] = [];
     for (const machine of activeMachines) {
       const assignment = slotAssignments[machine.id] ?? {};
       for (const slot of ["A", "B"] as const) {
         const flavorId = assignment[slot];
-        if (!flavorId) continue;
+        if (!flavorId || seen.has(flavorId)) continue;
         const flavor = stockFlavors[flavorId];
         if (!flavor) continue;
         const input = mixStartInputs[flavorId] ?? { mode: "packages" as const, value: null };
         if (!input.value || input.value <= 0) continue;
+        // Kein Pulververbrauch laut Rezept → kein Lager-Check nötig (übereinstimmend mit startShift)
+        if (_mvpInternals.calculateMixInputLiters(input, flavor) <= 0) continue;
+        const powderEntry = _mvpInternals.findGeneralStockItemForFlavor(generalStock, flavorId);
+        if (!powderEntry) { seen.add(flavorId); names.push(flavor.name); }
+      }
+    }
+    return names;
+  }, [activeMachines, generalStock, mixStartInputs, slotAssignments, stockFlavors]);
+
+  // Sorten mit Lager-Eintrag aber unzureichendem Bestand
+  const insufficientStockFlavors = useMemo(() => {
+    if (!generalStock) return [] as string[];
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const machine of activeMachines) {
+      const assignment = slotAssignments[machine.id] ?? {};
+      for (const slot of ["A", "B"] as const) {
+        const flavorId = assignment[slot];
+        if (!flavorId || seen.has(flavorId)) continue;
+        const flavor = stockFlavors[flavorId];
+        if (!flavor) continue;
+        const input = mixStartInputs[flavorId] ?? { mode: "packages" as const, value: null };
+        if (!input.value || input.value <= 0) continue;
+        // Kein Pulververbrauch laut Rezept → kein Lager-Check nötig
+        if (_mvpInternals.calculateMixInputLiters(input, flavor) <= 0) continue;
         const recipe = flavor.recipe;
         const packageKgVal = typeof recipe.packageKg === "number" && recipe.packageKg > 0
           ? recipe.packageKg : recipe.powderKgPerBatch;
@@ -107,15 +134,17 @@ export function ShiftStartForm({
         }
         const powderEntry = _mvpInternals.findGeneralStockItemForFlavor(generalStock, flavorId);
         const avail = powderEntry?.quantityOnHand ?? null;
-        if (avail !== null && packagesNeeded > avail) names.push(flavor.name);
+        // Nur unzureichender Bestand (kein Eintrag = missingLagerFlavors, nicht hier)
+        if (avail !== null && packagesNeeded > avail) { seen.add(flavorId); names.push(flavor.name); }
       }
     }
     return names;
   }, [activeMachines, generalStock, mixStartInputs, slotAssignments, stockFlavors]);
 
   const canStart = useMemo(
-    () => date.trim().length > 0 && eventName.trim().length > 0 && insufficientStockFlavors.length === 0,
-    [date, eventName, insufficientStockFlavors]
+    () => date.trim().length > 0 && eventName.trim().length > 0 &&
+          missingLagerFlavors.length === 0 && insufficientStockFlavors.length === 0,
+    [date, eventName, insufficientStockFlavors, missingLagerFlavors]
   );
 
   if (activeShift) {
@@ -556,6 +585,7 @@ export function ShiftStartForm({
                             </div>
                             <div className="flex min-h-10 items-center rounded-lg border border-black/15 bg-white focus-within:border-primaq-500">
                               <input
+                                data-testid={`shift-mix-start-input-${flavorId}`}
                                 inputMode="decimal"
                                 value={input.value === null ? "" : formatDecimal(input.value)}
                                 onChange={(event) => setMixStartInputs((current) => ({
@@ -580,6 +610,11 @@ export function ShiftStartForm({
         ) : null}
       </div>
 
+      {missingLagerFlavors.length > 0 ? (
+        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          Sorte nicht im Pulver-Lager erfasst: {missingLagerFlavors.join(", ")}. Zuerst Ware im Lager anlegen.
+        </p>
+      ) : null}
       {insufficientStockFlavors.length > 0 ? (
         <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
           Nicht genügend Bestand im Lager: {insufficientStockFlavors.join(", ")}. Bitte Lager auffüllen oder Startmenge reduzieren.
@@ -793,9 +828,13 @@ function MachineSlotCard({
 
   const stepInput: MixStockInput = { mode: "packages", value: 1 };
 
-  // Lager-Sperre: wenn ein Pulver-Eintrag vorhanden ist aber leer, sperren
+  // Hard Lock: kein Lager-Eintrag = gesperrt; Eintrag vorhanden aber leer = gesperrt
   const warehouseQty = generalStockItem?.quantityOnHand ?? null;
-  const warehouseBlocked = warehouseQty !== null && warehouseQty < 1;
+  const warehouseMissing = warehouseQty === null;
+  const warehouseBlocked = warehouseMissing || warehouseQty! < 1;
+  const warehouseBlockReason = warehouseMissing
+    ? "Sorte nicht im Pulver-Lager erfasst – zuerst Ware im Lager anlegen."
+    : "Nicht genügend Pulver im Lager. Bitte zuerst Ware im Lager buchen.";
 
   function openEdit(field: "initial" | "refill") {
     const current = field === "initial" ? (line?.startLiters ?? 0) : (line?.refilledLiters ?? 0);
@@ -918,7 +957,9 @@ function MachineSlotCard({
               </p>
             ) : null}
             {warehouseBlocked ? (
-              <p className="mt-1 text-[10px] font-bold text-red-600">0 Pkg im Lager</p>
+              <p className="mt-1 text-[10px] font-bold text-red-600">
+                {warehouseMissing ? "Nicht im Lager erfasst" : "0 Pkg im Lager"}
+              </p>
             ) : warehouseQty !== null ? (
               <p className="mt-1 text-[10px] text-black/40">{warehouseQty} Pkg im Lager</p>
             ) : null}
@@ -926,7 +967,7 @@ function MachineSlotCard({
           <button
             type="button"
             disabled={warehouseBlocked}
-            title={warehouseBlocked ? "Nicht genügend Pulver im Lager. Bitte zuerst Ware im Lager buchen." : undefined}
+            title={warehouseBlocked ? warehouseBlockReason : undefined}
             className={warehouseBlocked ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-[#f5f5f0] text-xl font-black text-black/25 cursor-not-allowed" : btnPlus}
             onClick={() => !warehouseBlocked && onStep("initial_plus", stepInput)}
           >+</button>
@@ -965,13 +1006,15 @@ function MachineSlotCard({
               </p>
             ) : null}
             {warehouseBlocked ? (
-              <p className="mt-1 text-[10px] font-bold text-red-600">Nachfüllung gesperrt</p>
+              <p className="mt-1 text-[10px] font-bold text-red-600">
+                {warehouseMissing ? "Nicht erfasst" : "Nachfüllung gesperrt"}
+              </p>
             ) : null}
           </div>
           <button
             type="button"
             disabled={warehouseBlocked}
-            title={warehouseBlocked ? "Nicht genügend Pulver im Lager. Bitte zuerst Ware im Lager buchen." : undefined}
+            title={warehouseBlocked ? warehouseBlockReason : undefined}
             className={warehouseBlocked ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-[#f5f5f0] text-xl font-black text-black/25 cursor-not-allowed" : btnPlus}
             onClick={() => !warehouseBlocked && onStep("refill_plus", stepInput)}
           >+</button>

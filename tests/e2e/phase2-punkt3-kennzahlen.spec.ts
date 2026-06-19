@@ -60,7 +60,10 @@ test.beforeEach(async ({ page }) => {
           materialCategories: [],
           materialItems: {},
           shiftMaterialAssignments: [],
-          sumupSettings: { enabled: true, paymentLink: "", hintText: "" }
+          sumupSettings: { enabled: true, paymentLink: "", hintText: "" },
+          generalStock: {
+            gs_erdbeer: { id: "gs_erdbeer", flavorId: "erdbeer", productName: "Erdbeer", flavorName: "Erdbeer", recipe: { powderKgPerBatch: 2, waterLitersPerBatch: 4, mixLitersPerBatch: 6, packageKg: 2 }, unit: "Pkg", quantityOnHand: 100, purchasePriceCents: null, active: true, createdAt: "2026-01-01T00:00:00.000Z", lastUpdatedAt: "2026-01-01T00:00:00.000Z" }
+          }
         })
       );
       window.localStorage.setItem(

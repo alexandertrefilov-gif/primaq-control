@@ -70,7 +70,10 @@ test.beforeEach(async ({ page }) => {
           consumptionEntries: [],
           machines: [machine],
           reports: [],
-          dayReport: null
+          dayReport: null,
+          generalStock: {
+            gs_vanille: { id: "gs_vanille", flavorId: "vanille", productName: "Vanille", flavorName: "Vanille", recipe: { powderKgPerBatch: 2, waterLitersPerBatch: 4, mixLitersPerBatch: 6, packageKg: 2 }, unit: "Pkg", quantityOnHand: 100, purchasePriceCents: null, active: true, createdAt: "2026-01-01T00:00:00.000Z", lastUpdatedAt: "2026-01-01T00:00:00.000Z" }
+          }
         })
       );
       window.localStorage.setItem(
