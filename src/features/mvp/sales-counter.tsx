@@ -155,7 +155,7 @@ export function SalesCounter({
   }, [currentOrder]);
 
   return (
-    <section className="grid min-h-0 flex-1 grid-cols-1 gap-2 min-[1024px]:grid-cols-[minmax(0,1fr)_360px] min-[1024px]:gap-3">
+    <section className="grid min-h-0 flex-1 grid-cols-1 gap-2 min-[1024px]:grid-cols-[minmax(0,1fr)_360px] min-[1024px]:grid-rows-1 min-[1024px]:gap-3">
 
       {/* ── LINKS: Monitor + Stats + Produktkacheln ───────────── */}
       <div className="flex min-h-0 flex-col gap-2 min-[1024px]:overflow-y-auto min-[1024px]:[scrollbar-width:thin]">
@@ -347,8 +347,8 @@ export function SalesCounter({
       </div>
 
       {/* ── RECHTS: Kalkulator + Kasse ────────────────────────── */}
-      <div className="flex min-h-0 flex-col gap-2">
-        <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">
           <OrderPanel
             active={active}
             order={currentOrder}
@@ -1718,7 +1718,7 @@ export function OrderPanel({
       </div>
 
       {/* ── Item list ───────────────────────────────────────────────── */}
-      <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]" style={{ maxHeight: "60vh" }}>
+      <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
         {hasItems ? (
           <ul>
             {order.items.map((item) => (

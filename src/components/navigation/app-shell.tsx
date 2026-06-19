@@ -14,7 +14,7 @@ export function AppShell({ children }: AppShellProps) {
   const isSalePage = pathname === "/verkauf";
 
   return (
-    <div className="flex min-h-screen flex-col overflow-x-hidden">
+    <div className={cn("flex flex-col overflow-x-hidden", isSalePage ? "h-screen overflow-hidden" : "min-h-screen")}>
       <header className="border-b border-black/10 bg-[#f7f8f4]/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2.5">
           <Link href="/dashboard" className="flex items-center gap-3">
@@ -63,7 +63,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </nav>
 
-        <main className={cn("min-w-0 pt-3", isSalePage && "flex-1 min-h-0 pt-2")}>{children}</main>
+        <main className={cn("min-w-0 pt-3", isSalePage && "flex flex-col flex-1 min-h-0 pt-2")}>{children}</main>
       </div>
     </div>
   );
