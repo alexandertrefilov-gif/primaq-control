@@ -2,40 +2,51 @@ import { supabase } from "@/lib/supabase";
 import type { MvpState } from "./types";
 
 const INVENTORY_ROW_KEY = "primaq-inventory";
+const INVENTORY_LOCAL_AT_KEY = "primaq-inventory-local-at";
 
-type CloudInventory = Partial<MvpState> & {
+export type CloudInventory = Partial<MvpState> & {
   updatedAt?: string;
+  // Zeitstempel des letzten lokalen Lager-Schreibvorgangs.
+  // Identisch mit localStorage["primaq-inventory-local-at"] beim Aufruf von syncInventoryToCloud.
+  // Wird von loadInventoryFromCloud genutzt, um zu entscheiden, ob lokale oder
+  // Cloud-Lagerdaten neuer sind (skipInventory-Logik, analog zu machinesWrittenAt).
+  inventoryWrittenAt?: string;
 };
-
-function hasItems(value: unknown) {
-  return !!value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
-}
-
-function hasArrayItems(value: unknown) {
-  return Array.isArray(value) && value.length > 0;
-}
 
 function mergeInventory(next: CloudInventory, existing: CloudInventory | null): CloudInventory {
   if (!existing) return next;
 
+  const nextAt = next.inventoryWrittenAt;
+  const existingAt = existing.inventoryWrittenAt;
+
+  // Wenn lokale Daten neuer sind (oder Cloud-Eintrag hat keinen Timestamp),
+  // gewinnt die lokale Version – auch bei leeren Objekten/Arrays (korrekte Lösch-Semantik).
+  if (nextAt && (!existingAt || existingAt <= nextAt)) {
+    return { ...existing, ...next, updatedAt: new Date().toISOString() };
+  }
+
+  // Cloud ist neuer (z. B. anderes Gerät hat zwischenzeitlich Lager geändert).
+  // Beide Seiten mergen, damit keine Daten verloren gehen.
   return {
     ...existing,
     ...next,
-    inventory: hasItems(next.inventory) ? next.inventory : existing.inventory,
-    generalStock: hasItems(next.generalStock) ? next.generalStock : existing.generalStock,
-    generalStockMovements: hasItems(next.generalStockMovements) ? next.generalStockMovements : existing.generalStockMovements,
-    inventoryMovements: hasItems(next.inventoryMovements) ? next.inventoryMovements : existing.inventoryMovements,
-    materialCategories: hasArrayItems(next.materialCategories) ? next.materialCategories : existing.materialCategories,
-    materialItems: hasItems(next.materialItems) ? next.materialItems : existing.materialItems,
-    shiftMaterialAssignments: hasArrayItems(next.shiftMaterialAssignments)
-      ? next.shiftMaterialAssignments
-      : existing.shiftMaterialAssignments,
+    inventory: next.inventory ?? existing.inventory,
+    generalStock: next.generalStock ?? existing.generalStock,
+    generalStockMovements: next.generalStockMovements ?? existing.generalStockMovements,
+    inventoryMovements: next.inventoryMovements ?? existing.inventoryMovements,
+    materialCategories: next.materialCategories ?? existing.materialCategories,
+    materialItems: next.materialItems ?? existing.materialItems,
+    shiftMaterialAssignments: next.shiftMaterialAssignments ?? existing.shiftMaterialAssignments,
     updatedAt: new Date().toISOString()
   };
 }
 
 export async function syncInventoryToCloud(state: MvpState, options?: { forceOverwrite?: boolean }) {
   try {
+    const inventoryWrittenAt = typeof window !== "undefined"
+      ? (window.localStorage.getItem(INVENTORY_LOCAL_AT_KEY) ?? undefined)
+      : undefined;
+
     const nextValue: CloudInventory = {
       inventory: state.inventory,
       generalStock: state.generalStock,
@@ -44,6 +55,7 @@ export async function syncInventoryToCloud(state: MvpState, options?: { forceOve
       materialCategories: state.materialCategories,
       materialItems: state.materialItems,
       shiftMaterialAssignments: state.shiftMaterialAssignments,
+      inventoryWrittenAt,
       updatedAt: new Date().toISOString()
     };
 
@@ -80,7 +92,7 @@ export async function syncInventoryToCloud(state: MvpState, options?: { forceOve
   }
 }
 
-export async function loadInventoryFromCloud(): Promise<Partial<MvpState> | null> {
+export async function loadInventoryFromCloud(): Promise<CloudInventory | null> {
   try {
     const { data, error } = await supabase
       .from("inventory")
@@ -93,7 +105,7 @@ export async function loadInventoryFromCloud(): Promise<Partial<MvpState> | null
       return null;
     }
 
-    return (data?.value as Partial<MvpState>) ?? null;
+    return (data?.value as CloudInventory) ?? null;
   } catch (error) {
     console.warn("Supabase inventory load unavailable", error);
     return null;

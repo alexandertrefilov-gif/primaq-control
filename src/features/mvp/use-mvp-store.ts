@@ -82,6 +82,9 @@ const completedOrdersStorageKey = "primaq-control-completed-orders";
 // Bewusst kein breiteres "settingsLocalAt": Verkäufe/Einsätze dürfen diesen Key
 // nicht überschreiben, weil das den Cross-Device-Sync (Mac → iPad) blockieren würde.
 const machinesLocalAtKey = "primaq-machines-local-at";
+// Analog zu machinesLocalAtKey, aber für Lagerdaten (generalStock, materialCategories, materialItems).
+// Schützt vor Race: Lagerware anlegen/löschen → Reload → loadInventoryFromCloud liefert alte Liste.
+const inventoryLocalAtKey = "primaq-inventory-local-at";
 
 // Verhindert, dass persistState während eines Resets (factoryReset/resetSalesData)
 // alten State in localStorage schreibt. Da mehrere Komponenten useMvpStore() aufrufen,
@@ -101,7 +104,8 @@ export const ALL_PRIMAQ_STORAGE_KEYS = [
   activeOrderIdStorageKey,
   dailySalesStorageKey,
   completedOrdersStorageKey,
-  machinesLocalAtKey
+  machinesLocalAtKey,
+  inventoryLocalAtKey
 ] as const;
 
 // Löscht alle PrimaQ localStorage-Einträge (bekannte Keys + alle "primaq-"-Prefixed Keys).
@@ -1907,6 +1911,15 @@ export function useMvpStore() {
         return;
       }
 
+      // Lokale Lagerdaten gewinnen, wenn sie neuer als der Cloud-Stand sind.
+      // Schützt vor dem gleichen Race wie machinesLocalAtKey:
+      // Lagerware anlegen/löschen → Reload → alte Cloud überschreibt lokale Änderung.
+      const inventoryLocalAt = window.localStorage.getItem(inventoryLocalAtKey);
+      const cloudInventoryAt = cloudInventory.inventoryWrittenAt;
+      if (inventoryLocalAt && (!cloudInventoryAt || cloudInventoryAt <= inventoryLocalAt)) {
+        return;
+      }
+
       setState((current) => ({
         ...current,
         inventory: cloudInventory.inventory ?? current.inventory,
@@ -3085,6 +3098,9 @@ export function useMvpStore() {
     note?: string;
   }) => {
     const now = new Date().toISOString();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, now);
+    }
     const movId = createId("ivm");
     setState((current) => {
       const existing = current.inventory[itemId];
@@ -3122,6 +3138,9 @@ export function useMvpStore() {
   }, []);
 
   const addMaterialCategory = useCallback((input: { name: string } | { name: string; type: import("./types").MaterialCategoryType; defaultUnit: string }) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, new Date().toISOString());
+    }
     const id = createId("mcat");
     const extra = "type" in input ? { type: input.type, defaultUnit: input.defaultUnit } : {};
     setState((current) => ({
@@ -3131,6 +3150,9 @@ export function useMvpStore() {
   }, []);
 
   const renameMaterialCategory = useCallback((catId: string, name: string) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, new Date().toISOString());
+    }
     setState((current) => ({
       ...current,
       materialCategories: current.materialCategories.map((c) => c.id === catId ? { ...c, name: name.trim() } : c),
@@ -3138,6 +3160,9 @@ export function useMvpStore() {
   }, []);
 
   const deleteMaterialCategory = useCallback((catId: string) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, new Date().toISOString());
+    }
     setState((current) => ({
       ...current,
       materialCategories: current.materialCategories.filter((c) => c.id !== catId),
@@ -3145,6 +3170,9 @@ export function useMvpStore() {
   }, []);
 
   const purgeOrphanedMaterialItems = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, new Date().toISOString());
+    }
     setState((current) => {
       const validIds = new Set<string>();
       for (const cat of current.materialCategories) {
@@ -3165,6 +3193,9 @@ export function useMvpStore() {
   const addMaterialItem = useCallback((categoryId: string, input: { name: string; description?: string | null; unit: string; purchasePriceCents?: number | null; minQuantity?: number | null; note?: string | null; startQuantity?: number; saleTag?: string; purchaseUnit?: string; itemsPerPurchaseUnit?: number }) => {
     const id = createId("mi");
     const now = new Date().toISOString();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, now);
+    }
     const startQty = typeof input.startQuantity === "number" && input.startQuantity > 0 ? input.startQuantity : 0;
     const item: import("./types").MaterialItem = {
       id,
@@ -3201,6 +3232,9 @@ export function useMvpStore() {
   }, []);
 
   const updateMaterialItem = useCallback((itemId: string, patch: Partial<import("./types").MaterialItem>) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, new Date().toISOString());
+    }
     setState((current) => {
       const item = current.materialItems[itemId];
       if (!item) return current;
@@ -3218,6 +3252,9 @@ export function useMvpStore() {
   ) => {
     const id = createId("mi");
     const now = new Date().toISOString();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, now);
+    }
     const qty = movementInput.type === "receipt" ? movementInput.quantity : 0;
     const item: import("./types").MaterialItem = {
       id,
@@ -3261,6 +3298,9 @@ export function useMvpStore() {
     note?: string;
   }) => {
     const now = new Date().toISOString();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, now);
+    }
     const movId = createId("mvm");
     setState((current) => {
       const item = current.materialItems[itemId];
@@ -4492,6 +4532,9 @@ export function useMvpStore() {
     note?: string;
   }) => {
     const now = new Date().toISOString();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, now);
+    }
     if (isGenericSoftMixInventoryName(input.flavorName) || isGenericSoftMixInventoryName(input.productName)) {
       return;
     }
@@ -4544,6 +4587,9 @@ export function useMvpStore() {
     note?: string;
   }) => {
     const now = new Date().toISOString();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, now);
+    }
     setState((current) => {
       const existing = current.generalStock[id];
       if (!existing) return current;
@@ -4572,6 +4618,9 @@ export function useMvpStore() {
 
   const deactivateGeneralStockItem = useCallback((id: string) => {
     const now = new Date().toISOString();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, now);
+    }
     setState((current) => {
       const existing = current.generalStock[id];
       if (!existing) return current;
@@ -4594,6 +4643,9 @@ export function useMvpStore() {
     note?: string;
   }) => {
     const now = new Date().toISOString();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, now);
+    }
     const movId = createId("gsm");
     setState((current) => {
       const existing = current.generalStock[itemId];
@@ -4633,6 +4685,9 @@ export function useMvpStore() {
     note?: string;
   }) => {
     const now = new Date().toISOString();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, now);
+    }
     const movId = createId("gsm");
     setState((current) => {
       const existing = current.generalStock[itemId];
@@ -4750,6 +4805,9 @@ export function useMvpStore() {
 
   const reactivateGeneralStockItem = useCallback((id: string) => {
     const now = new Date().toISOString();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, now);
+    }
     setState((current) => {
       const existing = current.generalStock[id];
       if (!existing) return current;

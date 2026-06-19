@@ -155,27 +155,28 @@ export function SalesCounter({
   }, [currentOrder]);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-3">
+    <section className="grid min-h-0 flex-1 grid-cols-1 gap-2 min-[1024px]:grid-cols-[minmax(0,1fr)_360px] min-[1024px]:gap-3">
 
-      {/* ── Phase 2: Live-Einsatzmonitor ──────────────────────── */}
-      {active && visibleMachines.some((m) => m.stockLines.length > 0) ? (
-        <LiveShiftMonitor machines={visibleMachines} />
-      ) : null}
+      {/* ── LINKS: Monitor + Stats + Produktkacheln ───────────── */}
+      <div className="flex min-h-0 flex-col gap-2 min-[1024px]:overflow-y-auto min-[1024px]:[scrollbar-width:thin]">
 
-      {/* ── Phase 3: Verkaufszähler ───────────────────────────── */}
-      {active ? (
-        <SalesStatsBar
-          salesCount={salesCount}
-          totalPieces={totalPieces}
-          totalRevenueCents={totalRevenueCents}
-        />
-      ) : null}
+        {/* Phase 2: Live-Einsatzmonitor */}
+        {active && visibleMachines.some((m) => m.stockLines.length > 0) ? (
+          <LiveShiftMonitor machines={visibleMachines} />
+        ) : null}
 
-      <div className="grid min-h-0 gap-4 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
-      <div className="min-w-0">
+        {/* Phase 3: Verkaufszähler */}
+        {active ? (
+          <SalesStatsBar
+            salesCount={salesCount}
+            totalPieces={totalPieces}
+            totalRevenueCents={totalRevenueCents}
+          />
+        ) : null}
+
         <div className="flex flex-col rounded-lg border border-black/10 bg-white p-3 shadow-sm">
 
-          {/* ── Phase 1b: Letzte Bestellung wiederholen ───────── */}
+          {/* Phase 1b: Letzte Bestellung wiederholen */}
           {undoInfo?.order && active ? (
             <div className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-black/8 bg-[#f7f8f4] px-3 py-2">
               <span className="text-xs text-black/50 truncate">
@@ -191,7 +192,7 @@ export function SalesCounter({
             </div>
           ) : null}
 
-          {/* ── Phase 1a: Favoriten-Bereich ───────────────────── */}
+          {/* Phase 1a: Favoriten-Bereich */}
           {favoritesData.length > 0 ? (
             <div className="mb-3">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-primaq-600">⭐ Favoriten</p>
@@ -240,25 +241,25 @@ export function SalesCounter({
                 </p>
               </div>
             ) : null}
-            <div className="grid grid-cols-1 gap-4 min-[1100px]:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 min-[600px]:grid-cols-2">
               {visibleMachines.map((machine, machineIndex) => (
                 <section
                   key={machine.id}
                   data-testid={`sale-machine-${machine.id}`}
-                  className="min-w-0 rounded-lg border border-black/10 bg-[#fbfcf8] p-3"
+                  className="min-w-0 rounded-lg border border-black/10 bg-[#fbfcf8] p-2.5"
                 >
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="flex items-baseline justify-between gap-2">
                     <div>
-                      <p className="text-xs font-bold uppercase text-primaq-700">Maschine {machineIndex + 1}</p>
-                      <h3 className="text-base font-bold leading-tight text-ink">
+                      <p className="text-[10px] font-bold uppercase text-primaq-700">M{machineIndex + 1}</p>
+                      <h3 className="text-sm font-bold leading-tight text-ink">
                         {formatMachineDisplayName(machine.name, machine.number || String(machineIndex + 1))}
                       </h3>
                     </div>
-                    <p className="text-xs font-semibold text-black/55">{machine.location}</p>
+                    <p className="shrink-0 text-[10px] font-semibold text-black/55">{machine.location}</p>
                   </div>
 
                   {machine.stockLines.length ? (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="mt-2 grid grid-cols-2 gap-1.5">
                       {machine.stockLines.map((line) => (
                         <MachineStockStatus
                           key={line.stockFlavorId}
@@ -268,11 +269,11 @@ export function SalesCounter({
                     </div>
                   ) : null}
 
-                  <div className="mt-3 grid gap-3">
+                  <div className="mt-2 grid gap-2">
                     {machine.productGroups.map((group) => (
-                      <div key={group.packagingType} className="grid gap-2">
-                        <p className="text-xs font-bold uppercase tracking-wide text-black/55">{group.packagingType}</p>
-                        <div className="flex flex-wrap content-start items-start gap-2">
+                      <div key={group.packagingType} className="grid gap-1.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-black/55">{group.packagingType}</p>
+                        <div className="flex flex-wrap content-start items-start gap-1.5">
                           {group.products.map((product, productIndex) => (
                             <SaleProductButton
                               key={product.id}
@@ -292,9 +293,9 @@ export function SalesCounter({
                     ))}
 
                     {machine.products.some((product) => product.toppingEnabled) ? (
-                      <div className="grid gap-2">
-                        <p className="text-xs font-bold uppercase tracking-wide text-black/55">Topping</p>
-                        <div className="flex flex-wrap content-start items-start gap-2">
+                      <div className="grid gap-1.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-black/55">Topping</p>
+                        <div className="flex flex-wrap content-start items-start gap-1.5">
                           {machine.products
                             .filter((product) => product.toppingEnabled)
                             .map((product, productIndex) => (
@@ -345,30 +346,29 @@ export function SalesCounter({
         </div>
       </div>
 
-      <div className="min-h-0 w-full">
-        <OrderPanel
-          active={active}
-          order={currentOrder}
-          orders={openOrders}
-          activeOrderId={activeOrderId}
-          onAddOrder={onAddOpenOrder}
-          onSelectOrder={onSetActiveOrder}
-          onRemoveOrderItem={onRemoveOrderItem}
-          onClearOrder={onClearOrder}
-          onDeleteOrder={onDeleteOrder}
-          onIncrementOrderItem={onIncrementOrderItem}
-          onDecrementOrderItem={onDecrementOrderItem}
-          onPaymentMethodChange={onPaymentMethodChange}
-          onCashReceivedChange={onCashReceivedChange}
-          onCheckout={onCheckout}
-          onCheckoutComplete={onCheckoutComplete}
-          hideCheckoutButton
-          hidePaymentSection
-        />
-      </div>
-      </div>
-
-      <div>
+      {/* ── RECHTS: Kalkulator + Kasse ────────────────────────── */}
+      <div className="flex min-h-0 flex-col gap-2">
+        <div className="min-h-0 flex-1">
+          <OrderPanel
+            active={active}
+            order={currentOrder}
+            orders={openOrders}
+            activeOrderId={activeOrderId}
+            onAddOrder={onAddOpenOrder}
+            onSelectOrder={onSetActiveOrder}
+            onRemoveOrderItem={onRemoveOrderItem}
+            onClearOrder={onClearOrder}
+            onDeleteOrder={onDeleteOrder}
+            onIncrementOrderItem={onIncrementOrderItem}
+            onDecrementOrderItem={onDecrementOrderItem}
+            onPaymentMethodChange={onPaymentMethodChange}
+            onCashReceivedChange={onCashReceivedChange}
+            onCheckout={onCheckout}
+            onCheckoutComplete={onCheckoutComplete}
+            hideCheckoutButton
+            hidePaymentSection
+          />
+        </div>
         <PaymentPanel
           active={active}
           order={currentOrder}
@@ -380,8 +380,10 @@ export function SalesCounter({
           undoInfo={undoInfo}
           stockIssueReason={orderStockIssue.message}
           sumupSettings={sumupSettings}
+          compact
         />
       </div>
+
     </section>
   );
 }
@@ -770,7 +772,7 @@ function SaleProductButton({
 
   const sizeClass = compact
     ? "h-[90px] max-h-[100px] min-h-[90px] w-[90px] min-w-[90px] max-w-[100px]"
-    : "h-[190px] max-h-[210px] min-h-[190px] w-[190px] min-w-[190px] max-w-[210px]";
+    : "h-[140px] min-h-[140px] w-[140px] min-w-[140px]";
 
   return (
     <div className="relative">
@@ -867,7 +869,7 @@ function ToppingButton({
         })
       }
       title={`Topping ${displayName} · ${formatCurrency(product.toppingPriceCents)}`}
-      className="pointer-events-auto flex aspect-square h-[190px] max-h-[210px] min-h-[190px] w-[190px] min-w-[190px] max-w-[210px] flex-col items-start justify-between overflow-hidden rounded-xl border p-3 text-left shadow-md transition active:scale-[0.97]"
+      className="pointer-events-auto flex aspect-square h-[140px] min-h-[140px] w-[140px] min-w-[140px] flex-col items-start justify-between overflow-hidden rounded-xl border p-3 text-left shadow-md transition active:scale-[0.97]"
       style={{
         background: tone.background,
         borderColor: tone.borderColor,
@@ -1020,7 +1022,8 @@ function PaymentPanel({
   onUndoLastOrder,
   undoInfo,
   stockIssueReason,
-  sumupSettings
+  sumupSettings,
+  compact = false
 }: {
   active: boolean;
   order: CurrentOrder;
@@ -1032,6 +1035,7 @@ function PaymentPanel({
   undoInfo?: UndoInfo;
   stockIssueReason?: string;
   sumupSettings?: SumupSettings;
+  compact?: boolean;
 }) {
   const [undoDialog, setUndoDialog] = useState<"idle" | "confirm" | "finalized">("idle");
   const differenceCents = order.cashReceivedCents - order.totalGrossCents;
@@ -1045,6 +1049,154 @@ function PaymentPanel({
 
     console.log("checkoutState", checkoutState);
   }, [checkoutState]);
+
+  if (compact) {
+    return (
+      <section data-testid="payment-panel" className="shrink-0 rounded-lg border border-black/10 bg-white p-3 shadow-sm">
+        {/* Zahlungsart */}
+        <div className="mb-2 grid gap-1.5 rounded-lg border border-blue-100 bg-blue-50 p-2">
+          <p className="text-[10px] font-black uppercase tracking-wide text-blue-700">Zahlungsart</p>
+          <div className={`grid gap-1.5 ${sumupSettings?.enabled ? "grid-cols-3" : "grid-cols-2"}`}>
+            <button type="button" data-testid="payment-cash-button" onClick={() => onPaymentMethodChange("cash")}
+              className={`min-h-10 rounded-lg border px-2 text-sm font-bold ${order.paymentMethod === "cash" ? "border-primaq-500 bg-primaq-50 text-primaq-700" : "border-black/10 bg-white text-black/65"}`}>
+              💶 Bar
+            </button>
+            <button type="button" data-testid="payment-card-button" onClick={() => onPaymentMethodChange("card")}
+              className={`min-h-10 rounded-lg border px-2 text-sm font-bold ${order.paymentMethod === "card" ? "border-primaq-500 bg-primaq-50 text-primaq-700" : "border-black/10 bg-white text-black/65"}`}>
+              💳 Karte
+            </button>
+            {sumupSettings?.enabled ? (
+              <button type="button" data-testid="payment-qr-button" onClick={() => onPaymentMethodChange("qr")}
+                className={`min-h-10 rounded-lg border px-2 text-sm font-bold ${order.paymentMethod === "qr" ? "border-primaq-500 bg-primaq-50 text-primaq-700" : "border-black/10 bg-white text-black/65"}`}>
+                📱 QR
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Gegeben / QR */}
+        {order.paymentMethod === "qr" && sumupSettings?.enabled ? (
+          <div className="mb-2">
+            <QrPaymentPanel
+              totalGrossCents={order.totalGrossCents}
+              paymentLink={sumupSettings.paymentLink}
+              hintText={sumupSettings.hintText}
+              onConfirm={() => { onCheckout(); onCheckoutComplete?.(); }}
+              onCancel={() => onPaymentMethodChange("cash")}
+              canConfirm={canBook}
+              compact
+            />
+          </div>
+        ) : order.paymentMethod === "cash" ? (
+          <div className="mb-2 grid gap-1.5 rounded-lg border border-yellow-100 bg-yellow-50 p-2">
+            <p className="text-[10px] font-black uppercase tracking-wide text-yellow-800">Gegeben</p>
+            <div className="flex min-h-11 items-center rounded-lg border border-black/15 bg-white focus-within:border-primaq-500">
+              <input
+                inputMode="decimal"
+                data-testid="cash-received-input"
+                value={order.cashReceivedCents ? (order.cashReceivedCents / 100).toString().replace(".", ",") : ""}
+                onChange={(event) => onCashReceivedChange(toCents(event.target.value))}
+                className="min-h-11 min-w-0 flex-1 rounded-lg bg-transparent px-3 text-lg font-bold outline-none"
+              />
+              <button type="button" data-testid="cash-received-reset-button" onClick={() => onCashReceivedChange(0)}
+                className="mr-2 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-yellow-100 text-sm font-black text-yellow-900 ring-1 ring-yellow-200"
+                aria-label="Gegeben leeren">
+                ×
+              </button>
+            </div>
+            <div className="grid grid-cols-5 gap-1">
+              {quickAmounts.map((amount) => (
+                <button key={amount} type="button" data-testid={`cash-quick-add-${amount}`}
+                  onClick={() => onCashReceivedChange(order.cashReceivedCents + amount)}
+                  className="min-h-8 rounded-lg bg-white text-xs font-bold text-ink ring-1 ring-yellow-200">
+                  {amount / 100} €
+                </button>
+              ))}
+            </div>
+            <div className={`rounded-lg px-2 py-1.5 ${differenceCents < 0 ? "bg-orange-100 text-orange-900" : "bg-green-50 text-green-900"}`}>
+              <span className="block text-[10px] font-semibold uppercase tracking-wide">
+                {differenceCents < 0 ? "Noch offen" : differenceCents === 0 ? "Passt genau" : "Rückgeld"}
+              </span>
+              <span className="text-base font-black">
+                {differenceCents === 0 ? "Passt genau" : differenceCents > 0 ? formatCurrency(differenceCents) : formatCurrency(Math.abs(differenceCents))}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="mb-2 grid gap-1.5 rounded-lg border border-blue-100 bg-blue-50 p-2">
+            <p className="text-[10px] font-black uppercase tracking-wide text-blue-700">Gegeben</p>
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-white/70 px-3 py-2">
+              <span className="text-xs font-bold text-blue-700">Zu zahlen</span>
+              <span className="text-lg font-black text-blue-950">{formatCurrency(order.totalGrossCents)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Warnungen */}
+        {!active ? (
+          <p data-testid="checkout-shift-warning" className="mb-2 rounded-lg border border-orange-200 bg-orange-50 p-2 text-xs font-bold text-orange-900">
+            Kein aktiver Einsatz.
+          </p>
+        ) : null}
+        {stockIssueReason ? (
+          <p className="mb-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs font-bold text-red-800">
+            {stockIssueReason}
+          </p>
+        ) : null}
+
+        {/* Bestellung buchen */}
+        {order.paymentMethod === "qr" && sumupSettings?.enabled ? null : (
+          <button
+            type="button"
+            data-testid="checkout-button"
+            disabled={!canBook}
+            onClick={() => { if (!canBook) return; onCheckout(); onCheckoutComplete?.(); }}
+            className={`mb-1.5 min-h-16 w-full rounded-xl px-4 text-xl font-black text-white transition ${canBook ? "bg-green-600 shadow-md active:scale-[0.99]" : "cursor-not-allowed bg-black/25"}`}
+          >
+            Bestellung buchen
+          </button>
+        )}
+
+        {/* Letzte Buchung zurückholen */}
+        {undoInfo ? (
+          <button type="button"
+            onClick={() => setUndoDialog(undoInfo.canUndo ? "confirm" : "finalized")}
+            className="flex min-h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 text-xs font-bold text-orange-800 transition active:scale-[0.99]">
+            <RotateCcw className="h-3.5 w-3.5" />
+            Letzte Buchung zurückholen
+          </button>
+        ) : null}
+
+        {undoDialog === "confirm" && undoInfo ? (
+          <div className="mt-2 grid gap-2 rounded-lg border border-orange-200 bg-orange-50 p-2">
+            <p className="text-xs font-bold text-orange-900">
+              Letzte Buchung wirklich zurückholen? (#{undoInfo.order.orderNumber} · {formatCurrency(undoInfo.order.totalGrossCents)})
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button type="button" onClick={() => setUndoDialog("idle")}
+                className="min-h-8 rounded-lg border border-black/15 bg-white text-xs font-bold text-black/70">
+                Abbrechen
+              </button>
+              <button type="button" onClick={() => { onUndoLastOrder?.(); setUndoDialog("idle"); }}
+                className="min-h-8 rounded-lg bg-orange-600 text-xs font-bold text-white active:scale-[0.99]">
+                Zurückholen
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {undoDialog === "finalized" ? (
+          <div className="mt-2 grid gap-2 rounded-lg border border-red-200 bg-red-50 p-2">
+            <p className="text-xs font-bold text-red-900">Tag bereits abgeschlossen – kann nicht zurückgeholt werden.</p>
+            <button type="button" onClick={() => setUndoDialog("idle")}
+              className="min-h-8 rounded-lg border border-black/15 bg-white text-xs font-bold text-black/70">
+              Schließen
+            </button>
+          </div>
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section data-testid="payment-panel" className="rounded-lg border border-black/10 bg-white p-3 shadow-sm">
@@ -1714,6 +1866,7 @@ function QrPaymentPanel({
   onConfirm,
   onCancel,
   canConfirm,
+  compact = false,
 }: {
   totalGrossCents: number;
   paymentLink: string;
@@ -1721,6 +1874,7 @@ function QrPaymentPanel({
   onConfirm: () => void;
   onCancel: () => void;
   canConfirm: boolean;
+  compact?: boolean;
 }) {
   const amountStr = (totalGrossCents / 100).toFixed(2);
   const qrUrl = paymentLink
@@ -1733,7 +1887,7 @@ function QrPaymentPanel({
 
       <div className="flex flex-col items-center gap-3 rounded-lg bg-white p-4">
         {qrUrl ? (
-          <QRCodeSVG value={qrUrl} size={160} level="M" />
+          <QRCodeSVG value={qrUrl} size={compact ? 120 : 160} level="M" />
         ) : (
           <div className="flex h-40 w-40 items-center justify-center rounded-lg border border-black/10 bg-[#f5f5f0] text-xs text-black/40 text-center p-4">
             SumUp Payment Link in den Einstellungen hinterlegen
