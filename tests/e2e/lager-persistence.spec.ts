@@ -1,8 +1,10 @@
 /**
- * Lager-Persistenz: Tests 1–5
+ * Lager-Persistenz: Tests 1–6
  *
  * Prüft, dass Pulver- und Materialdaten nach Navigation, Reload und trotz
  * älterer Cloud-Daten erhalten bleiben sowie dass neuere Cloud-Daten übernommen werden.
+ * Test 6 prüft, dass resetCurrentShift inventoryLocalAtKey setzt, damit zurückgebuchtes
+ * Pulver nicht von einer nachfolgenden Cloud-Sync überschrieben wird.
  * Kein UI-Interaktions-Test — Persistenz wird direkt über localStorage verifiziert.
  */
 
@@ -359,4 +361,59 @@ test("5: Neuere Cloud-Daten (anderes Gerät) werden beim Reload übernommen", as
   const gs = await readGeneralStock(page);
   expect(gs).toHaveProperty(pulverVanille.id);
   expect((gs as Record<string, { productName: string }>)[pulverVanille.id]?.productName).toBe("MAC Vanille");
+});
+
+// ── Test 6: resetCurrentShift setzt inventoryLocalAtKey → Cloud überschreibt NICHT
+//
+// Regression für: resetCurrentShift bucht Pakete zurück in generalStock, setzt aber
+// inventoryLocalAtKey NICHT → nachfolgende Cloud-Sync mit neuerem Timestamp
+// überschreibt das zurückgebuchte Pulver.
+
+test("6: Zurückgebuchtes Pulver bleibt nach resetCurrentShift trotz älterer Cloud erhalten", async ({ page }) => {
+  // Vanille hat 3 Pakete (war nach Shift-Ende zurückgebucht)
+  const vanilleNachReset = { ...pulverVanille, quantityOnHand: 3 };
+
+  const state = buildState({
+    generalStock: { [pulverVanille.id]: vanilleNachReset },
+    generalStockMovements: { [pulverVanille.id]: [] },
+    activeShift: null
+  });
+
+  // inventoryLocalAt = NEW_TS (gesetzt von resetCurrentShift)
+  await page.addInitScript(seedScript, { state, inventoryLocalAt: NEW_TS });
+
+  // Cloud: hat alten Stand mit 5 Paketen und ÄLTEREM Timestamp
+  const cloudInventory = {
+    generalStock: { [pulverVanille.id]: { ...pulverVanille, quantityOnHand: 5 } },
+    generalStockMovements: { [pulverVanille.id]: [] },
+    materialCategories: [],
+    materialItems: {},
+    inventoryMovements: {},
+    shiftMaterialAssignments: [],
+    inventoryWrittenAt: OLD_TS
+  };
+
+  await page.route(/supabase\.co/, async (route) => {
+    const url = route.request().url();
+    const method = route.request().method();
+    if (url.includes("/inventory") && method === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ value: cloudInventory })
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: "null" });
+  });
+  await page.routeWebSocket(/supabase\.co/, () => { /* deaktiviert */ });
+
+  await page.goto("/lager");
+  await page.waitForFunction(() => !document.body.textContent?.includes("Laden…"));
+  await page.waitForTimeout(1500);
+
+  // Lager muss den lokalen Stand (3 Pakete) zeigen – alte Cloud (5 Pakete) darf NICHT gewinnen
+  const gs = await readGeneralStock(page);
+  expect(gs).toHaveProperty(pulverVanille.id);
+  expect((gs as Record<string, { quantityOnHand: number }>)[pulverVanille.id]?.quantityOnHand).toBe(3);
 });

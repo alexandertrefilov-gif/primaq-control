@@ -3878,6 +3878,11 @@ export function useMvpStore() {
   }, [state.consumptionEntries, state.machines, state.mixStocks, state.stockFlavors]);
 
   const resetCurrentShift = useCallback(() => {
+    // Inventory (generalStock + materialItems) changes must win over stale cloud data.
+    const now = new Date().toISOString();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(inventoryLocalAtKey, now);
+    }
     setState((current) => {
       const now = new Date().toISOString();
       const nextGeneralStock = { ...current.generalStock };
