@@ -6,7 +6,8 @@ import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
 import { usePosStore } from "./use-pos-store";
 import { usePosFlavorStore } from "./use-pos-flavor-store";
-import { usePosLayoutStore, panelWidthClass } from "./use-pos-layout-store";
+import { usePosLayoutStore } from "./use-pos-layout-store";
+import type { CartFontSize } from "./use-pos-layout-store";
 import {
   FLAVORS,
   MACHINE_GROUP_LABELS,
@@ -141,10 +142,10 @@ function FlavorCard({
       </div>
 
       {/* Name label at bottom */}
-      <div className="relative z-10 w-full shrink-0 bg-black/25 px-2 py-2 text-center backdrop-blur-[2px]">
+      <div className="relative z-10 w-full shrink-0 bg-black/30 px-2 py-2.5 text-center backdrop-blur-[2px]">
         <span
-          className="block text-sm font-black leading-tight"
-          style={{ textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}
+          className="block text-base font-black leading-tight"
+          style={{ textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}
         >
           {flavor.name}
         </span>
@@ -257,22 +258,32 @@ function FlavorGroup({
   label,
   flavors,
   onFlavorClick,
+  cardSize,
 }: {
   label: string;
   flavors: FlavorConfig[];
   onFlavorClick: (flavor: FlavorConfig) => void;
+  cardSize: number;
 }) {
+  if (flavors.length === 0) return null;
+
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-primaq-700">
+    <div className="flex flex-col gap-2.5">
+      {/* Centered divider header */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-primaq-200/70" />
+        <span className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-primaq-500 px-1">
           {label}
         </span>
-        <div className="flex-1 h-px bg-primaq-100" />
+        <div className="flex-1 h-px bg-primaq-200/70" />
       </div>
+      {/* auto-fit + justify-center → cards always centered, exact cardSize columns */}
       <div
         className="grid gap-2"
-        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))" }}
+        style={{
+          gridTemplateColumns: `repeat(auto-fit, ${cardSize}px)`,
+          justifyContent: "center",
+        }}
       >
         {flavors.map((f) => (
           <FlavorCard key={f.id} flavor={f} onClick={() => onFlavorClick(f)} />
@@ -287,14 +298,14 @@ function FlavorGroup({
 function SizeColumn({
   selectedId,
   onSelect,
-  className,
+  widthPx,
 }: {
   selectedId: string | null;
   onSelect: (id: string) => void;
-  className?: string;
+  widthPx: number;
 }) {
   return (
-    <div className={cn("flex shrink-0 flex-col gap-2 min-h-0", className ?? "w-44")}>
+    <div className="flex shrink-0 flex-col gap-2 min-h-0" style={{ width: widthPx }}>
       <p className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-black/40">
         Größe wählen
       </p>
@@ -340,9 +351,11 @@ function SizeColumn({
 function FlavorColumn({
   selectedSize,
   onFlavorClick,
+  cardSize,
 }: {
   selectedSize: SizeConfig | null;
   onFlavorClick: (flavor: FlavorConfig) => void;
+  cardSize: number;
 }) {
   const allFlavors = useFlavorList();
   const groups = Object.entries(MACHINE_GROUP_LABELS);
@@ -370,7 +383,7 @@ function FlavorColumn({
           <span className="text-primaq-500">{fmt(selectedSize.priceCents)}</span>
         </p>
       </div>
-      <div className="flex-1 overflow-y-auto min-h-0 px-3 pb-3 space-y-4">
+      <div className="flex-1 overflow-y-auto min-h-0 px-3 pb-3 space-y-3">
         {groups.map(([groupId, groupLabel]) => {
           const flavors = allFlavors.filter((f) => f.group === groupId);
           return (
@@ -379,6 +392,7 @@ function FlavorColumn({
               label={groupLabel}
               flavors={flavors}
               onFlavorClick={onFlavorClick}
+              cardSize={cardSize}
             />
           );
         })}
@@ -388,6 +402,12 @@ function FlavorColumn({
 }
 
 // ── Right column – cart + payment ─────────────────────────────────────────────
+
+const CART_FONT_CFG: Record<CartFontSize, { name: string; price: string; qty: string; qtyW: string }> = {
+  normal: { name: "text-xl font-bold", price: "text-xl font-black", qty: "text-xl font-black", qtyW: "w-10" },
+  gross:  { name: "text-2xl font-bold", price: "text-2xl font-black", qty: "text-2xl font-black", qtyW: "w-11" },
+  xl:     { name: "text-2xl font-black", price: "text-2xl font-black", qty: "text-2xl font-black", qtyW: "w-12" },
+};
 
 function CartColumn({
   cart,
@@ -403,7 +423,9 @@ function CartColumn({
   onRemove,
   onClear,
   onBook,
-  className,
+  widthPx,
+  qtyBtnSize,
+  cartFontSize,
   showPayment = true,
 }: {
   cart: ReturnType<typeof usePosStore>["cart"];
@@ -419,11 +441,14 @@ function CartColumn({
   onRemove: (id: string) => void;
   onClear: () => void;
   onBook: () => void;
-  className?: string;
+  widthPx: number;
+  qtyBtnSize: number;
+  cartFontSize: CartFontSize;
   showPayment?: boolean;
 }) {
   const allFlavors = useFlavorList();
   const getLocalFlavorName = (id: string) => allFlavors.find((f) => f.id === id)?.name ?? id;
+  const fontCfg = CART_FONT_CFG[cartFontSize];
 
   const [ausgabeModus, setAusgabeModus] = useState(() => {
     if (typeof window !== "undefined") {
@@ -455,7 +480,7 @@ function CartColumn({
   useEffect(() => () => clearTimeout(clearTimerRef.current), []);
 
   return (
-    <div className={cn("flex shrink-0 flex-col gap-2 min-h-0", className ?? "w-[440px]")}>
+    <div className="flex shrink-0 flex-col gap-2 min-h-0" style={{ width: widthPx }}>
       {/* Cart */}
       <div className="flex flex-1 flex-col rounded-2xl bg-white shadow min-h-0">
         <div className="flex shrink-0 items-center gap-2 border-b border-black/5 px-4 py-2.5">
@@ -505,13 +530,13 @@ function CartColumn({
                     <CartItemBadge item={item} large={ausgabeModus} />
                     <p className={cn(
                       "flex-1 uppercase leading-tight line-clamp-2 text-ink",
-                      ausgabeModus ? "text-2xl font-black" : "text-xl font-bold"
+                      ausgabeModus ? "text-2xl font-black" : fontCfg.name
                     )}>
                       {getSizeName(item.size)} {getLocalFlavorName(item.flavor)}
                     </p>
                     <p className={cn(
                       "shrink-0 font-black text-ink tabular-nums pt-0.5",
-                      ausgabeModus ? "text-2xl" : "text-xl"
+                      ausgabeModus ? "text-2xl" : fontCfg.price
                     )}>
                       {fmt(item.quantity * item.unitPriceCents)}
                     </p>
@@ -529,19 +554,21 @@ function CartColumn({
                     <div className={cn("flex items-center gap-1.5", ausgabeModus && "ml-auto")}>
                       <button
                         onClick={() => onChangeQty(item.id, -1)}
-                        className="grid h-11 w-11 place-items-center rounded-full bg-black/5 hover:bg-red-100 hover:text-red-600 active:scale-90 transition-all"
+                        style={{ height: qtyBtnSize, width: qtyBtnSize }}
+                        className="grid place-items-center rounded-full bg-black/5 hover:bg-red-100 hover:text-red-600 active:scale-90 transition-all"
                       >
                         <Minus className="h-4 w-4" />
                       </button>
                       <span className={cn(
                         "text-center font-black text-ink tabular-nums",
-                        ausgabeModus ? "w-12 text-2xl" : "w-10 text-xl"
+                        ausgabeModus ? `w-12 text-2xl` : `${fontCfg.qtyW} ${fontCfg.qty}`
                       )}>
                         {item.quantity}
                       </span>
                       <button
                         onClick={() => onChangeQty(item.id, 1)}
-                        className="grid h-11 w-11 place-items-center rounded-full bg-black/5 hover:bg-primaq-100 hover:text-primaq-700 active:scale-90 transition-all"
+                        style={{ height: qtyBtnSize, width: qtyBtnSize }}
+                        className="grid place-items-center rounded-full bg-black/5 hover:bg-primaq-100 hover:text-primaq-700 active:scale-90 transition-all"
                       >
                         <Plus className="h-4 w-4" />
                       </button>
@@ -853,7 +880,7 @@ export function SalesPage() {
             return (
               <SizeColumn
                 key="groessen"
-                className={panelWidthClass("groessen", panel.size)}
+                widthPx={layout.sizeColumnWidth}
                 selectedId={selectedSizeId}
                 onSelect={setSelectedSizeId}
               />
@@ -865,6 +892,7 @@ export function SalesPage() {
                 key="sorten"
                 selectedSize={selectedSize}
                 onFlavorClick={handleFlavorClick}
+                cardSize={layout.flavorCardSize}
               />
             );
           }
@@ -872,7 +900,9 @@ export function SalesPage() {
             return (
               <CartColumn
                 key="warenkorb"
-                className={panelWidthClass("warenkorb", panel.size)}
+                widthPx={layout.cartWidth}
+                qtyBtnSize={layout.qtyButtonSize}
+                cartFontSize={layout.cartFontSize}
                 showPayment={showPayment}
                 cart={cart}
                 cartTotal={cartTotal}

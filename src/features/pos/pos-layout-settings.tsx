@@ -8,10 +8,22 @@ import {
   PANEL_LABELS,
   SIZE_LABELS,
   TOGGLE_LABELS,
+  CART_FONT_LABELS,
+  PRESETS,
+  DEFAULT_LAYOUT,
+  panelSizeToPixels,
 } from "./use-pos-layout-store";
-import type { LayoutConfig, PanelConfig, PanelId, PanelSize, ToggleId } from "./use-pos-layout-store";
+import type {
+  CartFontSize,
+  LayoutConfig,
+  PanelConfig,
+  PanelId,
+  PanelSize,
+  PresetId,
+  ToggleId,
+} from "./use-pos-layout-store";
 
-// ── Panel preview helpers ──────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────
 
 const PANEL_DOT: Record<PanelId, string> = {
   groessen: "bg-emerald-400",
@@ -25,12 +37,13 @@ const PANEL_BG: Record<PanelId, string> = {
   warenkorb: "bg-violet-50 text-violet-800",
 };
 
-// Approximate flex weights for the preview bar
-const PREVIEW_FLEX: Record<PanelId, Record<PanelSize, number>> = {
-  groessen: { klein: 0.7, mittel: 0.9, gross: 1.2, xl: 1.7 },
-  sorten:   { klein: 2.5, mittel: 2.5, gross: 2.5, xl: 2.5 },
-  warenkorb:{ klein: 1.8, mittel: 2.1, gross: 2.5, xl: 3.3 },
+const PREVIEW_FLEX: Record<PanelId, (cfg: LayoutConfig) => number> = {
+  groessen: (c) => c.sizeColumnWidth / 100,
+  sorten:   () => 2.5,
+  warenkorb: (c) => c.cartWidth / 160,
 };
+
+// ── Sub-components ─────────────────────────────────────────────────
 
 function LayoutPreview({ config }: { config: LayoutConfig }) {
   return (
@@ -39,10 +52,10 @@ function LayoutPreview({ config }: { config: LayoutConfig }) {
         <div
           key={panel.id}
           className={cn(
-            "flex items-center justify-center px-1 text-[10px] font-bold leading-tight text-center",
+            "flex items-center justify-center px-1 text-[9px] font-bold leading-tight text-center",
             PANEL_BG[panel.id]
           )}
-          style={{ flex: PREVIEW_FLEX[panel.id][panel.size] }}
+          style={{ flex: PREVIEW_FLEX[panel.id](config) }}
         >
           {PANEL_LABELS[panel.id]}
         </div>
@@ -50,40 +63,6 @@ function LayoutPreview({ config }: { config: LayoutConfig }) {
     </div>
   );
 }
-
-// ── Size selector ──────────────────────────────────────────────────
-
-function SizeSelector({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: PanelSize;
-  onChange: (size: PanelSize) => void;
-  disabled: boolean;
-}) {
-  const sizes: PanelSize[] = ["klein", "mittel", "gross", "xl"];
-  return (
-    <div className={cn("flex gap-1 transition-opacity", disabled && "opacity-40 pointer-events-none")}>
-      {sizes.map((s) => (
-        <button
-          key={s}
-          onClick={() => onChange(s)}
-          className={cn(
-            "flex-1 rounded-lg py-1.5 text-xs font-bold transition-colors",
-            value === s
-              ? "bg-primaq-500 text-white shadow-sm"
-              : "bg-black/5 text-black/50 hover:bg-black/10"
-          )}
-        >
-          {SIZE_LABELS[s]}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── iOS-compatible toggle switch ──────────────────────────────────
 
 function Toggle({
   checked,
@@ -115,7 +94,162 @@ function Toggle({
   );
 }
 
-// ── Main settings component ────────────────────────────────────────
+function SizeSelector({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: PanelSize;
+  onChange: (size: PanelSize) => void;
+  disabled: boolean;
+}) {
+  const sizes: PanelSize[] = ["klein", "mittel", "gross", "xl"];
+  return (
+    <div className={cn("flex gap-1 transition-opacity", disabled && "opacity-40 pointer-events-none")}>
+      {sizes.map((s) => (
+        <button
+          key={s}
+          onClick={() => onChange(s)}
+          className={cn(
+            "flex-1 rounded-lg py-1.5 text-xs font-bold transition-colors",
+            value === s ? "bg-primaq-500 text-white shadow-sm" : "bg-black/5 text-black/50 hover:bg-black/10"
+          )}
+        >
+          {SIZE_LABELS[s]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SliderControl({
+  label,
+  value,
+  min,
+  max,
+  step,
+  unit = "px",
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit?: string;
+  onChange: (v: number) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className={cn("space-y-1.5 transition-opacity", disabled && "opacity-40 pointer-events-none")}>
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold text-ink">{label}</span>
+        <span className="text-sm font-bold tabular-nums text-primaq-600">
+          {value}{unit}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-primaq-500"
+        style={{ touchAction: "none" }}
+      />
+      <div className="flex justify-between text-[10px] text-black/35">
+        <span>{min}{unit}</span>
+        <span>{max}{unit}</span>
+      </div>
+    </div>
+  );
+}
+
+function StepperControl({
+  label,
+  value,
+  min,
+  max,
+  step,
+  unit = "px",
+  defaultValue,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit?: string;
+  defaultValue: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-semibold text-black/60">{label}</p>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => onChange(Math.max(min, value - step))}
+          disabled={value <= min}
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-black/5 text-2xl font-bold text-ink transition-colors hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 select-none"
+        >
+          −
+        </button>
+        <span className="flex-1 text-center text-2xl font-black tabular-nums text-ink">
+          {value}{unit}
+        </span>
+        <button
+          onClick={() => onChange(Math.min(max, value + step))}
+          disabled={value >= max}
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-black/5 text-2xl font-bold text-ink transition-colors hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 select-none"
+        >
+          +
+        </button>
+      </div>
+      {value !== defaultValue && (
+        <button
+          onClick={() => onChange(defaultValue)}
+          className="w-full rounded-xl border border-black/10 py-2 text-xs font-semibold text-black/50 transition-colors hover:bg-black/5 hover:text-black/70 active:scale-[0.99]"
+        >
+          Standard wiederherstellen ({defaultValue}{unit})
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SegmentControl<T extends string>({
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  value: T;
+  options: { id: T; label: string }[];
+  onChange: (v: T) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className={cn("flex gap-1 transition-opacity", disabled && "opacity-40 pointer-events-none")}>
+      {options.map((o) => (
+        <button
+          key={o.id}
+          onClick={() => onChange(o.id)}
+          className={cn(
+            "flex-1 rounded-lg py-2 text-xs font-bold transition-colors",
+            value === o.id ? "bg-primaq-500 text-white shadow-sm" : "bg-black/5 text-black/50 hover:bg-black/10"
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────
 
 export function PosLayoutSettings() {
   const { active, profiles, hydrated, update, saveProfile, loadProfile, deleteProfile, resetToDefault } =
@@ -126,18 +260,14 @@ export function PosLayoutSettings() {
   const [resetConfirm, setResetConfirm] = useState(false);
   const [draggingId, setDraggingId] = useState<PanelId | null>(null);
 
-  // Refs to avoid stale closures in pointer handlers
   const draggingIdRef = useRef<PanelId | null>(null);
   const panelsRef = useRef<PanelConfig[]>(active.panels);
   const activeRef = useRef<LayoutConfig>(active);
   panelsRef.current = active.panels;
   activeRef.current = active;
 
-  // Per-item DOM refs for bounding-box hit testing
   const itemDivRefs = useRef<Map<PanelId, HTMLDivElement>>(new Map());
 
-  // Returns pointer-event props for a drag handle; uses setPointerCapture so
-  // move/up events keep firing even when the finger leaves the element.
   function makeDragHandle(panelId: PanelId): React.HTMLAttributes<HTMLDivElement> {
     if (!editMode) return {};
     return {
@@ -174,19 +304,17 @@ export function PosLayoutSettings() {
     };
   }
 
-  function updateSize(id: PanelId, size: PanelSize) {
-    update({ ...active, panels: active.panels.map((p) => (p.id === id ? { ...p, size } : p)) });
+  function updatePanelSize(id: PanelId, size: PanelSize) {
+    update({
+      ...active,
+      panels: active.panels.map((p) => (p.id === id ? { ...p, size } : p)),
+      ...panelSizeToPixels(id, size),
+    });
   }
 
-  function updateToggle(id: ToggleId, value: boolean) {
-    update({ ...active, toggles: { ...active.toggles, [id]: value } });
-  }
-
-  function handleSaveProfile() {
-    const name = profileName.trim();
-    if (!name) return;
-    saveProfile(name);
-    setProfileName("");
+  function applyPreset(id: PresetId) {
+    if (!editMode) return;
+    update(PRESETS[id].config);
   }
 
   function handleReset() {
@@ -200,18 +328,31 @@ export function PosLayoutSettings() {
     setEditMode(false);
   }
 
+  function handleSaveProfile() {
+    const name = profileName.trim();
+    if (!name) return;
+    saveProfile(name);
+    setProfileName("");
+  }
+
   if (!hydrated) return null;
+
+  const CART_WIDTH_STEPS = [320, 360, 400, 440, 480, 520];
+  const cartFontOptions: { id: CartFontSize; label: string }[] = [
+    { id: "normal", label: CART_FONT_LABELS.normal },
+    { id: "gross", label: CART_FONT_LABELS.gross },
+    { id: "xl", label: CART_FONT_LABELS.xl },
+  ];
 
   return (
     <div className="max-w-xl space-y-4">
-      {/* ── Lock / Edit toggle ─────────────────────────────────── */}
+
+      {/* ── Lock / Edit toggle ──────────────────────────────────── */}
       <div className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow">
         <div className="flex-1">
           <p className="text-sm font-bold text-ink">Layout bearbeiten</p>
           <p className="text-xs text-black/50">
-            {editMode
-              ? "Bereiche antippen und verschieben."
-              : "Layout ist gesperrt – Normalbetrieb."}
+            {editMode ? "Bereiche und Größen können angepasst werden." : "Layout ist gesperrt – Normalbetrieb."}
           </p>
         </div>
         <button
@@ -226,18 +367,146 @@ export function PosLayoutSettings() {
         </button>
       </div>
 
-      {/* ── Live preview ───────────────────────────────────────── */}
+      {/* ── Sorten-Buttons Größe ────────────────────────────────── */}
+      <div className="rounded-2xl bg-white p-4 shadow">
+        <div className="mb-4 border-b border-black/5 pb-3">
+          <p className="text-xs font-bold uppercase tracking-widest text-black/40">Sorten-Buttons</p>
+          <p className="mt-0.5 text-xs text-black/40">Größe der Sortenkarten im Bereich Sorten wählen</p>
+        </div>
+        <StepperControl
+          label="Sorten-Buttons Größe"
+          value={active.flavorCardSize}
+          min={110}
+          max={190}
+          step={10}
+          defaultValue={DEFAULT_LAYOUT.flavorCardSize}
+          onChange={(v) => update({ ...active, flavorCardSize: v })}
+        />
+      </div>
+
+      {/* ── Verkaufsmodus presets ───────────────────────────────── */}
+      <div className="overflow-hidden rounded-2xl bg-white shadow">
+        <div className="border-b border-black/5 px-4 py-3">
+          <p className="text-xs font-bold uppercase tracking-widest text-black/40">Verkaufsmodus</p>
+          <p className="mt-0.5 text-xs text-black/40">Passt alle Größen auf einmal an</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 p-3">
+          {(Object.entries(PRESETS) as [PresetId, typeof PRESETS[PresetId]][]).map(([id, preset]) => {
+            const isActive =
+              active.flavorCardSize === preset.config.flavorCardSize &&
+              active.cartFontSize === preset.config.cartFontSize &&
+              active.cartWidth === preset.config.cartWidth &&
+              active.qtyButtonSize === preset.config.qtyButtonSize;
+            return (
+              <button
+                key={id}
+                onClick={() => applyPreset(id)}
+                disabled={!editMode}
+                className={cn(
+                  "flex flex-col items-start rounded-xl px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed",
+                  isActive
+                    ? "bg-primaq-500 text-white shadow"
+                    : editMode
+                    ? "bg-black/5 text-ink hover:bg-primaq-50 hover:text-primaq-700"
+                    : "bg-black/5 text-black/40"
+                )}
+              >
+                <span className="text-sm font-black">{preset.label}</span>
+                <span className={cn("mt-0.5 text-[11px] leading-tight", isActive ? "text-white/80" : "text-black/45")}>
+                  {preset.description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Live preview ────────────────────────────────────────── */}
       <div className="rounded-2xl bg-white p-4 shadow">
         <p className="mb-3 text-xs font-bold uppercase tracking-widest text-black/40">Vorschau</p>
         <LayoutPreview config={active} />
       </div>
 
-      {/* ── Sortable panel list ────────────────────────────────── */}
+      {/* ── Feinjustierung ──────────────────────────────────────── */}
       <div className="overflow-hidden rounded-2xl bg-white shadow">
         <div className="border-b border-black/5 px-4 py-3">
-          <p className="text-xs font-bold uppercase tracking-widest text-black/40">Bereiche</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-black/40">Feinjustierung</p>
+        </div>
+        <div className="divide-y divide-black/5">
+
+          {/* Größenbereich */}
+          <div className="px-4 py-4 space-y-3">
+            <SliderControl
+              label="Größenbereich (Klein/Mittel/Groß)"
+              value={active.sizeColumnWidth}
+              min={120}
+              max={240}
+              step={8}
+              onChange={(v) => update({ ...active, sizeColumnWidth: v })}
+              disabled={!editMode}
+            />
+          </div>
+
+          {/* Mengenbuttons */}
+          <div className="px-4 py-4 space-y-3">
+            <SliderControl
+              label="Mengenbuttons (− Menge +)"
+              value={active.qtyButtonSize}
+              min={40}
+              max={80}
+              step={2}
+              onChange={(v) => update({ ...active, qtyButtonSize: v })}
+              disabled={!editMode}
+            />
+          </div>
+
+          {/* Warenkorb-Schrift */}
+          <div className="px-4 py-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-ink">Warenkorb-Schriftgröße</span>
+              <span className="text-xs text-black/40">{CART_FONT_LABELS[active.cartFontSize]}</span>
+            </div>
+            <SegmentControl
+              value={active.cartFontSize}
+              options={cartFontOptions}
+              onChange={(v) => update({ ...active, cartFontSize: v })}
+              disabled={!editMode}
+            />
+          </div>
+
+          {/* Warenkorb-Breite */}
+          <div className="px-4 py-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-ink">Warenkorb-Breite</span>
+              <span className="text-sm font-bold tabular-nums text-primaq-600">{active.cartWidth}px</span>
+            </div>
+            <div className={cn("flex gap-1 transition-opacity", !editMode && "opacity-40 pointer-events-none")}>
+              {CART_WIDTH_STEPS.map((w) => (
+                <button
+                  key={w}
+                  onClick={() => update({ ...active, cartWidth: w })}
+                  className={cn(
+                    "flex-1 rounded-lg py-1.5 text-xs font-bold transition-colors",
+                    active.cartWidth === w
+                      ? "bg-primaq-500 text-white shadow-sm"
+                      : "bg-black/5 text-black/50 hover:bg-black/10"
+                  )}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* ── Sortable panel list ──────────────────────────────────── */}
+      <div className="overflow-hidden rounded-2xl bg-white shadow">
+        <div className="border-b border-black/5 px-4 py-3">
+          <p className="text-xs font-bold uppercase tracking-widest text-black/40">Bereiche & Reihenfolge</p>
           {editMode && (
-            <p className="mt-0.5 text-xs text-primaq-600">↕ Griff halten und nach oben/unten verschieben</p>
+            <p className="mt-0.5 text-xs text-primaq-600">↕ Griff halten und verschieben</p>
           )}
         </div>
         <div className="divide-y divide-black/5">
@@ -259,7 +528,7 @@ export function PosLayoutSettings() {
                   className={cn(
                     "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors",
                     editMode
-                      ? "cursor-grab bg-black/5 text-black/50 hover:bg-primaq-100 hover:text-primaq-700 active:cursor-grabbing"
+                      ? "cursor-grab bg-black/5 text-black/50 hover:bg-primaq-100 hover:text-primaq-700"
                       : "cursor-not-allowed text-black/20"
                   )}
                 >
@@ -267,12 +536,18 @@ export function PosLayoutSettings() {
                 </div>
                 <div className={cn("h-2.5 w-2.5 shrink-0 rounded-full", PANEL_DOT[panel.id])} />
                 <span className="flex-1 text-sm font-bold text-ink">{PANEL_LABELS[panel.id]}</span>
-                <span className="text-xs font-semibold text-black/40">{SIZE_LABELS[panel.size]}</span>
+                <span className="text-xs font-semibold text-black/40">
+                  {panel.id === "groessen"
+                    ? `${active.sizeColumnWidth}px`
+                    : panel.id === "warenkorb"
+                    ? `${active.cartWidth}px`
+                    : SIZE_LABELS[panel.size]}
+                </span>
               </div>
               <div className="pl-12">
                 <SizeSelector
                   value={panel.size}
-                  onChange={(size) => updateSize(panel.id, size)}
+                  onChange={(size) => updatePanelSize(panel.id, size)}
                   disabled={!editMode}
                 />
               </div>
@@ -281,7 +556,7 @@ export function PosLayoutSettings() {
         </div>
       </div>
 
-      {/* ── Visibility toggles ─────────────────────────────────── */}
+      {/* ── Visibility toggles ───────────────────────────────────── */}
       <div className="overflow-hidden rounded-2xl bg-white shadow">
         <div className="border-b border-black/5 px-4 py-3">
           <p className="text-xs font-bold uppercase tracking-widest text-black/40">Sichtbarkeit</p>
@@ -292,7 +567,7 @@ export function PosLayoutSettings() {
               <span className="flex-1 text-sm font-semibold text-ink">{label}</span>
               <Toggle
                 checked={active.toggles[id]}
-                onChange={(v) => updateToggle(id, v)}
+                onChange={(v) => update({ ...active, toggles: { ...active.toggles, [id]: v } })}
                 disabled={!editMode}
               />
             </div>
@@ -300,14 +575,13 @@ export function PosLayoutSettings() {
         </div>
       </div>
 
-      {/* ── Profile management ─────────────────────────────────── */}
+      {/* ── Profile management ───────────────────────────────────── */}
       <div className="rounded-2xl bg-white p-4 shadow">
-        <p className="mb-3 text-xs font-bold uppercase tracking-widest text-black/40">Profile</p>
-
+        <p className="mb-3 text-xs font-bold uppercase tracking-widest text-black/40">Eigene Profile</p>
         <div className="flex gap-2">
           <input
             type="text"
-            placeholder="Name (z.B. Alexander, Rush-Hour…)"
+            placeholder="Name (z.B. Lichterfest, Morgen…)"
             value={profileName}
             onChange={(e) => setProfileName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") handleSaveProfile(); }}
@@ -323,14 +597,10 @@ export function PosLayoutSettings() {
             Speichern
           </button>
         </div>
-
         {profiles.length > 0 ? (
           <div className="mt-3 space-y-1.5">
             {profiles.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-2 rounded-xl bg-black/[0.03] px-3 py-2.5"
-              >
+              <div key={p.id} className="flex items-center gap-2 rounded-xl bg-black/[0.03] px-3 py-2.5">
                 <span className="flex-1 truncate text-sm font-semibold text-ink">{p.name}</span>
                 <button
                   onClick={() => loadProfile(p.id)}
@@ -349,11 +619,11 @@ export function PosLayoutSettings() {
             ))}
           </div>
         ) : (
-          <p className="mt-3 text-center text-xs text-black/35">Noch keine Profile gespeichert</p>
+          <p className="mt-3 text-center text-xs text-black/35">Noch keine eigenen Profile</p>
         )}
       </div>
 
-      {/* ── Reset to default ───────────────────────────────────── */}
+      {/* ── Reset ────────────────────────────────────────────────── */}
       <div className="rounded-2xl bg-white p-4 shadow">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -373,6 +643,7 @@ export function PosLayoutSettings() {
           </button>
         </div>
       </div>
+
     </div>
   );
 }
