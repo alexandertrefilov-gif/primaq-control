@@ -86,7 +86,7 @@ test("2: Klein + Mittel + Groß – Gesamtsumme 11,00 €", async ({ page }) => 
   await clickFlavor(page, "Schokolade");
 
   await clickSize(page, "Groß");
-  await clickFlavor(page, "Mix Vanille/Schoko");
+  await clickFlavor(page, "Mix Vanille/Schokolade");
 
   // Gesamt: 2,50 + 3,50 + 5,00 = 11,00
   await expect(page.getByText("11,00 €")).toBeVisible();
@@ -283,9 +283,10 @@ test("10: Menge erhöhen, verringern, Artikel entfernen", async ({ page }) => {
   await page.locator("li").first().getByRole("button").first().click();
   await expect(page.getByText("2,50 €").first()).toBeVisible();
 
-  // X: Artikel entfernen
+  // X: Artikel entfernen (2-Tap-Bestätigung)
   const listItem = page.locator("li").first();
-  await listItem.getByRole("button").last().click();
+  await listItem.getByRole("button").last().click(); // zeigt "Löschen?"
+  await page.getByRole("button", { name: "Löschen?" }).click(); // bestätigt
   await expect(page.getByText("Noch leer")).toBeVisible();
 });
 

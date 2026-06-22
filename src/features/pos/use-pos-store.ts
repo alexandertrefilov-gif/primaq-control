@@ -144,6 +144,26 @@ export function usePosStore() {
     setState((current) => ({ ...current, daily: emptyDaily() }));
   }, []);
 
+  const voidLastOrder = useCallback(() => {
+    setState((current) => {
+      const { daily } = current;
+      if (daily.orders.length === 0) return current;
+      const last = daily.orders[daily.orders.length - 1];
+      return {
+        ...current,
+        daily: {
+          ...daily,
+          orders: daily.orders.slice(0, -1),
+          totalCents: Math.max(0, daily.totalCents - last.totalCents),
+          cashCents: Math.max(0, daily.cashCents - (last.paymentMethod === "bar" ? last.totalCents : 0)),
+          cardCents: Math.max(0, daily.cardCents - (last.paymentMethod === "karte" ? last.totalCents : 0)),
+          qrCents: Math.max(0, daily.qrCents - (last.paymentMethod === "qr" ? last.totalCents : 0)),
+          orderCount: Math.max(0, daily.orderCount - 1),
+        },
+      };
+    });
+  }, []);
+
   const cartTotal = state.cart.reduce((sum, i) => sum + i.quantity * i.unitPriceCents, 0);
 
   return {
@@ -157,5 +177,6 @@ export function usePosStore() {
     clearCart,
     bookOrder,
     resetDaily,
+    voidLastOrder,
   };
 }

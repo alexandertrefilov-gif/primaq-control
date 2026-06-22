@@ -41,7 +41,9 @@ test.beforeEach(async ({ page }) => {
     ({ machine }) => {
       if (window.sessionStorage.getItem("primaq-del-seeded") === "true") return;
 
+      window.sessionStorage.setItem("primaq-admin", "true");
       window.localStorage.clear();
+      window.localStorage.setItem("primaq-legacy-settings-open", "1");
       window.localStorage.setItem("primaq-control-machines", JSON.stringify([machine]));
       window.localStorage.setItem(
         "primaq-control-mvp-state",
@@ -150,7 +152,9 @@ const machineB = {
 // Seed-Funktion für zwei Maschinen mit sessionStorage-Guard (reload-safe)
 function seedTwoMachinesFn({ mA, mB, guardKey }: { mA: object; mB: object; guardKey: string }) {
   if (window.sessionStorage.getItem(guardKey) === "true") return;
+  window.sessionStorage.setItem("primaq-admin", "true");
   window.localStorage.clear();
+  window.localStorage.setItem("primaq-legacy-settings-open", "1");
   window.localStorage.setItem("primaq-control-machines", JSON.stringify([mA, mB]));
   window.localStorage.setItem(
     "primaq-control-mvp-state",

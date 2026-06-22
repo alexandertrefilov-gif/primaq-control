@@ -14,11 +14,13 @@ export type SizeConfig = {
 export type FlavorConfig = {
   id: string;
   name: string;
+  displayName?: string;
   group: string;
   imageSrc?: string;
   fallbackImageSrc?: string;
   backgroundColor: string;
   textColor: string;
+  isActive?: boolean;
   isMix?: true;
   mixColors?: [string, string];
   mixParts?: [string, string];  // IDs of the two component flavors (for mix card images)

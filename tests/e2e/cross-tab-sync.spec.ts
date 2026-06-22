@@ -63,7 +63,9 @@ const fakeOrder = {
 };
 
 function seedFn({ machine, state, openOrder }: { machine: object; state: object; openOrder?: { id: string } | null }) {
+  window.sessionStorage.setItem("primaq-admin", "true");
   window.localStorage.clear();
+  window.localStorage.setItem("primaq-legacy-settings-open", "1");
   window.localStorage.setItem("primaq-control-machines", JSON.stringify([machine]));
   window.localStorage.setItem("primaq-control-mvp-state", JSON.stringify(state));
   window.localStorage.setItem("primaq-control-open-orders", JSON.stringify(openOrder ? [openOrder] : []));

@@ -1,4 +1,4 @@
-import { ClipboardCheck, ReceiptText } from "lucide-react";
+import { ClipboardCheck, ReceiptText, Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type NavigationItem = {
@@ -14,4 +14,5 @@ export const navigationItems: NavigationItem[] = [
 
 export const adminNavigationItems: NavigationItem[] = [
   { label: "Tagesabschluss", href: "/tagesabschluss", icon: ClipboardCheck },
+  { label: "Einstellungen", href: "/einstellungen", icon: Settings },
 ];

@@ -24,7 +24,9 @@ const baseMachine = {
 function seedScript(machine: object) {
   if (window.sessionStorage.getItem("primaq-pers-seeded") === "true") return;
   window.sessionStorage.setItem("primaq-pers-seeded", "true");
+  window.sessionStorage.setItem("primaq-admin", "true");
   window.localStorage.clear();
+  window.localStorage.setItem("primaq-legacy-settings-open", "1");
   window.localStorage.setItem("primaq-control-machines", JSON.stringify([machine]));
   window.localStorage.setItem(
     "primaq-control-mvp-state",

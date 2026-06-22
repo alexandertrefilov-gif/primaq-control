@@ -68,7 +68,7 @@ test("Admin 2: Bottom-Bar zeigt letzte Buchung nach Bestellung", async ({ page }
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   const bar = page.getByTestId("last-booking-bar");
-  await expect(bar.getByText("2,50 €")).toBeVisible();
+  await expect(bar.getByText("2,50 €").first()).toBeVisible();
   await expect(bar.getByText("Bar")).toBeVisible();
 });
 
@@ -123,6 +123,78 @@ test("Admin 5: PIN 1234 gibt Admin-Zugang zu Tagesabschluss", async ({ page }) =
   await waitLoaded(page);
   await expect(page.getByText("Gesamtumsatz")).toBeVisible();
   await expect(page.getByText("Admin-Berechtigung erforderlich")).not.toBeVisible();
+});
+
+// ── Test 7: Letzte Buchung stornieren ────────────────────────────────────────
+
+test("Admin 7: Letzte Buchung stornieren – Daily auf 0 reduziert", async ({ page }) => {
+  await seedEmptyPos(page);
+  await blockSupabase(page);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  // Book one order: Klein Vanille Bar (2,50 €)
+  await page.getByRole("button", { name: /^Klein/ }).click();
+  await page.getByRole("button", { name: "Vanille", exact: true }).click();
+  await page.getByRole("button", { name: "5€" }).click();
+  await page.getByRole("button", { name: "Bestellung buchen" }).click();
+
+  // Storno: click button, then confirm
+  await page.getByTestId("void-last-order").click();
+  await page.getByTestId("void-confirm").click();
+
+  // Bottom bar shows "noch keine"
+  const bar = page.getByTestId("last-booking-bar");
+  await expect(bar.getByText("noch keine")).toBeVisible();
+
+  // localStorage state reset to 0
+  const state = await page.evaluate(() => {
+    const raw = window.localStorage.getItem("primaq-pos-state");
+    return raw ? JSON.parse(raw) as { daily: { totalCents: number; orderCount: number; orders: unknown[] } } : null;
+  });
+  expect(state?.daily.totalCents).toBe(0);
+  expect(state?.daily.orderCount).toBe(0);
+  expect(state?.daily.orders).toHaveLength(0);
+});
+
+// ── Test 8: Storno bei zwei Buchungen – erste bleibt erhalten ─────────────────
+
+test("Admin 8: Storno letzter von zwei Buchungen – erste bleibt erhalten", async ({ page }) => {
+  await seedEmptyPos(page);
+  await blockSupabase(page);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  // Buchung 1: Klein Vanille Bar (2,50 €)
+  await page.getByRole("button", { name: /^Klein/ }).click();
+  await page.getByRole("button", { name: "Vanille", exact: true }).click();
+  await page.getByRole("button", { name: "5€" }).click();
+  await page.getByRole("button", { name: "Bestellung buchen" }).click();
+
+  // Buchung 2: Mittel Schokolade Karte (3,50 €)
+  await page.getByRole("button", { name: /^Mittel/ }).click();
+  await page.getByRole("button", { name: "Schokolade", exact: true }).click();
+  await page.getByRole("button", { name: "Karte" }).click();
+  await page.getByRole("button", { name: "Bestellung buchen" }).click();
+
+  // Storno letzte Buchung (3,50 € Karte)
+  await page.getByTestId("void-last-order").click();
+  await page.getByTestId("void-confirm").click();
+
+  // Bottom bar zeigt erste Buchung (2,50 € Bar)
+  const bar = page.getByTestId("last-booking-bar");
+  await expect(bar.getByText("2,50 €").first()).toBeVisible();
+  await expect(bar.getByText("Bar")).toBeVisible();
+
+  // localStorage: totalCents=250, cardCents=0, orderCount=1
+  const state = await page.evaluate(() => {
+    const raw = window.localStorage.getItem("primaq-pos-state");
+    return raw ? JSON.parse(raw) as { daily: { totalCents: number; cashCents: number; cardCents: number; orderCount: number } } : null;
+  });
+  expect(state?.daily.totalCents).toBe(250);
+  expect(state?.daily.cashCents).toBe(250);
+  expect(state?.daily.cardCents).toBe(0);
+  expect(state?.daily.orderCount).toBe(1);
 });
 
 // ── Test 6: Admin verlassen sperrt Tagesabschluss wieder ─────────────────────

@@ -1,21 +1,23 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Check, Minus, Plus, Settings, ShoppingCart, Trash2, X } from "lucide-react";
+import { useState, useCallback, useEffect, useRef, createContext, useContext } from "react";
+import { Check, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { usePosStore } from "./use-pos-store";
+import { usePosFlavorStore } from "./use-pos-flavor-store";
 import {
   FLAVORS,
   MACHINE_GROUP_LABELS,
   SIZES,
-  getFlavorName,
-  getSizeConfig,
   getSizeName,
 } from "./pos-config";
 import type { FlavorConfig, SizeConfig } from "./pos-config";
-import type { PaymentMethod } from "./pos-types";
+import type { CartItem, PaymentMethod } from "./pos-types";
+
+// Dynamic flavor context – populated by SalesPage from usePosFlavorStore
+const FlavorsCtx = createContext<import("./pos-config").FlavorConfig[]>(FLAVORS);
+function useFlavorList() { return useContext(FlavorsCtx); }
 
 function fmt(cents: number): string {
   return (cents / 100).toFixed(2).replace(".", ",") + " €";
@@ -74,15 +76,16 @@ function FlavorCard({
   flavor: FlavorConfig;
   onClick: () => void;
 }) {
+  const allFlavors = useFlavorList();
   const isMix = !!flavor.isMix && !!flavor.mixColors;
-  const part1 = isMix && flavor.mixParts ? FLAVORS.find((f) => f.id === flavor.mixParts![0]) : null;
-  const part2 = isMix && flavor.mixParts ? FLAVORS.find((f) => f.id === flavor.mixParts![1]) : null;
+  const part1 = isMix && flavor.mixParts ? allFlavors.find((f) => f.id === flavor.mixParts![0]) : null;
+  const part2 = isMix && flavor.mixParts ? allFlavors.find((f) => f.id === flavor.mixParts![1]) : null;
 
   return (
     <button
       aria-label={flavor.name}
       onClick={onClick}
-      className="relative flex flex-1 flex-col items-center justify-end overflow-hidden rounded-2xl shadow-md transition-all active:scale-[0.97] hover:shadow-xl hover:ring-2 hover:ring-primaq-500/40 select-none"
+      className="relative flex flex-1 flex-col items-center justify-end overflow-hidden rounded-2xl shadow-md transition-all active:scale-[0.97] hover:shadow-xl hover:ring-2 hover:ring-primaq-500/40 select-none min-h-[120px]"
       style={{ color: flavor.textColor }}
     >
       {/* Background */}
@@ -145,6 +148,104 @@ function FlavorCard({
           {flavor.name}
         </span>
       </div>
+    </button>
+  );
+}
+
+// ── Cart item badge – flavor icon on flavor background ───────────────────────
+
+function CartItemBadge({ item, large }: { item: CartItem; large?: boolean }) {
+  const allFlavors = useFlavorList();
+  const flavor = allFlavors.find((f) => f.id === item.flavor);
+
+  if (!flavor) {
+    return <div className={cn("shrink-0 rounded-xl bg-black/10", large ? "h-14 w-14" : "h-9 w-9")} />;
+  }
+
+  const isMix = !!flavor.isMix && !!flavor.mixColors;
+  const part1 = isMix && flavor.mixParts ? allFlavors.find((f) => f.id === flavor.mixParts![0]) : null;
+  const part2 = isMix && flavor.mixParts ? allFlavors.find((f) => f.id === flavor.mixParts![1]) : null;
+
+  return (
+    <div className={cn("relative shrink-0 overflow-hidden rounded-xl", large ? "h-14 w-14" : "h-9 w-9")}>
+      {isMix ? (
+        <>
+          <div
+            className="absolute inset-0"
+            style={{ clipPath: "polygon(0 0, 100% 0, 0 100%)", background: flavor.mixColors![0] }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{ clipPath: "polygon(100% 0, 100% 100%, 0 100%)", background: flavor.mixColors![1] }}
+          />
+        </>
+      ) : (
+        <div className="absolute inset-0" style={{ background: flavor.backgroundColor }} />
+      )}
+      <div className="relative z-10 flex h-full w-full items-center justify-center">
+        {isMix ? (
+          <div className="flex w-full items-center justify-around px-0.5">
+            {part1?.imageSrc && (
+              <ProductImage
+                src={part1.imageSrc}
+                fallbackSrc={part1.fallbackImageSrc}
+                alt=""
+                className={large ? "h-6 w-6 object-contain drop-shadow-sm" : "h-4 w-4 object-contain drop-shadow-sm"}
+              />
+            )}
+            {part2?.imageSrc && (
+              <ProductImage
+                src={part2.imageSrc}
+                fallbackSrc={part2.fallbackImageSrc}
+                alt=""
+                className={large ? "h-6 w-6 object-contain drop-shadow-sm" : "h-4 w-4 object-contain drop-shadow-sm"}
+              />
+            )}
+          </div>
+        ) : flavor.imageSrc ? (
+          <ProductImage
+            src={flavor.imageSrc}
+            fallbackSrc={flavor.fallbackImageSrc}
+            alt=""
+            className={large ? "h-9 w-9 object-contain drop-shadow-sm" : "h-6 w-6 object-contain drop-shadow-sm"}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ── Delete button – 2-tap confirmation with 3-second auto-reset ──────────────
+
+function DeleteButton({ itemId, onRemove }: { itemId: string; onRemove: (id: string) => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const handleClick = useCallback(() => {
+    if (!confirming) {
+      setConfirming(true);
+      timerRef.current = setTimeout(() => setConfirming(false), 3000);
+    } else {
+      clearTimeout(timerRef.current);
+      onRemove(itemId);
+    }
+  }, [confirming, itemId, onRemove]);
+
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  return confirming ? (
+    <button
+      onClick={handleClick}
+      className="h-11 rounded-lg bg-red-500 px-2.5 text-[11px] font-black text-white transition-colors active:scale-95"
+    >
+      Löschen?
+    </button>
+  ) : (
+    <button
+      onClick={handleClick}
+      className="grid h-11 w-11 place-items-center rounded-full text-black/25 hover:bg-red-50 hover:text-red-500 active:scale-90 transition-all"
+    >
+      <X className="h-4 w-4" />
     </button>
   );
 }
@@ -237,6 +338,7 @@ function FlavorColumn({
   selectedSize: SizeConfig | null;
   onFlavorClick: (flavor: FlavorConfig) => void;
 }) {
+  const allFlavors = useFlavorList();
   const groups = Object.entries(MACHINE_GROUP_LABELS);
 
   if (!selectedSize) {
@@ -252,18 +354,18 @@ function FlavorColumn({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-3 rounded-2xl bg-white p-4 shadow min-h-0">
+    <div className="flex flex-1 flex-col gap-2 rounded-2xl bg-white p-3 shadow min-h-0">
       <div className="shrink-0">
         <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">
           Sorte wählen
         </p>
-        <p className="text-lg font-black text-ink">
+        <p className="text-base font-black text-ink leading-tight">
           {selectedSize.name}{" "}
           <span className="text-primaq-500">{fmt(selectedSize.priceCents)}</span>
         </p>
       </div>
       {groups.map(([groupId, groupLabel]) => {
-        const flavors = FLAVORS.filter((f) => f.group === groupId);
+        const flavors = allFlavors.filter((f) => f.group === groupId);
         return (
           <FlavorGroup
             key={groupId}
@@ -308,32 +410,72 @@ function CartColumn({
   onClear: () => void;
   onBook: () => void;
 }) {
+  const allFlavors = useFlavorList();
+  const getLocalFlavorName = (id: string) => allFlavors.find((f) => f.id === id)?.name ?? id;
+
+  const [ausgabeModus, setAusgabeModus] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("primaq-ausgabe-modus") === "1";
+    }
+    return false;
+  });
+  const toggleAusgabeModus = useCallback((on: boolean) => {
+    setAusgabeModus(on);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("primaq-ausgabe-modus", on ? "1" : "0");
+    }
+  }, []);
+
+  const [clearing, setClearing] = useState(false);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const handleClear = useCallback(() => {
+    if (!clearing) {
+      setClearing(true);
+      clearTimerRef.current = setTimeout(() => setClearing(false), 3000);
+    } else {
+      clearTimeout(clearTimerRef.current);
+      onClear();
+      setClearing(false);
+    }
+  }, [clearing, onClear]);
+
+  useEffect(() => () => clearTimeout(clearTimerRef.current), []);
+
   return (
-    <div className="flex w-80 shrink-0 flex-col gap-2 min-h-0">
+    <div className="flex w-[440px] shrink-0 flex-col gap-2 min-h-0">
       {/* Cart */}
       <div className="flex flex-1 flex-col rounded-2xl bg-white shadow min-h-0">
-        <div className="flex shrink-0 items-center justify-between border-b border-black/5 px-3 py-2.5">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-black/40">
+        <div className="flex shrink-0 items-center gap-2 border-b border-black/5 px-4 py-2.5">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-black/40 mr-auto">
             Warenkorb
           </span>
-          <div className="flex items-center gap-1">
-            {cart.length > 0 && (
-              <button
-                onClick={onClear}
-                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-black/35 hover:bg-red-50 hover:text-red-600 transition-colors"
-              >
-                <Trash2 className="h-3 w-3" />
-                Leeren
-              </button>
+          <button
+            onClick={() => toggleAusgabeModus(!ausgabeModus)}
+            title="Ausgabe-Modus: größere Schrift für Zweipersonen-Betrieb"
+            className={cn(
+              "rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors select-none",
+              ausgabeModus
+                ? "bg-primaq-100 text-primaq-700"
+                : "text-black/30 hover:bg-black/5 hover:text-black/50"
             )}
-            <Link
-              href="/einstellungen"
-              className="grid h-7 w-7 place-items-center rounded-lg text-black/30 hover:bg-black/5 hover:text-black/60 transition-colors"
-              title="Einstellungen"
+          >
+            Ausgabe
+          </button>
+          {cart.length > 0 && (
+            <button
+              onClick={handleClear}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                clearing
+                  ? "bg-red-500 text-white"
+                  : "text-black/35 hover:bg-red-50 hover:text-red-600"
+              )}
             >
-              <Settings className="h-4 w-4" />
-            </Link>
-          </div>
+              <Trash2 className="h-3 w-3" />
+              {clearing ? "Erneut tippen" : "Leeren"}
+            </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto min-h-0">
@@ -344,61 +486,63 @@ function CartColumn({
             </div>
           ) : (
             <ul className="divide-y divide-black/5">
-              {cart.map((item) => {
-                const sizeConf = getSizeConfig(item.size);
-                return (
-                  <li key={item.id} className="flex items-center gap-2 px-3 py-2">
-                    {/* Size thumbnail */}
-                    <div className="shrink-0 h-9 w-9 flex items-center justify-center">
-                      <ProductImage
-                        src={sizeConf?.imageSrc}
-                        fallbackSrc={sizeConf?.fallbackImageSrc}
-                        alt=""
-                        className="max-h-full max-w-full object-contain"
-                      />
-                    </div>
-                    {/* Item label */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-ink truncate leading-tight">
-                        {getSizeName(item.size)} {getFlavorName(item.flavor)}
-                      </p>
-                      <p className="text-xs text-black/40">{fmt(item.unitPriceCents)} je</p>
-                    </div>
-                    {/* Qty controls */}
-                    <div className="flex items-center gap-1 shrink-0">
+              {cart.map((item) => (
+                <li key={item.id} className={cn("px-4", ausgabeModus ? "py-5" : "py-4")}>
+                  {/* Row 1: badge + name + total */}
+                  <div className={cn("flex items-start", ausgabeModus ? "gap-3" : "gap-2.5")}>
+                    <CartItemBadge item={item} large={ausgabeModus} />
+                    <p className={cn(
+                      "flex-1 uppercase leading-tight line-clamp-2 text-ink",
+                      ausgabeModus ? "text-2xl font-black" : "text-xl font-bold"
+                    )}>
+                      {getSizeName(item.size)} {getLocalFlavorName(item.flavor)}
+                    </p>
+                    <p className={cn(
+                      "shrink-0 font-black text-ink tabular-nums pt-0.5",
+                      ausgabeModus ? "text-2xl" : "text-xl"
+                    )}>
+                      {fmt(item.quantity * item.unitPriceCents)}
+                    </p>
+                  </div>
+                  {/* Row 2: unit price + qty controls */}
+                  <div className={cn(
+                    "mt-2 flex items-center",
+                    ausgabeModus ? "pl-[68px]" : "pl-[44px]"
+                  )}>
+                    {!ausgabeModus && (
+                      <span className="text-xs text-black/40 tabular-nums mr-auto">
+                        {fmt(item.unitPriceCents)} je
+                      </span>
+                    )}
+                    <div className={cn("flex items-center gap-1.5", ausgabeModus && "ml-auto")}>
                       <button
                         onClick={() => onChangeQty(item.id, -1)}
-                        className="grid h-7 w-7 place-items-center rounded-full bg-black/5 hover:bg-red-100 hover:text-red-600 active:scale-90 transition-all"
+                        className="grid h-11 w-11 place-items-center rounded-full bg-black/5 hover:bg-red-100 hover:text-red-600 active:scale-90 transition-all"
                       >
-                        <Minus className="h-3 w-3" />
+                        <Minus className="h-4 w-4" />
                       </button>
-                      <span className="w-5 text-center text-sm font-bold text-ink">
+                      <span className={cn(
+                        "text-center font-black text-ink tabular-nums",
+                        ausgabeModus ? "w-12 text-2xl" : "w-10 text-xl"
+                      )}>
                         {item.quantity}
                       </span>
                       <button
                         onClick={() => onChangeQty(item.id, 1)}
-                        className="grid h-7 w-7 place-items-center rounded-full bg-black/5 hover:bg-primaq-100 hover:text-primaq-700 active:scale-90 transition-all"
+                        className="grid h-11 w-11 place-items-center rounded-full bg-black/5 hover:bg-primaq-100 hover:text-primaq-700 active:scale-90 transition-all"
                       >
-                        <Plus className="h-3 w-3" />
+                        <Plus className="h-4 w-4" />
                       </button>
-                      <button
-                        onClick={() => onRemove(item.id)}
-                        className="grid h-7 w-7 place-items-center rounded-full text-black/25 hover:bg-red-50 hover:text-red-500 active:scale-90 transition-all"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                      <DeleteButton itemId={item.id} onRemove={onRemove} />
                     </div>
-                    <p className="w-14 shrink-0 text-right text-sm font-bold text-ink tabular-nums">
-                      {fmt(item.quantity * item.unitPriceCents)}
-                    </p>
-                  </li>
-                );
-              })}
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
         </div>
 
-        <div className="shrink-0 border-t border-black/10 px-3 py-2.5">
+        <div className="shrink-0 border-t border-black/10 px-4 py-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-black/50">Gesamt</span>
             <span className="text-2xl font-black text-ink tabular-nums">{fmt(cartTotal)}</span>
@@ -415,7 +559,7 @@ function CartColumn({
               key={m}
               onClick={() => onPaymentChange(m)}
               className={cn(
-                "flex-1 rounded-xl py-2 text-sm font-bold transition-all",
+                "flex-1 rounded-xl py-2.5 text-sm font-bold transition-all",
                 paymentMethod === m
                   ? "bg-primaq-500 text-white shadow"
                   : "bg-black/5 text-black/50 hover:bg-black/10"
@@ -425,6 +569,14 @@ function CartColumn({
             </button>
           ))}
         </div>
+
+        {/* Karte indicator */}
+        {paymentMethod === "karte" && (
+          <div className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 py-3">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600" aria-hidden><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+            <span className="text-sm font-semibold text-blue-700">Kartenzahlung gewählt</span>
+          </div>
+        )}
 
         {/* Cash input */}
         {paymentMethod === "bar" && (
@@ -448,7 +600,7 @@ function CartColumn({
                 <button
                   key={a}
                   onClick={() => onCashInput(String(a))}
-                  className="flex-1 rounded-lg bg-black/5 py-1 text-xs font-bold text-black/65 hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 transition-all"
+                  className="flex-1 rounded-lg bg-black/5 py-1.5 text-xs font-bold text-black/65 hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 transition-all"
                 >
                   {a}€
                 </button>
@@ -484,7 +636,7 @@ function CartColumn({
   );
 }
 
-// ── Bottom bar – last booking only (no aggregate totals for operator) ─────────
+// ── Bottom status bar – last booking + live daily stats ──────────────────────
 
 const BOOKING_PAYMENT_LABEL: Record<string, string> = {
   bar: "Bar",
@@ -492,14 +644,33 @@ const BOOKING_PAYMENT_LABEL: Record<string, string> = {
   qr: "QR",
 };
 
-function LastBookingBar({ daily }: { daily: ReturnType<typeof usePosStore>["daily"] }) {
+function SalesStatusBar({
+  daily,
+  onVoid,
+}: {
+  daily: ReturnType<typeof usePosStore>["daily"];
+  onVoid: () => void;
+}) {
   const last = daily.orders.length > 0 ? daily.orders[daily.orders.length - 1] : null;
+  const [confirming, setConfirming] = useState(false);
+
+  const handleVoidClick = useCallback(() => {
+    if (!confirming) { setConfirming(true); return; }
+    onVoid();
+    setConfirming(false);
+  }, [confirming, onVoid]);
+
+  const portionen = daily.orders.reduce(
+    (sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0),
+    0
+  );
 
   return (
     <div
       data-testid="last-booking-bar"
       className="shrink-0 flex items-center gap-3 rounded-2xl bg-white/90 px-5 py-2.5 shadow backdrop-blur-sm"
     >
+      {/* Left: last booking */}
       <span className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-black/40">
         Letzte Buchung
       </span>
@@ -514,7 +685,7 @@ function LastBookingBar({ daily }: { daily: ReturnType<typeof usePosStore>["dail
             {BOOKING_PAYMENT_LABEL[last.paymentMethod] ?? last.paymentMethod}
           </span>
           <div className="h-4 w-px shrink-0 bg-black/15" />
-          <span className="text-sm font-semibold text-black/55">
+          <span className="text-sm font-semibold text-black/55 tabular-nums">
             {new Date(last.createdAt).toLocaleTimeString("de-DE", {
               hour: "2-digit",
               minute: "2-digit",
@@ -524,10 +695,55 @@ function LastBookingBar({ daily }: { daily: ReturnType<typeof usePosStore>["dail
           <span className="text-xs text-black/35">
             {last.items.reduce((s, i) => s + i.quantity, 0)} Artikel
           </span>
+          <div className="flex items-center gap-2 shrink-0">
+            {confirming ? (
+              <>
+                <button
+                  data-testid="void-confirm"
+                  onClick={handleVoidClick}
+                  className="rounded-lg bg-red-600 px-3 py-1 text-xs font-bold text-white hover:bg-red-700 transition-colors"
+                >
+                  Wirklich stornieren?
+                </button>
+                <button
+                  onClick={() => setConfirming(false)}
+                  className="rounded-lg bg-black/5 px-2 py-1 text-xs font-semibold text-black/50 hover:bg-black/10 transition-colors"
+                >
+                  Abbrechen
+                </button>
+              </>
+            ) : (
+              <button
+                data-testid="void-last-order"
+                onClick={handleVoidClick}
+                className="rounded-lg border border-black/15 bg-white px-3 py-1 text-xs font-semibold text-black/50 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
+              >
+                Stornieren
+              </button>
+            )}
+          </div>
         </>
       ) : (
         <span className="text-sm text-black/35">noch keine</span>
       )}
+
+      {/* Right: daily totals */}
+      <div className="ml-auto flex items-center gap-4 shrink-0 pl-3 border-l border-black/10">
+        <div className="text-center">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-black/35">Portionen</p>
+          <p className="text-base font-black text-ink tabular-nums">{portionen}</p>
+        </div>
+        <div className="h-6 w-px bg-black/10" />
+        <div className="text-center">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-black/35">Verkäufe</p>
+          <p className="text-base font-black text-ink tabular-nums">{daily.orderCount}</p>
+        </div>
+        <div className="h-6 w-px bg-black/10" />
+        <div className="text-center">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-black/35">Umsatz</p>
+          <p className="text-base font-black text-primaq-600 tabular-nums">{fmt(daily.totalCents)}</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -544,8 +760,11 @@ export function SalesPage() {
     changeQty,
     clearCart,
     bookOrder,
+    voidLastOrder,
     hydrated,
   } = usePosStore();
+
+  const { allFlavors, hydrated: flavorsHydrated } = usePosFlavorStore();
 
   const [selectedSizeId, setSelectedSizeId] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("bar");
@@ -586,16 +805,17 @@ export function SalesPage() {
     setCashInput("");
   }, [bookOrder]);
 
-  if (!hydrated) {
+  if (!hydrated || !flavorsHydrated) {
     return (
       <div className="flex h-full items-center justify-center text-black/40">Laden…</div>
     );
   }
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col gap-2">
+    <FlavorsCtx.Provider value={allFlavors}>
+    <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
       {/* 3 main columns */}
-      <div className="flex flex-1 min-h-0 gap-3">
+      <div className="flex flex-1 min-h-0 gap-3 overflow-hidden">
         <SizeColumn selectedId={selectedSizeId} onSelect={setSelectedSizeId} />
         <FlavorColumn selectedSize={selectedSize} onFlavorClick={handleFlavorClick} />
         <CartColumn
@@ -615,8 +835,8 @@ export function SalesPage() {
         />
       </div>
 
-      {/* Bottom bar – last booking only */}
-      <LastBookingBar daily={daily} />
+      {/* Bottom status bar */}
+      <SalesStatusBar daily={daily} onVoid={voidLastOrder} />
 
       {/* QR overlay */}
       {showQr && (
@@ -655,5 +875,6 @@ export function SalesPage() {
         </div>
       )}
     </div>
+    </FlavorsCtx.Provider>
   );
 }

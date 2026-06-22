@@ -15,6 +15,31 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const isSalePage = pathname === "/verkauf";
   const { isAdmin, login, logout } = useAdmin();
 
+  // Prevent any body/html scroll when the POS sale page is active.
+  // This blocks iOS rubber-band bounce and ensures nothing scrolls outside
+  // the explicitly scrollable cart list.
+  useEffect(() => {
+    if (!isSalePage) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      htmlOverscroll: html.style.overscrollBehavior,
+      bodyOverscroll: body.style.overscrollBehavior,
+    };
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+    body.style.overscrollBehavior = "none";
+    return () => {
+      html.style.overflow = prev.htmlOverflow;
+      body.style.overflow = prev.bodyOverflow;
+      html.style.overscrollBehavior = prev.htmlOverscroll;
+      body.style.overscrollBehavior = prev.bodyOverscroll;
+    };
+  }, [isSalePage]);
+
   const [showModal, setShowModal] = useState(false);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
@@ -59,7 +84,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     <div
       className={cn(
         "flex flex-col overflow-x-hidden",
-        isSalePage ? "h-screen overflow-hidden" : "min-h-screen"
+        isSalePage ? "h-dvh overflow-hidden" : "min-h-screen"
       )}
     >
       <header className="shrink-0 border-b border-black/10 bg-[#f7f8f4]/95 backdrop-blur">
@@ -101,7 +126,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <div
         className={cn(
           "flex min-h-0 w-full flex-1 flex-col",
-          isSalePage ? "px-4 py-3 xl:px-6" : "mx-auto max-w-4xl px-4 py-2.5 lg:py-3"
+          isSalePage ? "px-4 py-2 xl:px-5" : "mx-auto max-w-4xl px-4 py-2.5 lg:py-3"
         )}
       >
         <nav className="shrink-0 border-b border-black/10 pb-2">
