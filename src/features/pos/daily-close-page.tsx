@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Download, RotateCcw } from "lucide-react";
+import { Download, Lock, RotateCcw } from "lucide-react";
+import Link from "next/link";
 import { usePosStore } from "./use-pos-store";
+import { useAdmin } from "./admin-context";
 import { getFlavorName, getSizeName } from "./pos-config";
 import type { DailySummary } from "./pos-types";
 
@@ -48,6 +50,7 @@ function downloadCsv(daily: DailySummary) {
 
 export function DailyClosePage() {
   const { daily, resetDaily, hydrated } = usePosStore();
+  const { isAdmin, hydrated: adminHydrated } = useAdmin();
   const [confirming, setConfirming] = useState(false);
 
   const handleReset = useCallback(() => {
@@ -59,8 +62,31 @@ export function DailyClosePage() {
     setConfirming(false);
   }, [confirming, resetDaily]);
 
-  if (!hydrated) {
+  if (!hydrated || !adminHydrated) {
     return <div className="flex h-40 items-center justify-center text-black/40">Laden…</div>;
+  }
+
+  // Guard: operator access blocked
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center gap-6 py-20 text-center">
+        <div className="grid h-16 w-16 place-items-center rounded-full bg-black/5">
+          <Lock className="h-8 w-8 text-black/25" />
+        </div>
+        <div>
+          <p className="text-xl font-black text-black/60">Admin-Berechtigung erforderlich</p>
+          <p className="mt-1 text-sm text-black/40">
+            Bitte als Admin anmelden, um den Tagesabschluss zu sehen.
+          </p>
+        </div>
+        <Link
+          href="/verkauf"
+          className="rounded-xl bg-primaq-500 px-6 py-3 font-bold text-white hover:bg-primaq-700 transition-colors"
+        >
+          Zurück zum Verkauf
+        </Link>
+      </div>
+    );
   }
 
   const hasData = daily.orderCount > 0;

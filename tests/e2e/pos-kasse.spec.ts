@@ -20,6 +20,12 @@ async function seedEmptyPos(page: import("@playwright/test").Page) {
   });
 }
 
+async function seedAdmin(page: import("@playwright/test").Page) {
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem("primaq-admin", "true");
+  });
+}
+
 async function waitLoaded(page: import("@playwright/test").Page) {
   await page.waitForFunction(() => !document.body.textContent?.includes("Laden…"));
 }
@@ -216,6 +222,7 @@ test("7: Drei Buchungen – Gesamtumsatz korrekt summiert", async ({ page }) => 
 
 test("8: Tagesabschluss zeigt Umsatz aus /verkauf", async ({ page }) => {
   await seedEmptyPos(page);
+  await seedAdmin(page);
   await blockSupabase(page);
   await page.goto("/verkauf");
   await waitLoaded(page);
@@ -296,12 +303,14 @@ test("11: Buchen deaktiviert ohne Warenkorb-Inhalt", async ({ page }) => {
 
 // ── Test 12: Navigation Verkauf ↔ Tagesabschluss ─────────────────────────────
 
-test("12: Navigation zwischen Verkauf und Tagesabschluss", async ({ page }) => {
+test("12: Navigation zwischen Verkauf und Tagesabschluss (mit Admin)", async ({ page }) => {
   await seedEmptyPos(page);
+  await seedAdmin(page);
   await blockSupabase(page);
   await page.goto("/verkauf");
   await waitLoaded(page);
 
+  // Tagesabschluss is visible when admin
   await page.getByRole("link", { name: "Tagesabschluss" }).click();
   await waitLoaded(page);
   await expect(page.getByText("Tagesabschluss")).toBeVisible();

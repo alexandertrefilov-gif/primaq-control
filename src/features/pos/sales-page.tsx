@@ -484,39 +484,50 @@ function CartColumn({
   );
 }
 
-// ── Bottom bar – daily totals ─────────────────────────────────────────────────
+// ── Bottom bar – last booking only (no aggregate totals for operator) ─────────
 
-function BottomBar({ daily }: { daily: ReturnType<typeof usePosStore>["daily"] }) {
-  return (
-    <div className="shrink-0 flex items-center gap-4 rounded-2xl bg-white/90 px-5 py-3 shadow backdrop-blur-sm">
-      <Stat label="Bestellungen" value={String(daily.orderCount)} />
-      <div className="h-6 w-px bg-black/10 shrink-0" />
-      <Stat label="Umsatz gesamt" value={fmt(daily.totalCents)} accent />
-      <div className="h-6 w-px bg-black/10 shrink-0" />
-      <Stat label="Bar"   value={fmt(daily.cashCents)} />
-      <div className="h-6 w-px bg-black/10 shrink-0" />
-      <Stat label="Karte" value={fmt(daily.cardCents)} />
-      <div className="h-6 w-px bg-black/10 shrink-0" />
-      <Stat label="QR"    value={fmt(daily.qrCents)} />
-    </div>
-  );
-}
+const BOOKING_PAYMENT_LABEL: Record<string, string> = {
+  bar: "Bar",
+  karte: "Karte",
+  qr: "QR",
+};
 
-function Stat({
-  label,
-  value,
-  accent = false,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
+function LastBookingBar({ daily }: { daily: ReturnType<typeof usePosStore>["daily"] }) {
+  const last = daily.orders.length > 0 ? daily.orders[daily.orders.length - 1] : null;
+
   return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-black/40">{label}</p>
-      <p className={cn("text-base font-black tabular-nums", accent ? "text-primaq-700" : "text-ink")}>
-        {value}
-      </p>
+    <div
+      data-testid="last-booking-bar"
+      className="shrink-0 flex items-center gap-3 rounded-2xl bg-white/90 px-5 py-2.5 shadow backdrop-blur-sm"
+    >
+      <span className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-black/40">
+        Letzte Buchung
+      </span>
+      <div className="h-4 w-px shrink-0 bg-black/15" />
+      {last ? (
+        <>
+          <span className="text-base font-black text-ink tabular-nums">
+            {fmt(last.totalCents)}
+          </span>
+          <div className="h-4 w-px shrink-0 bg-black/15" />
+          <span className="text-sm font-semibold text-black/55">
+            {BOOKING_PAYMENT_LABEL[last.paymentMethod] ?? last.paymentMethod}
+          </span>
+          <div className="h-4 w-px shrink-0 bg-black/15" />
+          <span className="text-sm font-semibold text-black/55">
+            {new Date(last.createdAt).toLocaleTimeString("de-DE", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+          <div className="h-4 w-px shrink-0 bg-black/15" />
+          <span className="text-xs text-black/35">
+            {last.items.reduce((s, i) => s + i.quantity, 0)} Artikel
+          </span>
+        </>
+      ) : (
+        <span className="text-sm text-black/35">noch keine</span>
+      )}
     </div>
   );
 }
@@ -604,8 +615,8 @@ export function SalesPage() {
         />
       </div>
 
-      {/* Bottom daily bar */}
-      <BottomBar daily={daily} />
+      {/* Bottom bar – last booking only */}
+      <LastBookingBar daily={daily} />
 
       {/* QR overlay */}
       {showQr && (
