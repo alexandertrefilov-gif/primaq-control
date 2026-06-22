@@ -86,7 +86,7 @@ function FlavorCard({
     <button
       aria-label={flavor.name}
       onClick={onClick}
-      className="relative flex flex-1 flex-col items-center justify-end overflow-hidden rounded-2xl shadow-md transition-all active:scale-[0.97] hover:shadow-xl hover:ring-2 hover:ring-primaq-500/40 select-none min-h-[120px]"
+      className="relative flex w-full aspect-square flex-col items-center justify-end overflow-hidden rounded-2xl shadow-md transition-all active:scale-[0.97] hover:shadow-xl hover:ring-2 hover:ring-primaq-500/40 select-none"
       style={{ color: flavor.textColor }}
     >
       {/* Background */}
@@ -263,14 +263,17 @@ function FlavorGroup({
   onFlavorClick: (flavor: FlavorConfig) => void;
 }) {
   return (
-    <div className="flex flex-1 flex-col gap-2 min-h-0">
-      <div className="flex shrink-0 items-center gap-2">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
         <span className="text-[11px] font-bold uppercase tracking-widest text-primaq-700">
           {label}
         </span>
         <div className="flex-1 h-px bg-primaq-100" />
       </div>
-      <div className="flex flex-1 gap-2 min-h-0">
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))" }}
+      >
         {flavors.map((f) => (
           <FlavorCard key={f.id} flavor={f} onClick={() => onFlavorClick(f)} />
         ))}
@@ -357,8 +360,8 @@ function FlavorColumn({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-2 rounded-2xl bg-white p-3 shadow min-h-0">
-      <div className="shrink-0">
+    <div className="flex flex-1 flex-col rounded-2xl bg-white shadow min-h-0">
+      <div className="shrink-0 px-3 pt-3 pb-2">
         <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">
           Sorte wählen
         </p>
@@ -367,17 +370,19 @@ function FlavorColumn({
           <span className="text-primaq-500">{fmt(selectedSize.priceCents)}</span>
         </p>
       </div>
-      {groups.map(([groupId, groupLabel]) => {
-        const flavors = allFlavors.filter((f) => f.group === groupId);
-        return (
-          <FlavorGroup
-            key={groupId}
-            label={groupLabel}
-            flavors={flavors}
-            onFlavorClick={onFlavorClick}
-          />
-        );
-      })}
+      <div className="flex-1 overflow-y-auto min-h-0 px-3 pb-3 space-y-4">
+        {groups.map(([groupId, groupLabel]) => {
+          const flavors = allFlavors.filter((f) => f.group === groupId);
+          return (
+            <FlavorGroup
+              key={groupId}
+              label={groupLabel}
+              flavors={flavors}
+              onFlavorClick={onFlavorClick}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
