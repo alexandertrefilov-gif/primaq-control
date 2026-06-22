@@ -6,6 +6,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
 import { usePosStore } from "./use-pos-store";
 import { usePosFlavorStore } from "./use-pos-flavor-store";
+import { usePosLayoutStore, panelWidthClass } from "./use-pos-layout-store";
 import {
   FLAVORS,
   MACHINE_GROUP_LABELS,
@@ -283,12 +284,14 @@ function FlavorGroup({
 function SizeColumn({
   selectedId,
   onSelect,
+  className,
 }: {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  className?: string;
 }) {
   return (
-    <div className="flex w-44 shrink-0 flex-col gap-2 min-h-0">
+    <div className={cn("flex shrink-0 flex-col gap-2 min-h-0", className ?? "w-44")}>
       <p className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-black/40">
         Größe wählen
       </p>
@@ -395,6 +398,8 @@ function CartColumn({
   onRemove,
   onClear,
   onBook,
+  className,
+  showPayment = true,
 }: {
   cart: ReturnType<typeof usePosStore>["cart"];
   cartTotal: number;
@@ -409,6 +414,8 @@ function CartColumn({
   onRemove: (id: string) => void;
   onClear: () => void;
   onBook: () => void;
+  className?: string;
+  showPayment?: boolean;
 }) {
   const allFlavors = useFlavorList();
   const getLocalFlavorName = (id: string) => allFlavors.find((f) => f.id === id)?.name ?? id;
@@ -443,7 +450,7 @@ function CartColumn({
   useEffect(() => () => clearTimeout(clearTimerRef.current), []);
 
   return (
-    <div className="flex w-[440px] shrink-0 flex-col gap-2 min-h-0">
+    <div className={cn("flex shrink-0 flex-col gap-2 min-h-0", className ?? "w-[440px]")}>
       {/* Cart */}
       <div className="flex flex-1 flex-col rounded-2xl bg-white shadow min-h-0">
         <div className="flex shrink-0 items-center gap-2 border-b border-black/5 px-4 py-2.5">
@@ -552,72 +559,76 @@ function CartColumn({
 
       {/* Payment */}
       <div className="shrink-0 rounded-2xl bg-white p-3 shadow">
-        {/* Payment tabs */}
-        <div className="mb-3 flex gap-1.5">
-          {(["bar", "karte", "qr"] as PaymentMethod[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => onPaymentChange(m)}
-              className={cn(
-                "flex-1 rounded-xl py-2.5 text-sm font-bold transition-all",
-                paymentMethod === m
-                  ? "bg-primaq-500 text-white shadow"
-                  : "bg-black/5 text-black/50 hover:bg-black/10"
-              )}
-            >
-              {PAYMENT_LABELS[m]}
-            </button>
-          ))}
-        </div>
-
-        {/* Karte indicator */}
-        {paymentMethod === "karte" && (
-          <div className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 py-3">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600" aria-hidden><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
-            <span className="text-sm font-semibold text-blue-700">Kartenzahlung gewählt</span>
-          </div>
-        )}
-
-        {/* Cash input */}
-        {paymentMethod === "bar" && (
-          <div className="mb-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="shrink-0 text-sm font-semibold text-black/50">Gegeben</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                step="0.50"
-                min="0"
-                value={cashInput}
-                onChange={(e) => onCashInput(e.target.value)}
-                placeholder="0,00"
-                className="flex-1 rounded-xl border border-black/15 bg-black/[0.03] px-2.5 py-1.5 text-right text-lg font-bold outline-none focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20"
-              />
-              <span className="shrink-0 text-sm font-semibold text-black/50">€</span>
-            </div>
-            <div className="flex gap-1">
-              {QUICK_AMOUNTS.map((a) => (
+        {showPayment && (
+          <>
+            {/* Payment tabs */}
+            <div className="mb-3 flex gap-1.5">
+              {(["bar", "karte", "qr"] as PaymentMethod[]).map((m) => (
                 <button
-                  key={a}
-                  onClick={() => onCashInput(String(a))}
-                  className="flex-1 rounded-lg bg-black/5 py-1.5 text-xs font-bold text-black/65 hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 transition-all"
+                  key={m}
+                  onClick={() => onPaymentChange(m)}
+                  className={cn(
+                    "flex-1 rounded-xl py-2.5 text-sm font-bold transition-all",
+                    paymentMethod === m
+                      ? "bg-primaq-500 text-white shadow"
+                      : "bg-black/5 text-black/50 hover:bg-black/10"
+                  )}
                 >
-                  {a}€
+                  {PAYMENT_LABELS[m]}
                 </button>
               ))}
             </div>
-            {cashCents >= cartTotal && cartTotal > 0 && (
-              <div className="flex items-center justify-between rounded-xl bg-green-50 px-3 py-2">
-                <span className="text-sm font-semibold text-green-700">Rückgeld</span>
-                <span className="text-xl font-black text-green-700 tabular-nums">
-                  {fmt(change)}
-                </span>
+
+            {/* Karte indicator */}
+            {paymentMethod === "karte" && (
+              <div className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 py-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600" aria-hidden><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                <span className="text-sm font-semibold text-blue-700">Kartenzahlung gewählt</span>
               </div>
             )}
-          </div>
+
+            {/* Cash input */}
+            {paymentMethod === "bar" && (
+              <div className="mb-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 text-sm font-semibold text-black/50">Gegeben</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.50"
+                    min="0"
+                    value={cashInput}
+                    onChange={(e) => onCashInput(e.target.value)}
+                    placeholder="0,00"
+                    className="flex-1 rounded-xl border border-black/15 bg-black/[0.03] px-2.5 py-1.5 text-right text-lg font-bold outline-none focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20"
+                  />
+                  <span className="shrink-0 text-sm font-semibold text-black/50">€</span>
+                </div>
+                <div className="flex gap-1">
+                  {QUICK_AMOUNTS.map((a) => (
+                    <button
+                      key={a}
+                      onClick={() => onCashInput(String(a))}
+                      className="flex-1 rounded-lg bg-black/5 py-1.5 text-xs font-bold text-black/65 hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 transition-all"
+                    >
+                      {a}€
+                    </button>
+                  ))}
+                </div>
+                {cashCents >= cartTotal && cartTotal > 0 && (
+                  <div className="flex items-center justify-between rounded-xl bg-green-50 px-3 py-2">
+                    <span className="text-sm font-semibold text-green-700">Rückgeld</span>
+                    <span className="text-xl font-black text-green-700 tabular-nums">
+                      {fmt(change)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
 
-        {/* Book button */}
+        {/* Book button – always visible */}
         <button
           data-testid="book-button"
           onClick={onBook}
@@ -629,7 +640,7 @@ function CartColumn({
               : "cursor-not-allowed bg-black/8 text-black/20"
           )}
         >
-          {paymentMethod === "qr" ? "QR anzeigen" : "Bestellung buchen"}
+          {showPayment && paymentMethod === "qr" ? "QR anzeigen" : "Bestellung buchen"}
         </button>
       </div>
     </div>
@@ -647,9 +658,13 @@ const BOOKING_PAYMENT_LABEL: Record<string, string> = {
 function SalesStatusBar({
   daily,
   onVoid,
+  showLastBooking = true,
+  showStats = true,
 }: {
   daily: ReturnType<typeof usePosStore>["daily"];
   onVoid: () => void;
+  showLastBooking?: boolean;
+  showStats?: boolean;
 }) {
   const last = daily.orders.length > 0 ? daily.orders[daily.orders.length - 1] : null;
   const [confirming, setConfirming] = useState(false);
@@ -670,80 +685,89 @@ function SalesStatusBar({
       data-testid="last-booking-bar"
       className="shrink-0 flex items-center gap-3 rounded-2xl bg-white/90 px-5 py-2.5 shadow backdrop-blur-sm"
     >
-      {/* Left: last booking */}
-      <span className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-black/40">
-        Letzte Buchung
-      </span>
-      <div className="h-4 w-px shrink-0 bg-black/15" />
-      {last ? (
+      {/* Left: last booking – controlled by live-monitor toggle */}
+      {showLastBooking && (
         <>
-          <span className="text-base font-black text-ink tabular-nums">
-            {fmt(last.totalCents)}
+          <span className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-black/40">
+            Letzte Buchung
           </span>
           <div className="h-4 w-px shrink-0 bg-black/15" />
-          <span className="text-sm font-semibold text-black/55">
-            {BOOKING_PAYMENT_LABEL[last.paymentMethod] ?? last.paymentMethod}
-          </span>
-          <div className="h-4 w-px shrink-0 bg-black/15" />
-          <span className="text-sm font-semibold text-black/55 tabular-nums">
-            {new Date(last.createdAt).toLocaleTimeString("de-DE", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
-          <div className="h-4 w-px shrink-0 bg-black/15" />
-          <span className="text-xs text-black/35">
-            {last.items.reduce((s, i) => s + i.quantity, 0)} Artikel
-          </span>
-          <div className="flex items-center gap-2 shrink-0">
-            {confirming ? (
-              <>
-                <button
-                  data-testid="void-confirm"
-                  onClick={handleVoidClick}
-                  className="rounded-lg bg-red-600 px-3 py-1 text-xs font-bold text-white hover:bg-red-700 transition-colors"
-                >
-                  Wirklich stornieren?
-                </button>
-                <button
-                  onClick={() => setConfirming(false)}
-                  className="rounded-lg bg-black/5 px-2 py-1 text-xs font-semibold text-black/50 hover:bg-black/10 transition-colors"
-                >
-                  Abbrechen
-                </button>
-              </>
-            ) : (
-              <button
-                data-testid="void-last-order"
-                onClick={handleVoidClick}
-                className="rounded-lg border border-black/15 bg-white px-3 py-1 text-xs font-semibold text-black/50 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
-              >
-                Stornieren
-              </button>
-            )}
-          </div>
+          {last ? (
+            <>
+              <span className="text-base font-black text-ink tabular-nums">
+                {fmt(last.totalCents)}
+              </span>
+              <div className="h-4 w-px shrink-0 bg-black/15" />
+              <span className="text-sm font-semibold text-black/55">
+                {BOOKING_PAYMENT_LABEL[last.paymentMethod] ?? last.paymentMethod}
+              </span>
+              <div className="h-4 w-px shrink-0 bg-black/15" />
+              <span className="text-sm font-semibold text-black/55 tabular-nums">
+                {new Date(last.createdAt).toLocaleTimeString("de-DE", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+              <div className="h-4 w-px shrink-0 bg-black/15" />
+              <span className="text-xs text-black/35">
+                {last.items.reduce((s, i) => s + i.quantity, 0)} Artikel
+              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                {confirming ? (
+                  <>
+                    <button
+                      data-testid="void-confirm"
+                      onClick={handleVoidClick}
+                      className="rounded-lg bg-red-600 px-3 py-1 text-xs font-bold text-white hover:bg-red-700 transition-colors"
+                    >
+                      Wirklich stornieren?
+                    </button>
+                    <button
+                      onClick={() => setConfirming(false)}
+                      className="rounded-lg bg-black/5 px-2 py-1 text-xs font-semibold text-black/50 hover:bg-black/10 transition-colors"
+                    >
+                      Abbrechen
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    data-testid="void-last-order"
+                    onClick={handleVoidClick}
+                    className="rounded-lg border border-black/15 bg-white px-3 py-1 text-xs font-semibold text-black/50 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
+                  >
+                    Stornieren
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <span className="text-sm text-black/35">noch keine</span>
+          )}
         </>
-      ) : (
-        <span className="text-sm text-black/35">noch keine</span>
       )}
 
-      {/* Right: daily totals */}
-      <div className="ml-auto flex items-center gap-4 shrink-0 pl-3 border-l border-black/10">
-        <div className="text-center">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-black/35">Portionen</p>
-          <p className="text-base font-black text-ink tabular-nums">{portionen}</p>
+      {/* Right: daily totals – controlled by verkaufszaehler toggle */}
+      {showStats && (
+        <div className={cn(
+          "flex items-center gap-4 shrink-0 pl-3 border-l border-black/10",
+          showLastBooking ? "ml-auto" : "ml-0"
+        )}>
+          <div className="text-center">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-black/35">Portionen</p>
+            <p className="text-base font-black text-ink tabular-nums">{portionen}</p>
+          </div>
+          <div className="h-6 w-px bg-black/10" />
+          <div className="text-center">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-black/35">Verkäufe</p>
+            <p className="text-base font-black text-ink tabular-nums">{daily.orderCount}</p>
+          </div>
+          <div className="h-6 w-px bg-black/10" />
+          <div className="text-center">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-black/35">Umsatz</p>
+            <p className="text-base font-black text-primaq-600 tabular-nums">{fmt(daily.totalCents)}</p>
+          </div>
         </div>
-        <div className="h-6 w-px bg-black/10" />
-        <div className="text-center">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-black/35">Verkäufe</p>
-          <p className="text-base font-black text-ink tabular-nums">{daily.orderCount}</p>
-        </div>
-        <div className="h-6 w-px bg-black/10" />
-        <div className="text-center">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-black/35">Umsatz</p>
-          <p className="text-base font-black text-primaq-600 tabular-nums">{fmt(daily.totalCents)}</p>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -765,6 +789,7 @@ export function SalesPage() {
   } = usePosStore();
 
   const { allFlavors, hydrated: flavorsHydrated } = usePosFlavorStore();
+  const { active: layout, hydrated: layoutHydrated } = usePosLayoutStore();
 
   const [selectedSizeId, setSelectedSizeId] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("bar");
@@ -773,7 +798,9 @@ export function SalesPage() {
 
   const cashCents = Math.round(parseFloat(cashInput.replace(",", ".")) * 100) || 0;
   const change = cashCents - cartTotal;
-  const canBook = cart.length > 0 && (payment !== "bar" || cashCents >= cartTotal);
+  const showPayment = layout.toggles.zahlung;
+  // When payment section is hidden, always allow booking (payment method check bypassed)
+  const canBook = cart.length > 0 && (showPayment ? (payment !== "bar" || cashCents >= cartTotal) : true);
   const selectedSize = SIZES.find((s) => s.id === selectedSizeId) ?? null;
 
   const handleFlavorClick = useCallback(
@@ -791,13 +818,13 @@ export function SalesPage() {
 
   const handleBook = useCallback(() => {
     if (!canBook) return;
-    if (payment === "qr") {
+    if (showPayment && payment === "qr") {
       setShowQr(true);
       return;
     }
-    bookOrder(payment);
+    bookOrder(showPayment ? payment : "karte");
     setCashInput("");
-  }, [canBook, payment, bookOrder]);
+  }, [canBook, showPayment, payment, bookOrder]);
 
   const handleQrConfirm = useCallback(() => {
     bookOrder("qr");
@@ -805,7 +832,7 @@ export function SalesPage() {
     setCashInput("");
   }, [bookOrder]);
 
-  if (!hydrated || !flavorsHydrated) {
+  if (!hydrated || !flavorsHydrated || !layoutHydrated) {
     return (
       <div className="flex h-full items-center justify-center text-black/40">Laden…</div>
     );
@@ -814,29 +841,63 @@ export function SalesPage() {
   return (
     <FlavorsCtx.Provider value={allFlavors}>
     <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
-      {/* 3 main columns */}
+      {/* 3 main columns – order and width driven by layout config */}
       <div className="flex flex-1 min-h-0 gap-3 overflow-hidden">
-        <SizeColumn selectedId={selectedSizeId} onSelect={setSelectedSizeId} />
-        <FlavorColumn selectedSize={selectedSize} onFlavorClick={handleFlavorClick} />
-        <CartColumn
-          cart={cart}
-          cartTotal={cartTotal}
-          paymentMethod={payment}
-          cashInput={cashInput}
-          cashCents={cashCents}
-          change={change}
-          canBook={canBook}
-          onPaymentChange={handlePaymentChange}
-          onCashInput={setCashInput}
-          onChangeQty={changeQty}
-          onRemove={removeFromCart}
-          onClear={clearCart}
-          onBook={handleBook}
-        />
+        {layout.panels.map((panel) => {
+          if (panel.id === "groessen") {
+            return (
+              <SizeColumn
+                key="groessen"
+                className={panelWidthClass("groessen", panel.size)}
+                selectedId={selectedSizeId}
+                onSelect={setSelectedSizeId}
+              />
+            );
+          }
+          if (panel.id === "sorten") {
+            return (
+              <FlavorColumn
+                key="sorten"
+                selectedSize={selectedSize}
+                onFlavorClick={handleFlavorClick}
+              />
+            );
+          }
+          if (panel.id === "warenkorb") {
+            return (
+              <CartColumn
+                key="warenkorb"
+                className={panelWidthClass("warenkorb", panel.size)}
+                showPayment={showPayment}
+                cart={cart}
+                cartTotal={cartTotal}
+                paymentMethod={payment}
+                cashInput={cashInput}
+                cashCents={cashCents}
+                change={change}
+                canBook={canBook}
+                onPaymentChange={handlePaymentChange}
+                onCashInput={setCashInput}
+                onChangeQty={changeQty}
+                onRemove={removeFromCart}
+                onClear={clearCart}
+                onBook={handleBook}
+              />
+            );
+          }
+          return null;
+        })}
       </div>
 
-      {/* Bottom status bar */}
-      <SalesStatusBar daily={daily} onVoid={voidLastOrder} />
+      {/* Bottom status bar – visibility controlled by letzte-bestellung toggle */}
+      {layout.toggles["letzte-bestellung"] && (
+        <SalesStatusBar
+          daily={daily}
+          onVoid={voidLastOrder}
+          showLastBooking={layout.toggles["live-monitor"]}
+          showStats={layout.toggles["verkaufszaehler"]}
+        />
+      )}
 
       {/* QR overlay */}
       {showQr && (
