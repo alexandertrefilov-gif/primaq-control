@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { CartItem, DailySummary, Flavor, Order, PaymentMethod, PosState, Size } from "./pos-types";
-import { SIZES } from "./pos-types";
+import type { CartItem, DailySummary, Order, PaymentMethod, PosState } from "./pos-types";
+import { SIZES } from "./pos-config";
 
 const STORAGE_KEY = "primaq-pos-state";
 
@@ -64,10 +64,12 @@ export function usePosStore() {
     writeStorage(state);
   }, [state, hydrated]);
 
-  const addToCart = useCallback((size: Size, flavor: Flavor) => {
-    const unitPriceCents = SIZES[size].priceCents;
+  const addToCart = useCallback((sizeId: string, flavorId: string) => {
+    const sizeConfig = SIZES.find((s) => s.id === sizeId);
+    if (!sizeConfig) return;
+    const unitPriceCents = sizeConfig.priceCents;
     setState((current) => {
-      const existing = current.cart.find((i) => i.size === size && i.flavor === flavor);
+      const existing = current.cart.find((i) => i.size === sizeId && i.flavor === flavorId);
       if (existing) {
         return {
           ...current,
@@ -76,7 +78,13 @@ export function usePosStore() {
           ),
         };
       }
-      const newItem: CartItem = { id: createId(), size, flavor, quantity: 1, unitPriceCents };
+      const newItem: CartItem = {
+        id: createId(),
+        size: sizeId,
+        flavor: flavorId,
+        quantity: 1,
+        unitPriceCents,
+      };
       return { ...current, cart: [...current.cart, newItem] };
     });
   }, []);
@@ -91,7 +99,10 @@ export function usePosStore() {
       if (!item) return current;
       const newQty = item.quantity + delta;
       if (newQty <= 0) return { ...current, cart: current.cart.filter((i) => i.id !== id) };
-      return { ...current, cart: current.cart.map((i) => (i.id === id ? { ...i, quantity: newQty } : i)) };
+      return {
+        ...current,
+        cart: current.cart.map((i) => (i.id === id ? { ...i, quantity: newQty } : i)),
+      };
     });
   }, []);
 
@@ -102,7 +113,10 @@ export function usePosStore() {
   const bookOrder = useCallback((paymentMethod: PaymentMethod) => {
     setState((current) => {
       if (current.cart.length === 0) return current;
-      const totalCents = current.cart.reduce((sum, i) => sum + i.quantity * i.unitPriceCents, 0);
+      const totalCents = current.cart.reduce(
+        (sum, i) => sum + i.quantity * i.unitPriceCents,
+        0
+      );
       const order: Order = {
         id: createId(),
         createdAt: new Date().toISOString(),

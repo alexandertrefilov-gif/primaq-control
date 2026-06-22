@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { Download, RotateCcw } from "lucide-react";
 import { usePosStore } from "./use-pos-store";
-import { FLAVORS, SIZES } from "./pos-types";
+import { getFlavorName, getSizeName } from "./pos-config";
 import type { DailySummary } from "./pos-types";
 
 function fmt(cents: number): string {
@@ -23,7 +23,7 @@ function buildCsv(daily: DailySummary): string {
       rows.push(
         [
           time,
-          `${SIZES[item.size].label} ${FLAVORS[item.flavor].label}`,
+          `${getSizeName(item.size)} ${getFlavorName(item.flavor)}`,
           item.quantity,
           method,
           (item.unitPriceCents / 100).toFixed(2),
@@ -121,7 +121,7 @@ export function DailyClosePage() {
                   <div className="flex-1 min-w-0">
                     {order.items.map((item) => (
                       <p key={item.id} className="text-sm text-ink">
-                        {item.quantity}× {SIZES[item.size].label} {FLAVORS[item.flavor].label}
+                        {item.quantity}× {getSizeName(item.size)} {getFlavorName(item.flavor)}
                       </p>
                     ))}
                   </div>

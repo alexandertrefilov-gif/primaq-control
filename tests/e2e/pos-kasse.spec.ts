@@ -124,8 +124,8 @@ test("4: Bestellung buchen → Warenkorb leer, Tagesumsatz korrekt", async ({ pa
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   // Warenkorb ist leer
-  await expect(page.getByText("Größe antippen um zu starten")).toBeVisible();
-  await expect(page.getByText("0,00 €")).toBeVisible();
+  await expect(page.getByText("Noch leer")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Bestellung buchen" })).toBeDisabled();
 
   // localStorage korrekt
   const state = await readPosState(page);
@@ -279,7 +279,7 @@ test("10: Menge erhöhen, verringern, Artikel entfernen", async ({ page }) => {
   // X: Artikel entfernen
   const listItem = page.locator("li").first();
   await listItem.getByRole("button").last().click();
-  await expect(page.getByText("Größe antippen um zu starten")).toBeVisible();
+  await expect(page.getByText("Noch leer")).toBeVisible();
 });
 
 // ── Test 11: Buch-Button bei leerem Warenkorb deaktiviert ────────────────────
@@ -308,5 +308,5 @@ test("12: Navigation zwischen Verkauf und Tagesabschluss", async ({ page }) => {
 
   await page.getByRole("link", { name: "Verkauf" }).click();
   await waitLoaded(page);
-  await expect(page.getByText("Größe wählen")).toBeVisible();
+  await expect(page.getByText("Größe wählen").first()).toBeVisible();
 });

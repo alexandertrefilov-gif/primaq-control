@@ -1,15 +1,24 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Minus, Plus, Trash2, X, ShoppingCart } from "lucide-react";
+import Image from "next/image";
+import { Check, Minus, Plus, Settings, ShoppingCart, Trash2, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { usePosStore } from "./use-pos-store";
-import type { Flavor, PaymentMethod, Size } from "./pos-types";
-import { FLAVORS, FLAVOR_ORDER, SIZES, SIZE_ORDER } from "./pos-types";
+import {
+  FLAVORS,
+  MACHINE_GROUP_LABELS,
+  SIZES,
+  getFlavorName,
+  getSizeName,
+} from "./pos-config";
+import type { FlavorConfig, SizeConfig } from "./pos-config";
+import type { PaymentMethod } from "./pos-types";
 
 function fmt(cents: number): string {
-  return (cents / 100).toFixed(2).replace(".", ",") + " €";
+  return (cents / 100).toFixed(2).replace(".", ",") + " €";
 }
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
@@ -20,29 +29,466 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
 
 const QUICK_AMOUNTS = [5, 10, 20, 50, 100];
 
-export function SalesPage() {
-  const { cart, cartTotal, addToCart, removeFromCart, changeQty, clearCart, bookOrder, hydrated } =
-    usePosStore();
+// ── Flavor card ──────────────────────────────────────────────────────────────
 
-  const [selectedSize, setSelectedSize] = useState<Size | null>(null);
+function FlavorCard({
+  flavor,
+  onClick,
+}: {
+  flavor: FlavorConfig;
+  onClick: () => void;
+}) {
+  const isMix = !!flavor.isMix && flavor.mixColors;
+
+  return (
+    <button
+      aria-label={flavor.name}
+      onClick={onClick}
+      className="relative flex flex-1 flex-col items-center justify-end overflow-hidden rounded-2xl shadow-md transition-all active:scale-[0.97] hover:shadow-lg hover:ring-2 hover:ring-primaq-500/40 select-none"
+      style={{ color: flavor.textColor }}
+    >
+      {/* Background */}
+      {isMix ? (
+        <>
+          <div
+            className="absolute inset-0"
+            style={{
+              clipPath: "polygon(0 0, 100% 0, 0 100%)",
+              background: flavor.mixColors![0],
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              clipPath: "polygon(100% 0, 100% 100%, 0 100%)",
+              background: flavor.mixColors![1],
+            }}
+          />
+          <div className="absolute inset-0 bg-black/10" />
+        </>
+      ) : (
+        <div className="absolute inset-0" style={{ background: flavor.backgroundColor }} />
+      )}
+
+      {/* Flavor image */}
+      {flavor.image && (
+        <div className="relative z-10 flex flex-1 items-center justify-center py-2">
+          <Image
+            src={flavor.image}
+            alt={flavor.name}
+            width={72}
+            height={72}
+            className="h-14 w-14 object-contain drop-shadow-md"
+            unoptimized
+          />
+        </div>
+      )}
+
+      {/* Name label */}
+      <div className="relative z-10 w-full bg-black/20 px-2 py-2 text-center backdrop-blur-sm">
+        <span
+          className="text-sm font-black leading-tight drop-shadow"
+          style={{ textShadow: "0 1px 3px rgba(0,0,0,0.4)" }}
+        >
+          {flavor.name}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+// ── Machine flavor group ──────────────────────────────────────────────────────
+
+function FlavorGroup({
+  label,
+  flavors,
+  onFlavorClick,
+}: {
+  label: string;
+  flavors: FlavorConfig[];
+  onFlavorClick: (flavor: FlavorConfig) => void;
+}) {
+  return (
+    <div className="flex flex-1 flex-col gap-2 min-h-0">
+      <div className="flex shrink-0 items-center gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-primaq-700">
+          {label}
+        </span>
+        <div className="flex-1 h-px bg-primaq-100" />
+      </div>
+      <div className="flex flex-1 gap-2 min-h-0">
+        {flavors.map((f) => (
+          <FlavorCard key={f.id} flavor={f} onClick={() => onFlavorClick(f)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Left column – sizes ───────────────────────────────────────────────────────
+
+function SizeColumn({
+  selectedId,
+  onSelect,
+}: {
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="flex w-44 shrink-0 flex-col gap-2 min-h-0">
+      <p className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-black/40">
+        Größe wählen
+      </p>
+      {SIZES.map((size: SizeConfig) => {
+        const active = selectedId === size.id;
+        return (
+          <button
+            key={size.id}
+            onClick={() => onSelect(size.id)}
+            className={cn(
+              "relative flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl border-2 bg-white shadow transition-all select-none",
+              active
+                ? "border-primaq-500 shadow-lg shadow-primaq-500/20 ring-2 ring-primaq-500/30"
+                : "border-transparent hover:border-primaq-300 hover:bg-primaq-50 active:scale-[0.97]"
+            )}
+          >
+            {active && (
+              <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-primaq-500 text-white">
+                <Check className="h-3 w-3" />
+              </span>
+            )}
+            <Image
+              src={size.image}
+              alt={size.name}
+              width={64}
+              height={64}
+              className="h-14 w-auto object-contain drop-shadow"
+              unoptimized
+            />
+            <span className={cn("text-xl font-black", active ? "text-primaq-700" : "text-ink")}>
+              {size.name}
+            </span>
+            <span className={cn("text-base font-bold", active ? "text-primaq-500" : "text-black/50")}>
+              {fmt(size.priceCents)}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Middle column – flavors ───────────────────────────────────────────────────
+
+function FlavorColumn({
+  selectedSize,
+  onFlavorClick,
+}: {
+  selectedSize: SizeConfig | null;
+  onFlavorClick: (flavor: FlavorConfig) => void;
+}) {
+  const groups = Object.entries(MACHINE_GROUP_LABELS);
+
+  if (!selectedSize) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-primaq-200 bg-primaq-50/40 text-center min-h-0">
+        <div className="grid h-16 w-16 place-items-center rounded-full bg-primaq-100">
+          <ShoppingCart className="h-8 w-8 text-primaq-500" />
+        </div>
+        <p className="text-base font-bold text-black/50">Bitte zuerst</p>
+        <p className="text-base font-bold text-black/50">Größe wählen</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-1 flex-col gap-3 rounded-2xl bg-white p-4 shadow min-h-0">
+      <div className="shrink-0">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">
+          Sorte wählen
+        </p>
+        <p className="text-lg font-black text-ink">
+          {selectedSize.name}{" "}
+          <span className="text-primaq-500">{fmt(selectedSize.priceCents)}</span>
+        </p>
+      </div>
+      {groups.map(([groupId, groupLabel]) => {
+        const flavors = FLAVORS.filter((f) => f.group === groupId);
+        return (
+          <FlavorGroup
+            key={groupId}
+            label={groupLabel}
+            flavors={flavors}
+            onFlavorClick={onFlavorClick}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Right column – cart + payment ─────────────────────────────────────────────
+
+function CartColumn({
+  cart,
+  cartTotal,
+  paymentMethod,
+  cashInput,
+  cashCents,
+  change,
+  canBook,
+  onPaymentChange,
+  onCashInput,
+  onChangeQty,
+  onRemove,
+  onClear,
+  onBook,
+}: {
+  cart: ReturnType<typeof usePosStore>["cart"];
+  cartTotal: number;
+  paymentMethod: PaymentMethod;
+  cashInput: string;
+  cashCents: number;
+  change: number;
+  canBook: boolean;
+  onPaymentChange: (m: PaymentMethod) => void;
+  onCashInput: (v: string) => void;
+  onChangeQty: (id: string, delta: number) => void;
+  onRemove: (id: string) => void;
+  onClear: () => void;
+  onBook: () => void;
+}) {
+  return (
+    <div className="flex w-80 shrink-0 flex-col gap-2 min-h-0">
+      {/* Cart */}
+      <div className="flex flex-1 flex-col rounded-2xl bg-white shadow min-h-0">
+        <div className="flex shrink-0 items-center justify-between border-b border-black/5 px-3 py-2.5">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-black/40">
+            Warenkorb
+          </span>
+          <div className="flex items-center gap-1">
+            {cart.length > 0 && (
+              <button
+                onClick={onClear}
+                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-black/35 hover:bg-red-50 hover:text-red-600 transition-colors"
+              >
+                <Trash2 className="h-3 w-3" />
+                Leeren
+              </button>
+            )}
+            <Link
+              href="/einstellungen"
+              className="grid h-7 w-7 place-items-center rounded-lg text-black/30 hover:bg-black/5 hover:text-black/60 transition-colors"
+              title="Einstellungen"
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {cart.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-black/20 py-6">
+              <ShoppingCart className="h-8 w-8" />
+              <span className="text-xs">Noch leer</span>
+            </div>
+          ) : (
+            <ul className="divide-y divide-black/5">
+              {cart.map((item) => (
+                <li key={item.id} className="flex items-center gap-2 px-3 py-2.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-ink truncate leading-tight">
+                      {getSizeName(item.size)} {getFlavorName(item.flavor)}
+                    </p>
+                    <p className="text-xs text-black/40">{fmt(item.unitPriceCents)} je</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => onChangeQty(item.id, -1)}
+                      className="grid h-7 w-7 place-items-center rounded-full bg-black/5 hover:bg-red-100 hover:text-red-600 active:scale-90 transition-all"
+                    >
+                      <Minus className="h-3 w-3" />
+                    </button>
+                    <span className="w-5 text-center text-sm font-bold text-ink">
+                      {item.quantity}
+                    </span>
+                    <button
+                      onClick={() => onChangeQty(item.id, 1)}
+                      className="grid h-7 w-7 place-items-center rounded-full bg-black/5 hover:bg-primaq-100 hover:text-primaq-700 active:scale-90 transition-all"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={() => onRemove(item.id)}
+                      className="grid h-7 w-7 place-items-center rounded-full text-black/25 hover:bg-red-50 hover:text-red-500 active:scale-90 transition-all"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <p className="w-14 shrink-0 text-right text-sm font-bold text-ink tabular-nums">
+                    {fmt(item.quantity * item.unitPriceCents)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="shrink-0 border-t border-black/10 px-3 py-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-black/50">Gesamt</span>
+            <span className="text-2xl font-black text-ink tabular-nums">{fmt(cartTotal)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment */}
+      <div className="shrink-0 rounded-2xl bg-white p-3 shadow">
+        {/* Payment tabs */}
+        <div className="mb-3 flex gap-1.5">
+          {(["bar", "karte", "qr"] as PaymentMethod[]).map((m) => (
+            <button
+              key={m}
+              onClick={() => onPaymentChange(m)}
+              className={cn(
+                "flex-1 rounded-xl py-2 text-sm font-bold transition-all",
+                paymentMethod === m
+                  ? "bg-primaq-500 text-white shadow"
+                  : "bg-black/5 text-black/50 hover:bg-black/10"
+              )}
+            >
+              {PAYMENT_LABELS[m]}
+            </button>
+          ))}
+        </div>
+
+        {/* Cash input */}
+        {paymentMethod === "bar" && (
+          <div className="mb-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-sm font-semibold text-black/50">Gegeben</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.50"
+                min="0"
+                value={cashInput}
+                onChange={(e) => onCashInput(e.target.value)}
+                placeholder="0,00"
+                className="flex-1 rounded-xl border border-black/15 bg-black/[0.03] px-2.5 py-1.5 text-right text-lg font-bold outline-none focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20"
+              />
+              <span className="shrink-0 text-sm font-semibold text-black/50">€</span>
+            </div>
+            <div className="flex gap-1">
+              {QUICK_AMOUNTS.map((a) => (
+                <button
+                  key={a}
+                  onClick={() => onCashInput(String(a))}
+                  className="flex-1 rounded-lg bg-black/5 py-1 text-xs font-bold text-black/65 hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 transition-all"
+                >
+                  {a}€
+                </button>
+              ))}
+            </div>
+            {cashCents >= cartTotal && cartTotal > 0 && (
+              <div className="flex items-center justify-between rounded-xl bg-green-50 px-3 py-2">
+                <span className="text-sm font-semibold text-green-700">Rückgeld</span>
+                <span className="text-xl font-black text-green-700 tabular-nums">
+                  {fmt(change)}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Book button */}
+        <button
+          data-testid="book-button"
+          onClick={onBook}
+          disabled={!canBook}
+          className={cn(
+            "w-full rounded-xl py-4 text-base font-black transition-all select-none",
+            canBook
+              ? "bg-primaq-500 text-white shadow-md hover:bg-primaq-700 active:scale-[0.98]"
+              : "cursor-not-allowed bg-black/8 text-black/20"
+          )}
+        >
+          {paymentMethod === "qr" ? "QR anzeigen" : "Bestellung buchen"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Bottom bar – daily totals ─────────────────────────────────────────────────
+
+function BottomBar({ daily }: { daily: ReturnType<typeof usePosStore>["daily"] }) {
+  return (
+    <div className="shrink-0 flex items-center gap-4 rounded-2xl bg-white/90 px-5 py-3 shadow backdrop-blur-sm">
+      <Stat label="Bestellungen" value={String(daily.orderCount)} />
+      <div className="h-6 w-px bg-black/10 shrink-0" />
+      <Stat label="Umsatz gesamt" value={fmt(daily.totalCents)} accent />
+      <div className="h-6 w-px bg-black/10 shrink-0" />
+      <Stat label="Bar" value={fmt(daily.cashCents)} />
+      <div className="h-6 w-px bg-black/10 shrink-0" />
+      <Stat label="Karte" value={fmt(daily.cardCents)} />
+      <div className="h-6 w-px bg-black/10 shrink-0" />
+      <Stat label="QR" value={fmt(daily.qrCents)} />
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-black/40">{label}</p>
+      <p className={cn("text-base font-black tabular-nums", accent ? "text-primaq-700" : "text-ink")}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+export function SalesPage() {
+  const {
+    cart,
+    cartTotal,
+    daily,
+    addToCart,
+    removeFromCart,
+    changeQty,
+    clearCart,
+    bookOrder,
+    hydrated,
+  } = usePosStore();
+
+  const [selectedSizeId, setSelectedSizeId] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("bar");
   const [cashInput, setCashInput] = useState("");
   const [showQr, setShowQr] = useState(false);
 
   const cashCents = Math.round(parseFloat(cashInput.replace(",", ".")) * 100) || 0;
   const change = cashCents - cartTotal;
-  const canBook =
-    cart.length > 0 && (payment !== "bar" || cashCents >= cartTotal);
+  const canBook = cart.length > 0 && (payment !== "bar" || cashCents >= cartTotal);
 
-  const handleSize = useCallback((size: Size) => setSelectedSize(size), []);
+  const selectedSize = SIZES.find((s) => s.id === selectedSizeId) ?? null;
 
-  const handleFlavor = useCallback(
-    (flavor: Flavor) => {
-      if (!selectedSize) return;
-      addToCart(selectedSize, flavor);
-      setSelectedSize(null);
+  const handleFlavorClick = useCallback(
+    (flavor: FlavorConfig) => {
+      if (!selectedSizeId) return;
+      addToCart(selectedSizeId, flavor.id);
     },
-    [selectedSize, addToCart]
+    [selectedSizeId, addToCart]
   );
 
   const handlePaymentChange = useCallback((method: PaymentMethod) => {
@@ -73,226 +519,32 @@ export function SalesPage() {
   }
 
   return (
-    <div className="flex flex-1 min-h-0 gap-4">
-      {/* ── Left: size selection ────────────────────────────────────── */}
-      <div className="flex w-56 shrink-0 flex-col gap-3 min-h-0">
-        <p className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-black/40">
-          Größe wählen
-        </p>
-        {SIZE_ORDER.map((size) => {
-          const s = SIZES[size];
-          const active = selectedSize === size;
-          return (
-            <button
-              key={size}
-              onClick={() => handleSize(size)}
-              className={cn(
-                "flex flex-1 flex-col items-center justify-center rounded-2xl border-2 transition-all select-none",
-                active
-                  ? "border-primaq-500 bg-primaq-500 text-white shadow-lg scale-[1.02]"
-                  : "border-transparent bg-white text-ink shadow hover:border-primaq-500/40 hover:bg-primaq-50 active:scale-95"
-              )}
-            >
-              <span className="text-3xl font-black leading-tight">{s.label}</span>
-              <span
-                className={cn(
-                  "text-xl font-bold leading-tight",
-                  active ? "text-white/85" : "text-primaq-700"
-                )}
-              >
-                {fmt(s.priceCents)}
-              </span>
-            </button>
-          );
-        })}
+    <div className="flex flex-1 min-h-0 flex-col gap-2">
+      {/* 3 main columns */}
+      <div className="flex flex-1 min-h-0 gap-3">
+        <SizeColumn selectedId={selectedSizeId} onSelect={setSelectedSizeId} />
+        <FlavorColumn selectedSize={selectedSize} onFlavorClick={handleFlavorClick} />
+        <CartColumn
+          cart={cart}
+          cartTotal={cartTotal}
+          paymentMethod={payment}
+          cashInput={cashInput}
+          cashCents={cashCents}
+          change={change}
+          canBook={canBook}
+          onPaymentChange={handlePaymentChange}
+          onCashInput={setCashInput}
+          onChangeQty={changeQty}
+          onRemove={removeFromCart}
+          onClear={clearCart}
+          onBook={handleBook}
+        />
       </div>
 
-      {/* ── Right: cart + payment ───────────────────────────────────── */}
-      <div className="flex flex-1 flex-col gap-3 min-h-0">
-        {/* Cart */}
-        <div className="flex flex-1 flex-col rounded-2xl bg-white shadow min-h-0">
-          <div className="flex shrink-0 items-center justify-between border-b border-black/5 px-4 py-3">
-            <span className="text-xs font-bold uppercase tracking-widest text-black/40">
-              Warenkorb
-            </span>
-            {cart.length > 0 && (
-              <button
-                onClick={clearCart}
-                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-black/35 hover:bg-red-50 hover:text-red-600 transition-colors"
-              >
-                <Trash2 className="h-3 w-3" />
-                Leeren
-              </button>
-            )}
-          </div>
+      {/* Bottom daily bar */}
+      <BottomBar daily={daily} />
 
-          <div className="flex-1 overflow-y-auto px-4 py-2 min-h-0">
-            {cart.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-black/20">
-                <ShoppingCart className="h-10 w-10" />
-                <span className="text-sm">Größe antippen um zu starten</span>
-              </div>
-            ) : (
-              <ul className="divide-y divide-black/5">
-                {cart.map((item) => (
-                  <li key={item.id} className="flex items-center gap-3 py-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-ink truncate">
-                        {SIZES[item.size].label} {FLAVORS[item.flavor].label}
-                      </p>
-                      <p className="text-xs text-black/45">{fmt(item.unitPriceCents)} je</p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => changeQty(item.id, -1)}
-                        className="grid h-8 w-8 place-items-center rounded-full bg-black/5 hover:bg-red-100 hover:text-red-600 active:scale-90 transition-all"
-                      >
-                        <Minus className="h-3.5 w-3.5" />
-                      </button>
-                      <span className="w-6 text-center font-bold text-ink">{item.quantity}</span>
-                      <button
-                        onClick={() => changeQty(item.id, 1)}
-                        className="grid h-8 w-8 place-items-center rounded-full bg-black/5 hover:bg-primaq-100 hover:text-primaq-700 active:scale-90 transition-all"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => removeFromCart(item.id)}
-                        className="grid h-8 w-8 place-items-center rounded-full text-black/25 hover:bg-red-50 hover:text-red-500 active:scale-90 transition-all"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    <p className="w-16 text-right font-bold text-ink">
-                      {fmt(item.quantity * item.unitPriceCents)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="shrink-0 border-t border-black/10 px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-black/55">Gesamt</span>
-              <span className="text-3xl font-black text-ink">{fmt(cartTotal)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Payment */}
-        <div className="shrink-0 rounded-2xl bg-white p-4 shadow">
-          <div className="mb-3 flex gap-2">
-            {(["bar", "karte", "qr"] as PaymentMethod[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => handlePaymentChange(m)}
-                className={cn(
-                  "flex-1 rounded-xl py-2.5 text-sm font-bold transition-all",
-                  payment === m
-                    ? "bg-primaq-500 text-white shadow"
-                    : "bg-black/5 text-black/50 hover:bg-black/10"
-                )}
-              >
-                {PAYMENT_LABELS[m]}
-              </button>
-            ))}
-          </div>
-
-          {payment === "bar" && (
-            <div className="mb-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-sm font-semibold text-black/55">Gegeben</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.50"
-                  min="0"
-                  value={cashInput}
-                  onChange={(e) => setCashInput(e.target.value)}
-                  placeholder="0,00"
-                  className="flex-1 rounded-xl border border-black/15 bg-black/[0.03] px-3 py-2 text-right text-xl font-bold outline-none focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20"
-                />
-                <span className="shrink-0 text-sm font-semibold text-black/55">€</span>
-              </div>
-              <div className="flex gap-1.5">
-                {QUICK_AMOUNTS.map((a) => (
-                  <button
-                    key={a}
-                    onClick={() => setCashInput(String(a))}
-                    className="flex-1 rounded-lg bg-black/5 py-1.5 text-sm font-bold text-black/65 hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 transition-all"
-                  >
-                    {a}€
-                  </button>
-                ))}
-              </div>
-              {cashCents >= cartTotal && cartTotal > 0 && (
-                <div className="flex items-center justify-between rounded-xl bg-green-50 px-4 py-2.5">
-                  <span className="text-sm font-semibold text-green-700">Rückgeld</span>
-                  <span className="text-2xl font-black text-green-700">{fmt(change)}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          <button
-            onClick={handleBook}
-            disabled={!canBook}
-            className={cn(
-              "w-full rounded-xl py-4 text-lg font-black transition-all select-none",
-              canBook
-                ? "bg-primaq-500 text-white shadow-md hover:bg-primaq-700 active:scale-[0.98]"
-                : "cursor-not-allowed bg-black/8 text-black/20"
-            )}
-          >
-            {payment === "qr" ? "QR anzeigen" : "Bestellung buchen"}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Flavor picker overlay ────────────────────────────────────── */}
-      {selectedSize && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setSelectedSize(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-5 flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">
-                  Sorte wählen
-                </p>
-                <p className="text-2xl font-black text-ink">
-                  {SIZES[selectedSize].label}{" "}
-                  <span className="text-primaq-700">{fmt(SIZES[selectedSize].priceCents)}</span>
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedSize(null)}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-black/5 hover:bg-black/10"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {FLAVOR_ORDER.map((flavor) => (
-                <button
-                  key={flavor}
-                  onClick={() => handleFlavor(flavor)}
-                  className="rounded-2xl bg-primaq-100 px-4 py-5 text-center text-base font-bold text-primaq-900 hover:bg-primaq-500 hover:text-white active:scale-95 transition-all select-none"
-                >
-                  {FLAVORS[flavor].label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── QR payment overlay ───────────────────────────────────────── */}
+      {/* QR overlay */}
       {showQr && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
@@ -305,7 +557,7 @@ export function SalesPage() {
             <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-black/40">
               QR-Zahlung
             </p>
-            <p className="mb-6 text-5xl font-black text-ink">{fmt(cartTotal)}</p>
+            <p className="mb-6 text-5xl font-black text-ink tabular-nums">{fmt(cartTotal)}</p>
             <div className="mb-6 flex justify-center">
               <QRCodeSVG
                 value={`https://primaq.de/pay?total=${cartTotal}`}
