@@ -1,14 +1,14 @@
 import { PageHeader } from "@/components/ui/page-header";
-import { TagesabschlussClient } from "@/features/mvp/tagesabschluss-client";
+import { DailyClosePage } from "@/features/pos/daily-close-page";
 
 export default function TagesabschlussPage() {
   return (
     <>
       <PageHeader
         title="Tagesabschluss"
-        description="Tagesbericht mit Umsatz, Zahlungsarten, Stueckzahlen, Teamdaten und Export."
+        description="Tagesumsatz, Zahlungsarten und CSV-Export."
       />
-      <TagesabschlussClient />
+      <DailyClosePage />
     </>
   );
 }
