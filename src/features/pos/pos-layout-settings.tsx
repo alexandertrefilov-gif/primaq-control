@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { GripVertical, Lock, Unlock, RotateCcw, Save, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SIZES } from "./pos-config";
 import {
   usePosLayoutStore,
   PANEL_LABELS,
@@ -365,6 +366,46 @@ export function PosLayoutSettings() {
           {editMode ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
           {editMode ? "Bearbeiten" : "Gesperrt"}
         </button>
+      </div>
+
+      {/* ── Verkaufsgrößen ─────────────────────────────────────── */}
+      <div className="overflow-hidden rounded-2xl bg-white shadow">
+        <div className="border-b border-black/5 px-4 py-3">
+          <p className="text-xs font-bold uppercase tracking-widest text-black/40">Verkaufsgrößen</p>
+          <p className="mt-0.5 text-xs text-black/40">Welche Größen im Verkauf angezeigt werden</p>
+        </div>
+        <div className="divide-y divide-black/5">
+          {SIZES.map((size) => {
+            const enabled = active.sizeVisibility[size.id] !== false;
+            const activeCount = SIZES.filter((s) => active.sizeVisibility[s.id] !== false).length;
+            const isLast = enabled && activeCount === 1;
+            return (
+              <div key={size.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-ink">{size.name}</p>
+                  <p className="text-xs text-black/40">
+                    {(size.priceCents / 100).toFixed(2).replace(".", ",")} €
+                  </p>
+                </div>
+                {isLast && (
+                  <span className="text-[11px] font-semibold text-amber-600 mr-1">
+                    Mindestens eine
+                  </span>
+                )}
+                <Toggle
+                  checked={enabled}
+                  onChange={(v) =>
+                    update({
+                      ...active,
+                      sizeVisibility: { ...active.sizeVisibility, [size.id]: v },
+                    })
+                  }
+                  disabled={!editMode || isLast}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Sorten-Buttons Größe ────────────────────────────────── */}

@@ -42,6 +42,7 @@ export type PanelConfig = {
 export type LayoutConfig = {
   panels: PanelConfig[];
   toggles: Record<ToggleId, boolean>;
+  sizeVisibility: Record<string, boolean>; // which sizes appear in the sales UI
   // Fine-grained size controls
   flavorCardSize: number;    // 110–190 px, default 140
   sizeColumnWidth: number;   // 120–240 px, default 176  (= w-44)
@@ -70,6 +71,7 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
     verkaufszaehler: true,
     "letzte-bestellung": true,
   },
+  sizeVisibility: { klein: true, mittel: true, gross: true },
   flavorCardSize: 140,
   sizeColumnWidth: 176,
   qtyButtonSize: 44,
@@ -157,6 +159,7 @@ function loadState(): StoreState {
       ...DEFAULT_LAYOUT,
       ...(parsed.active ?? {}),
       toggles: { ...DEFAULT_LAYOUT.toggles, ...(parsed.active?.toggles ?? {}) },
+      sizeVisibility: { ...DEFAULT_LAYOUT.sizeVisibility, ...(parsed.active?.sizeVisibility ?? {}) },
     };
     return { active, profiles: parsed.profiles ?? [] };
   } catch {

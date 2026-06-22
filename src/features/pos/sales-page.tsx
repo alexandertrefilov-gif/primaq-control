@@ -298,17 +298,31 @@ function FlavorGroup({
 function SizeRow({
   selectedId,
   onSelect,
+  sizeVisibility,
 }: {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  sizeVisibility: Record<string, boolean>;
 }) {
+  const visibleSizes = SIZES.filter((s) => sizeVisibility[s.id] !== false);
+
+  if (visibleSizes.length === 0) {
+    return (
+      <div className="shrink-0 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-center">
+        <p className="text-sm font-bold text-amber-700">
+          Keine Verkaufsgröße aktiv. Bitte in Einstellungen → Verkaufsoberfläche mindestens eine Größe aktivieren.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="shrink-0">
       <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-black/40">
         Größe wählen
       </p>
       <div className="flex gap-3">
-        {SIZES.map((size: SizeConfig) => {
+        {visibleSizes.map((size: SizeConfig) => {
           const active = selectedId === size.id;
           return (
             <button
@@ -829,6 +843,15 @@ export function SalesPage() {
   const cashCents = Math.round(parseFloat(cashInput.replace(",", ".")) * 100) || 0;
   const change = cashCents - cartTotal;
   const showPayment = layout.toggles.zahlung;
+
+  // Auto-select the first visible size when the current selection becomes inactive
+  useEffect(() => {
+    if (!selectedSizeId) return;
+    if (layout.sizeVisibility[selectedSizeId] === false) {
+      const first = SIZES.find((s) => layout.sizeVisibility[s.id] !== false);
+      setSelectedSizeId(first?.id ?? null);
+    }
+  }, [layout.sizeVisibility, selectedSizeId]);
   // When payment section is hidden, always allow booking (payment method check bypassed)
   const canBook = cart.length > 0 && (showPayment ? (payment !== "bar" || cashCents >= cartTotal) : true);
   const selectedSize = SIZES.find((s) => s.id === selectedSizeId) ?? null;
@@ -876,7 +899,11 @@ export function SalesPage() {
       <div className="flex flex-1 min-h-0 gap-3 overflow-hidden">
         {/* Left: stacked selection area */}
         <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-hidden">
-          <SizeRow selectedId={selectedSizeId} onSelect={setSelectedSizeId} />
+          <SizeRow
+            selectedId={selectedSizeId}
+            onSelect={setSelectedSizeId}
+            sizeVisibility={layout.sizeVisibility}
+          />
           <FlavorColumn
             selectedSize={selectedSize}
             onFlavorClick={handleFlavorClick}
