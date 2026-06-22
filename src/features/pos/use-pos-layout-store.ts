@@ -44,7 +44,7 @@ export type LayoutConfig = {
   toggles: Record<ToggleId, boolean>;
   sizeVisibility: Record<string, boolean>; // which sizes appear in the sales UI
   // Fine-grained size controls
-  flavorCardSize: number;    // 110–190 px, default 140
+  flavorCardSize: number;    // 110–240 px, default 140
   sizeColumnWidth: number;   // 120–240 px, default 176  (= w-44)
   qtyButtonSize: number;     // 40–80 px,  default 44
   cartFontSize: CartFontSize;

@@ -418,7 +418,7 @@ export function PosLayoutSettings() {
           label="Sorten-Buttons Größe"
           value={active.flavorCardSize}
           min={110}
-          max={190}
+          max={240}
           step={10}
           defaultValue={DEFAULT_LAYOUT.flavorCardSize}
           onChange={(v) => update({ ...active, flavorCardSize: v })}
