@@ -293,55 +293,55 @@ function FlavorGroup({
   );
 }
 
-// ── Left column – sizes ───────────────────────────────────────────────────────
+// ── Size row – horizontal strip above the flavor grid ────────────────────────
 
-function SizeColumn({
+function SizeRow({
   selectedId,
   onSelect,
-  widthPx,
 }: {
   selectedId: string | null;
   onSelect: (id: string) => void;
-  widthPx: number;
 }) {
   return (
-    <div className="flex shrink-0 flex-col gap-2 min-h-0" style={{ width: widthPx }}>
-      <p className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-black/40">
+    <div className="shrink-0">
+      <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-black/40">
         Größe wählen
       </p>
-      {SIZES.map((size: SizeConfig) => {
-        const active = selectedId === size.id;
-        return (
-          <button
-            key={size.id}
-            onClick={() => onSelect(size.id)}
-            className={cn(
-              "relative flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl border-2 bg-white shadow transition-all select-none",
-              active
-                ? "border-primaq-500 bg-primaq-50 shadow-lg shadow-primaq-500/20 ring-2 ring-primaq-500/30"
-                : "border-transparent hover:border-primaq-300 hover:bg-primaq-50/60 active:scale-[0.97]"
-            )}
-          >
-            {active && (
-              <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-primaq-500 text-white">
-                <Check className="h-3 w-3" />
+      <div className="flex gap-3">
+        {SIZES.map((size: SizeConfig) => {
+          const active = selectedId === size.id;
+          return (
+            <button
+              key={size.id}
+              onClick={() => onSelect(size.id)}
+              className={cn(
+                "relative flex h-[160px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl border-2 bg-white shadow transition-all select-none",
+                active
+                  ? "border-primaq-500 bg-primaq-50 shadow-lg shadow-primaq-500/20 ring-2 ring-primaq-500/30"
+                  : "border-transparent hover:border-primaq-300 hover:bg-primaq-50/60 active:scale-[0.97]"
+              )}
+            >
+              {active && (
+                <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-primaq-500 text-white">
+                  <Check className="h-3 w-3" />
+                </span>
+              )}
+              <ProductImage
+                src={size.imageSrc}
+                fallbackSrc={size.fallbackImageSrc}
+                alt=""
+                className="max-h-20 w-auto object-contain drop-shadow"
+              />
+              <span className={cn("text-xl font-black", active ? "text-primaq-700" : "text-ink")}>
+                {size.name}
               </span>
-            )}
-            <ProductImage
-              src={size.imageSrc}
-              fallbackSrc={size.fallbackImageSrc}
-              alt=""
-              className="max-h-28 w-auto object-contain drop-shadow"
-            />
-            <span className={cn("text-xl font-black", active ? "text-primaq-700" : "text-ink")}>
-              {size.name}
-            </span>
-            <span className={cn("text-base font-bold", active ? "text-primaq-500" : "text-black/50")}>
-              {fmt(size.priceCents)}
-            </span>
-          </button>
-        );
-      })}
+              <span className={cn("text-base font-bold", active ? "text-primaq-500" : "text-black/50")}>
+                {fmt(size.priceCents)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -360,29 +360,26 @@ function FlavorColumn({
   const allFlavors = useFlavorList();
   const groups = Object.entries(MACHINE_GROUP_LABELS);
 
-  if (!selectedSize) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-primaq-200 bg-primaq-50/40 text-center min-h-0">
-        <div className="grid h-16 w-16 place-items-center rounded-full bg-primaq-100">
-          <ShoppingCart className="h-8 w-8 text-primaq-500" />
-        </div>
-        <p className="text-base font-bold text-black/50">Bitte zuerst</p>
-        <p className="text-base font-bold text-black/50">Größe wählen</p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-1 flex-col rounded-2xl bg-white shadow min-h-0">
-      <div className="shrink-0 px-3 pt-3 pb-2">
+      <div className="shrink-0 px-3 pt-3 pb-2 flex items-baseline gap-2">
         <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">
           Sorte wählen
         </p>
-        <p className="text-base font-black text-ink leading-tight">
-          {selectedSize.name}{" "}
-          <span className="text-primaq-500">{fmt(selectedSize.priceCents)}</span>
-        </p>
+        {selectedSize && (
+          <p className="text-sm font-bold text-primaq-500 ml-auto">
+            {selectedSize.name} – {fmt(selectedSize.priceCents)}
+          </p>
+        )}
       </div>
+      {!selectedSize ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center px-4">
+          <div className="grid h-14 w-14 place-items-center rounded-full bg-primaq-100">
+            <ShoppingCart className="h-7 w-7 text-primaq-500" />
+          </div>
+          <p className="text-base font-bold text-black/40">Bitte oben eine Größe wählen</p>
+        </div>
+      ) : (
       <div className="flex-1 overflow-y-auto min-h-0 px-3 pb-3 space-y-3">
         {groups.map(([groupId, groupLabel]) => {
           const flavors = allFlavors.filter((f) => f.group === groupId);
@@ -397,6 +394,7 @@ function FlavorColumn({
           );
         })}
       </div>
+      )}
     </div>
   );
 }
@@ -873,55 +871,38 @@ export function SalesPage() {
   return (
     <FlavorsCtx.Provider value={allFlavors}>
     <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
-      {/* 3 main columns – order and width driven by layout config */}
+      <div className="shrink-0 rounded-lg bg-primaq-500 px-3 py-1 text-center text-xs font-black text-white">LAYOUT SIZE ROW AKTIV</div>
+      {/* Main area: [SizeRow + FlavorColumn] | [CartColumn] */}
       <div className="flex flex-1 min-h-0 gap-3 overflow-hidden">
-        {layout.panels.map((panel) => {
-          if (panel.id === "groessen") {
-            return (
-              <SizeColumn
-                key="groessen"
-                widthPx={layout.sizeColumnWidth}
-                selectedId={selectedSizeId}
-                onSelect={setSelectedSizeId}
-              />
-            );
-          }
-          if (panel.id === "sorten") {
-            return (
-              <FlavorColumn
-                key="sorten"
-                selectedSize={selectedSize}
-                onFlavorClick={handleFlavorClick}
-                cardSize={layout.flavorCardSize}
-              />
-            );
-          }
-          if (panel.id === "warenkorb") {
-            return (
-              <CartColumn
-                key="warenkorb"
-                widthPx={layout.cartWidth}
-                qtyBtnSize={layout.qtyButtonSize}
-                cartFontSize={layout.cartFontSize}
-                showPayment={showPayment}
-                cart={cart}
-                cartTotal={cartTotal}
-                paymentMethod={payment}
-                cashInput={cashInput}
-                cashCents={cashCents}
-                change={change}
-                canBook={canBook}
-                onPaymentChange={handlePaymentChange}
-                onCashInput={setCashInput}
-                onChangeQty={changeQty}
-                onRemove={removeFromCart}
-                onClear={clearCart}
-                onBook={handleBook}
-              />
-            );
-          }
-          return null;
-        })}
+        {/* Left: stacked selection area */}
+        <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-hidden">
+          <SizeRow selectedId={selectedSizeId} onSelect={setSelectedSizeId} />
+          <FlavorColumn
+            selectedSize={selectedSize}
+            onFlavorClick={handleFlavorClick}
+            cardSize={layout.flavorCardSize}
+          />
+        </div>
+        {/* Right: cart */}
+        <CartColumn
+          widthPx={layout.cartWidth}
+          qtyBtnSize={layout.qtyButtonSize}
+          cartFontSize={layout.cartFontSize}
+          showPayment={showPayment}
+          cart={cart}
+          cartTotal={cartTotal}
+          paymentMethod={payment}
+          cashInput={cashInput}
+          cashCents={cashCents}
+          change={change}
+          canBook={canBook}
+          onPaymentChange={handlePaymentChange}
+          onCashInput={setCashInput}
+          onChangeQty={changeQty}
+          onRemove={removeFromCart}
+          onClear={clearCart}
+          onBook={handleBook}
+        />
       </div>
 
       {/* Bottom status bar – visibility controlled by letzte-bestellung toggle */}
