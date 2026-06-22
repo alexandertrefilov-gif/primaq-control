@@ -1,11 +1,43 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <path d="M38 85 C36 70 35 45 37 20 C38 16 40 14 42 14 C44 14 46 16 47 20 C49 45 48 70 46 85 Z" fill="#8B6914"/>
-  <path d="M55 82 C53 67 52 44 54 22 C55 18 57 16 59 16 C61 16 63 18 64 22 C66 44 65 67 63 82 Z" fill="#A07820"/>
-  <ellipse cx="42" cy="14" rx="5" ry="7" fill="#C8A030" transform="rotate(8 42 14)"/>
-  <ellipse cx="59" cy="16" rx="5" ry="7" fill="#B89028" transform="rotate(-5 59 16)"/>
-  <circle cx="42" cy="38" r="1.8" fill="#5A3C00"/>
-  <circle cx="42" cy="54" r="1.8" fill="#5A3C00"/>
-  <circle cx="42" cy="70" r="1.8" fill="#5A3C00"/>
-  <circle cx="59" cy="42" r="1.8" fill="#5A3C00"/>
-  <circle cx="59" cy="60" r="1.8" fill="#5A3C00"/>
+  <!-- Warm yellow background circle -->
+  <circle cx="50" cy="50" r="47" fill="#FFF0A0"/>
+  <circle cx="50" cy="50" r="47" fill="none" stroke="#E8D060" stroke-width="2" opacity="0.45"/>
+
+  <!-- Pod 1 – back, left-tilted -->
+  <g transform="rotate(-28 50 55)">
+    <path d="M47 10 C49 7 53 7 55 10 L58 82 C56 88 44 88 42 82 Z" fill="#4A2C00"/>
+    <path d="M48.5 13 L46 76" stroke="white" stroke-width="1.5" opacity="0.1"
+          fill="none" stroke-linecap="round"/>
+    <line x1="50" y1="12" x2="50" y2="80" stroke="#2A1400" stroke-width="0.8" opacity="0.3"/>
+    <circle cx="50" cy="28" r="0.9" fill="#6A4020" opacity="0.75"/>
+    <circle cx="50" cy="38" r="0.9" fill="#6A4020" opacity="0.75"/>
+    <circle cx="50" cy="48" r="0.9" fill="#6A4020" opacity="0.75"/>
+    <circle cx="50" cy="58" r="0.9" fill="#6A4020" opacity="0.75"/>
+    <circle cx="50" cy="68" r="0.9" fill="#6A4020" opacity="0.75"/>
+    <path d="M47 82 C47 88 53 88 53 82" fill="#3A1A00"/>
+    <path d="M48 10 C44 4 41 0 39 2" stroke="#3A1A00" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M52 10 C56 4 59 0 61 2" stroke="#3A1A00" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- Pod 2 – front, right-tilted -->
+  <g transform="rotate(22 50 55)">
+    <path d="M45 12 C47 9 55 9 57 12 L60 84 C58 90 44 90 42 84 Z" fill="#5C3800"/>
+    <path d="M46.5 15 L44 80" stroke="white" stroke-width="1.5" opacity="0.1"
+          fill="none" stroke-linecap="round"/>
+    <line x1="50" y1="14" x2="50" y2="82" stroke="#3A2000" stroke-width="0.8" opacity="0.3"/>
+    <circle cx="50" cy="30" r="0.9" fill="#7A5030" opacity="0.7"/>
+    <circle cx="50" cy="40" r="0.9" fill="#7A5030" opacity="0.7"/>
+    <circle cx="50" cy="50" r="0.9" fill="#7A5030" opacity="0.7"/>
+    <circle cx="50" cy="60" r="0.9" fill="#7A5030" opacity="0.7"/>
+    <circle cx="50" cy="70" r="0.9" fill="#7A5030" opacity="0.7"/>
+    <path d="M44 84 C44 90 56 90 56 84" fill="#4A2800"/>
+    <path d="M46 12 C42 6 39 2 37 4" stroke="#4A2800" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M54 12 C58 6 61 2 63 4" stroke="#4A2800" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- Fragrance dots -->
+  <circle cx="16" cy="24" r="2.5" fill="#D4A030" opacity="0.4"/>
+  <circle cx="83" cy="18" r="2"   fill="#D4A030" opacity="0.35"/>
+  <circle cx="86" cy="73" r="2.5" fill="#D4A030" opacity="0.3"/>
+  <circle cx="12" cy="75" r="2"   fill="#D4A030" opacity="0.3"/>
 </svg>

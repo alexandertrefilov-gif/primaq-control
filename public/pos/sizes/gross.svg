@@ -1,10 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 112">
-  <path d="M7 16 L73 16 L40 110 Z" fill="#C89050"/>
-  <path d="M7 36 L73 36" stroke="#8B5E30" stroke-width="2" fill="none"/>
-  <path d="M11 56 L69 56" stroke="#8B5E30" stroke-width="2" fill="none"/>
-  <path d="M18 76 L62 76" stroke="#8B5E30" stroke-width="2" fill="none"/>
-  <path d="M26 96 L54 96" stroke="#8B5E30" stroke-width="2" fill="none"/>
-  <path d="M27 16 L40 110" stroke="#8B5E30" stroke-width="2" fill="none"/>
-  <path d="M53 16 L40 110" stroke="#8B5E30" stroke-width="2" fill="none"/>
-  <rect x="4" y="10" width="72" height="8" rx="4" fill="#8B5E30"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 148">
+  <defs>
+    <linearGradient id="cn" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#F0C030"/>
+      <stop offset="50%"  stop-color="#C8900C"/>
+      <stop offset="100%" stop-color="#8A5C06"/>
+    </linearGradient>
+    <clipPath id="cnc">
+      <path d="M10 26 L90 26 L50 138 Z"/>
+    </clipPath>
+  </defs>
+  <ellipse cx="50" cy="139" rx="5" ry="3" fill="#000" opacity="0.1"/>
+  <path d="M10 26 L90 26 L50 138 Z" fill="url(#cn)"/>
+  <g clip-path="url(#cnc)" stroke="#7A4E04" stroke-width="1.1" opacity="0.42" fill="none">
+    <line x1="10" y1="26" x2="50" y2="138"/>
+    <line x1="30" y1="26" x2="60" y2="138"/>
+    <line x1="50" y1="26" x2="70" y2="138"/>
+    <line x1="70" y1="26" x2="80" y2="138"/>
+    <line x1="90" y1="26" x2="90" y2="138"/>
+    <line x1="90" y1="26" x2="50" y2="138"/>
+    <line x1="70" y1="26" x2="40" y2="138"/>
+    <line x1="50" y1="26" x2="30" y2="138"/>
+    <line x1="30" y1="26" x2="20" y2="138"/>
+    <line x1="10" y1="26" x2="10" y2="138"/>
+  </g>
+  <path d="M10 26 L33 26 L50 138 L49 138 Z" fill="white" opacity="0.07" clip-path="url(#cnc)"/>
+  <ellipse cx="50" cy="26" rx="40" ry="11"  fill="#D09810"/>
+  <ellipse cx="50" cy="23" rx="36" ry="8"   fill="#EEB416"/>
+  <ellipse cx="50" cy="30" rx="32" ry="5.5" fill="#6A4006" opacity="0.88"/>
 </svg>

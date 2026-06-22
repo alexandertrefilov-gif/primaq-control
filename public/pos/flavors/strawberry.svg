@@ -1,12 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <path d="M50 92 C28 78 12 60 14 38 C16 20 30 15 42 24 C45 12 55 12 58 24 C70 15 84 20 86 38 C88 60 72 78 50 92Z" fill="#E8204A"/>
-  <ellipse cx="36" cy="44" rx="3" ry="4" fill="#FFD0A0" transform="rotate(-12 36 44)"/>
-  <ellipse cx="52" cy="36" rx="3" ry="4" fill="#FFD0A0"/>
-  <ellipse cx="66" cy="44" rx="3" ry="4" fill="#FFD0A0" transform="rotate(12 66 44)"/>
-  <ellipse cx="39" cy="61" rx="3" ry="4" fill="#FFD0A0" transform="rotate(-6 39 61)"/>
-  <ellipse cx="61" cy="61" rx="3" ry="4" fill="#FFD0A0" transform="rotate(6 61 61)"/>
-  <ellipse cx="50" cy="72" rx="3" ry="4" fill="#FFD0A0"/>
-  <path d="M42 24 C38 14 32 10 35 6 C38 3 42 9 42 24Z" fill="#2A8000"/>
-  <path d="M50 20 C50 10 47 5 50 3 C53 5 50 10 50 20Z" fill="#3A9000"/>
-  <path d="M58 24 C62 14 68 10 65 6 C62 3 58 9 58 24Z" fill="#2A8000"/>
+  <!-- Background circle -->
+  <circle cx="50" cy="54" r="44" fill="#FFEEF2"/>
+
+  <!-- Strawberry body – fuller, rounder heart-like shape -->
+  <path d="M50 92 C26 76 10 56 12 36 C14 18 28 12 40 22
+           C43 10 57 10 60 22 C72 12 86 18 88 36
+           C90 56 74 76 50 92Z"
+        fill="#E8204A"/>
+
+  <!-- Highlight / shine on upper-left -->
+  <path d="M28 30 C30 24 36 20 42 22" stroke="white" stroke-width="2.5"
+        fill="none" opacity="0.4" stroke-linecap="round"/>
+
+  <!-- Seed pattern – ellipses angled naturally -->
+  <ellipse cx="36" cy="43" rx="2.5" ry="3.5" fill="#FFCCA0" transform="rotate(-12 36 43)"/>
+  <ellipse cx="52" cy="35" rx="2.5" ry="3.5" fill="#FFCCA0"/>
+  <ellipse cx="66" cy="43" rx="2.5" ry="3.5" fill="#FFCCA0" transform="rotate(12 66 43)"/>
+  <ellipse cx="39" cy="59" rx="2.5" ry="3.5" fill="#FFCCA0" transform="rotate(-6 39 59)"/>
+  <ellipse cx="61" cy="59" rx="2.5" ry="3.5" fill="#FFCCA0" transform="rotate(6 61 59)"/>
+  <ellipse cx="50" cy="70" rx="2.5" ry="3.5" fill="#FFCCA0"/>
+  <ellipse cx="32" cy="72" rx="2"   ry="3"   fill="#FFCCA0" transform="rotate(-8 32 72)"/>
+  <ellipse cx="68" cy="72" rx="2"   ry="3"   fill="#FFCCA0" transform="rotate(8 68 72)"/>
+
+  <!-- Leaves at top -->
+  <path d="M40 22 C36 12 30 8 33 4 C36 1 40 7 40 22Z"  fill="#2A9020"/>
+  <path d="M50 18 C50 8 47 3 50 1 C53 3 50 8 50 18Z"   fill="#38A830"/>
+  <path d="M60 22 C64 12 70 8 67 4 C64 1 60 7 60 22Z"  fill="#2A9020"/>
+  <!-- Leaf tips / highlights -->
+  <path d="M34 5 C31 8 33 12 36 12" stroke="#1A6010" stroke-width="1" fill="none" opacity="0.5"/>
+  <path d="M66 5 C69 8 67 12 64 12" stroke="#1A6010" stroke-width="1" fill="none" opacity="0.5"/>
 </svg>

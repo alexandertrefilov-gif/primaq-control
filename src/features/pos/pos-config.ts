@@ -1,28 +1,48 @@
 // Central configuration for the POS system.
 // Change sizes, flavors, prices and images here — no code changes needed elsewhere.
+// Set imageSrc to a future .webp/.png path; fallbackImageSrc points to the SVG.
+// The ProductImage component in sales-page.tsx tries imageSrc first, then fallbackImageSrc.
 
 export type SizeConfig = {
   id: string;
   name: string;
   priceCents: number;
-  image: string;
+  imageSrc: string;
+  fallbackImageSrc?: string;
 };
 
 export type FlavorConfig = {
   id: string;
   name: string;
   group: string;
-  image?: string;
+  imageSrc?: string;
+  fallbackImageSrc?: string;
   backgroundColor: string;
   textColor: string;
   isMix?: true;
   mixColors?: [string, string];
+  mixParts?: [string, string];  // IDs of the two component flavors (for mix card images)
 };
 
 export const SIZES: SizeConfig[] = [
-  { id: "klein",  name: "Klein",  priceCents: 250, image: "/pos/sizes/klein.svg"  },
-  { id: "mittel", name: "Mittel", priceCents: 350, image: "/pos/sizes/mittel.svg" },
-  { id: "gross",  name: "Groß",   priceCents: 500, image: "/pos/sizes/gross.svg"  },
+  {
+    id: "klein",
+    name: "Klein",
+    priceCents: 250,
+    imageSrc: "/pos/sizes/klein.svg",
+  },
+  {
+    id: "mittel",
+    name: "Mittel",
+    priceCents: 350,
+    imageSrc: "/pos/sizes/mittel.svg",
+  },
+  {
+    id: "gross",
+    name: "Groß",
+    priceCents: 500,
+    imageSrc: "/pos/sizes/gross.svg",
+  },
 ];
 
 export const FLAVORS: FlavorConfig[] = [
@@ -30,7 +50,7 @@ export const FLAVORS: FlavorConfig[] = [
     id: "vanille",
     name: "Vanille",
     group: "machine1",
-    image: "/pos/flavors/vanilla.svg",
+    imageSrc: "/pos/flavors/vanilla.svg",
     backgroundColor: "#FFF3B0",
     textColor: "#5C4200",
   },
@@ -38,7 +58,7 @@ export const FLAVORS: FlavorConfig[] = [
     id: "schokolade",
     name: "Schokolade",
     group: "machine1",
-    image: "/pos/flavors/chocolate.svg",
+    imageSrc: "/pos/flavors/chocolate.svg",
     backgroundColor: "#3D1800",
     textColor: "#fff",
   },
@@ -48,6 +68,7 @@ export const FLAVORS: FlavorConfig[] = [
     group: "machine1",
     isMix: true,
     mixColors: ["#FFF3B0", "#3D1800"],
+    mixParts: ["vanille", "schokolade"],
     backgroundColor: "#3D1800",
     textColor: "#fff",
   },
@@ -55,7 +76,7 @@ export const FLAVORS: FlavorConfig[] = [
     id: "cheesecake",
     name: "Cheesecake",
     group: "machine2",
-    image: "/pos/flavors/cheesecake.svg",
+    imageSrc: "/pos/flavors/cheesecake.svg",
     backgroundColor: "#FFE5A0",
     textColor: "#5C3800",
   },
@@ -63,7 +84,7 @@ export const FLAVORS: FlavorConfig[] = [
     id: "erdbeere",
     name: "Erdbeere",
     group: "machine2",
-    image: "/pos/flavors/strawberry.svg",
+    imageSrc: "/pos/flavors/strawberry.svg",
     backgroundColor: "#E8204A",
     textColor: "#fff",
   },
@@ -73,6 +94,7 @@ export const FLAVORS: FlavorConfig[] = [
     group: "machine2",
     isMix: true,
     mixColors: ["#FFE5A0", "#E8204A"],
+    mixParts: ["cheesecake", "erdbeere"],
     backgroundColor: "#E8204A",
     textColor: "#fff",
   },
@@ -89,4 +111,8 @@ export function getSizeName(id: string): string {
 
 export function getFlavorName(id: string): string {
   return FLAVORS.find((f) => f.id === id)?.name ?? id;
+}
+
+export function getSizeConfig(id: string): SizeConfig | undefined {
+  return SIZES.find((s) => s.id === id);
 }

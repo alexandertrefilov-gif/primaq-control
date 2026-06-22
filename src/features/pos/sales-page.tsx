@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import Image from "next/image";
 import { Check, Minus, Plus, Settings, ShoppingCart, Trash2, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
@@ -12,13 +11,14 @@ import {
   MACHINE_GROUP_LABELS,
   SIZES,
   getFlavorName,
+  getSizeConfig,
   getSizeName,
 } from "./pos-config";
 import type { FlavorConfig, SizeConfig } from "./pos-config";
 import type { PaymentMethod } from "./pos-types";
 
 function fmt(cents: number): string {
-  return (cents / 100).toFixed(2).replace(".", ",") + " €";
+  return (cents / 100).toFixed(2).replace(".", ",") + " €";
 }
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
@@ -29,6 +29,42 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
 
 const QUICK_AMOUNTS = [5, 10, 20, 50, 100];
 
+// ── Robust image with automatic fallback ─────────────────────────────────────
+
+function ProductImage({
+  src,
+  fallbackSrc,
+  alt,
+  className,
+}: {
+  src?: string;
+  fallbackSrc?: string;
+  alt: string;
+  className?: string;
+}) {
+  const initial = src ?? fallbackSrc;
+  const [imgSrc, setImgSrc] = useState(initial);
+  const [failed, setFailed] = useState(!initial);
+
+  if (failed || !imgSrc) return null;
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={imgSrc}
+      alt={alt}
+      className={className}
+      onError={() => {
+        if (fallbackSrc && imgSrc !== fallbackSrc) {
+          setImgSrc(fallbackSrc);
+        } else {
+          setFailed(true);
+        }
+      }}
+    />
+  );
+}
+
 // ── Flavor card ──────────────────────────────────────────────────────────────
 
 function FlavorCard({
@@ -38,13 +74,15 @@ function FlavorCard({
   flavor: FlavorConfig;
   onClick: () => void;
 }) {
-  const isMix = !!flavor.isMix && flavor.mixColors;
+  const isMix = !!flavor.isMix && !!flavor.mixColors;
+  const part1 = isMix && flavor.mixParts ? FLAVORS.find((f) => f.id === flavor.mixParts![0]) : null;
+  const part2 = isMix && flavor.mixParts ? FLAVORS.find((f) => f.id === flavor.mixParts![1]) : null;
 
   return (
     <button
       aria-label={flavor.name}
       onClick={onClick}
-      className="relative flex flex-1 flex-col items-center justify-end overflow-hidden rounded-2xl shadow-md transition-all active:scale-[0.97] hover:shadow-lg hover:ring-2 hover:ring-primaq-500/40 select-none"
+      className="relative flex flex-1 flex-col items-center justify-end overflow-hidden rounded-2xl shadow-md transition-all active:scale-[0.97] hover:shadow-xl hover:ring-2 hover:ring-primaq-500/40 select-none"
       style={{ color: flavor.textColor }}
     >
       {/* Background */}
@@ -52,17 +90,11 @@ function FlavorCard({
         <>
           <div
             className="absolute inset-0"
-            style={{
-              clipPath: "polygon(0 0, 100% 0, 0 100%)",
-              background: flavor.mixColors![0],
-            }}
+            style={{ clipPath: "polygon(0 0, 100% 0, 0 100%)", background: flavor.mixColors![0] }}
           />
           <div
             className="absolute inset-0"
-            style={{
-              clipPath: "polygon(100% 0, 100% 100%, 0 100%)",
-              background: flavor.mixColors![1],
-            }}
+            style={{ clipPath: "polygon(100% 0, 100% 100%, 0 100%)", background: flavor.mixColors![1] }}
           />
           <div className="absolute inset-0 bg-black/10" />
         </>
@@ -70,25 +102,45 @@ function FlavorCard({
         <div className="absolute inset-0" style={{ background: flavor.backgroundColor }} />
       )}
 
-      {/* Flavor image */}
-      {flavor.image && (
-        <div className="relative z-10 flex flex-1 items-center justify-center py-2">
-          <Image
-            src={flavor.image}
-            alt={flavor.name}
-            width={72}
-            height={72}
-            className="h-14 w-14 object-contain drop-shadow-md"
-            unoptimized
-          />
-        </div>
-      )}
+      {/* Image area (flex-1 so it fills all space above the label) */}
+      <div className="relative z-10 flex min-h-0 flex-1 w-full items-center justify-center">
+        {isMix ? (
+          /* Mix: show both component images side by side */
+          <div className="flex w-full items-center justify-around px-3 py-2">
+            {part1?.imageSrc && (
+              <ProductImage
+                src={part1.imageSrc}
+                fallbackSrc={part1.fallbackImageSrc}
+                alt=""
+                className="h-14 w-14 object-contain drop-shadow-md opacity-90"
+              />
+            )}
+            {part2?.imageSrc && (
+              <ProductImage
+                src={part2.imageSrc}
+                fallbackSrc={part2.fallbackImageSrc}
+                alt=""
+                className="h-14 w-14 object-contain drop-shadow-md opacity-90"
+              />
+            )}
+          </div>
+        ) : (
+          flavor.imageSrc && (
+            <ProductImage
+              src={flavor.imageSrc}
+              fallbackSrc={flavor.fallbackImageSrc}
+              alt=""
+              className="max-h-24 max-w-full object-contain drop-shadow-lg p-2"
+            />
+          )
+        )}
+      </div>
 
-      {/* Name label */}
-      <div className="relative z-10 w-full bg-black/20 px-2 py-2 text-center backdrop-blur-sm">
+      {/* Name label at bottom */}
+      <div className="relative z-10 w-full shrink-0 bg-black/25 px-2 py-2 text-center backdrop-blur-[2px]">
         <span
-          className="text-sm font-black leading-tight drop-shadow"
-          style={{ textShadow: "0 1px 3px rgba(0,0,0,0.4)" }}
+          className="block text-sm font-black leading-tight"
+          style={{ textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}
         >
           {flavor.name}
         </span>
@@ -148,8 +200,8 @@ function SizeColumn({
             className={cn(
               "relative flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl border-2 bg-white shadow transition-all select-none",
               active
-                ? "border-primaq-500 shadow-lg shadow-primaq-500/20 ring-2 ring-primaq-500/30"
-                : "border-transparent hover:border-primaq-300 hover:bg-primaq-50 active:scale-[0.97]"
+                ? "border-primaq-500 bg-primaq-50 shadow-lg shadow-primaq-500/20 ring-2 ring-primaq-500/30"
+                : "border-transparent hover:border-primaq-300 hover:bg-primaq-50/60 active:scale-[0.97]"
             )}
           >
             {active && (
@@ -157,13 +209,11 @@ function SizeColumn({
                 <Check className="h-3 w-3" />
               </span>
             )}
-            <Image
-              src={size.image}
-              alt={size.name}
-              width={64}
-              height={64}
-              className="h-14 w-auto object-contain drop-shadow"
-              unoptimized
+            <ProductImage
+              src={size.imageSrc}
+              fallbackSrc={size.fallbackImageSrc}
+              alt=""
+              className="max-h-28 w-auto object-contain drop-shadow"
             />
             <span className={cn("text-xl font-black", active ? "text-primaq-700" : "text-ink")}>
               {size.name}
@@ -294,42 +344,56 @@ function CartColumn({
             </div>
           ) : (
             <ul className="divide-y divide-black/5">
-              {cart.map((item) => (
-                <li key={item.id} className="flex items-center gap-2 px-3 py-2.5">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-ink truncate leading-tight">
-                      {getSizeName(item.size)} {getFlavorName(item.flavor)}
+              {cart.map((item) => {
+                const sizeConf = getSizeConfig(item.size);
+                return (
+                  <li key={item.id} className="flex items-center gap-2 px-3 py-2">
+                    {/* Size thumbnail */}
+                    <div className="shrink-0 h-9 w-9 flex items-center justify-center">
+                      <ProductImage
+                        src={sizeConf?.imageSrc}
+                        fallbackSrc={sizeConf?.fallbackImageSrc}
+                        alt=""
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    </div>
+                    {/* Item label */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-ink truncate leading-tight">
+                        {getSizeName(item.size)} {getFlavorName(item.flavor)}
+                      </p>
+                      <p className="text-xs text-black/40">{fmt(item.unitPriceCents)} je</p>
+                    </div>
+                    {/* Qty controls */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => onChangeQty(item.id, -1)}
+                        className="grid h-7 w-7 place-items-center rounded-full bg-black/5 hover:bg-red-100 hover:text-red-600 active:scale-90 transition-all"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </button>
+                      <span className="w-5 text-center text-sm font-bold text-ink">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => onChangeQty(item.id, 1)}
+                        className="grid h-7 w-7 place-items-center rounded-full bg-black/5 hover:bg-primaq-100 hover:text-primaq-700 active:scale-90 transition-all"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                      <button
+                        onClick={() => onRemove(item.id)}
+                        className="grid h-7 w-7 place-items-center rounded-full text-black/25 hover:bg-red-50 hover:text-red-500 active:scale-90 transition-all"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <p className="w-14 shrink-0 text-right text-sm font-bold text-ink tabular-nums">
+                      {fmt(item.quantity * item.unitPriceCents)}
                     </p>
-                    <p className="text-xs text-black/40">{fmt(item.unitPriceCents)} je</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => onChangeQty(item.id, -1)}
-                      className="grid h-7 w-7 place-items-center rounded-full bg-black/5 hover:bg-red-100 hover:text-red-600 active:scale-90 transition-all"
-                    >
-                      <Minus className="h-3 w-3" />
-                    </button>
-                    <span className="w-5 text-center text-sm font-bold text-ink">
-                      {item.quantity}
-                    </span>
-                    <button
-                      onClick={() => onChangeQty(item.id, 1)}
-                      className="grid h-7 w-7 place-items-center rounded-full bg-black/5 hover:bg-primaq-100 hover:text-primaq-700 active:scale-90 transition-all"
-                    >
-                      <Plus className="h-3 w-3" />
-                    </button>
-                    <button
-                      onClick={() => onRemove(item.id)}
-                      className="grid h-7 w-7 place-items-center rounded-full text-black/25 hover:bg-red-50 hover:text-red-500 active:scale-90 transition-all"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                  <p className="w-14 shrink-0 text-right text-sm font-bold text-ink tabular-nums">
-                    {fmt(item.quantity * item.unitPriceCents)}
-                  </p>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -429,11 +493,11 @@ function BottomBar({ daily }: { daily: ReturnType<typeof usePosStore>["daily"] }
       <div className="h-6 w-px bg-black/10 shrink-0" />
       <Stat label="Umsatz gesamt" value={fmt(daily.totalCents)} accent />
       <div className="h-6 w-px bg-black/10 shrink-0" />
-      <Stat label="Bar" value={fmt(daily.cashCents)} />
+      <Stat label="Bar"   value={fmt(daily.cashCents)} />
       <div className="h-6 w-px bg-black/10 shrink-0" />
       <Stat label="Karte" value={fmt(daily.cardCents)} />
       <div className="h-6 w-px bg-black/10 shrink-0" />
-      <Stat label="QR" value={fmt(daily.qrCents)} />
+      <Stat label="QR"    value={fmt(daily.qrCents)} />
     </div>
   );
 }
@@ -480,7 +544,6 @@ export function SalesPage() {
   const cashCents = Math.round(parseFloat(cashInput.replace(",", ".")) * 100) || 0;
   const change = cashCents - cartTotal;
   const canBook = cart.length > 0 && (payment !== "bar" || cashCents >= cartTotal);
-
   const selectedSize = SIZES.find((s) => s.id === selectedSizeId) ?? null;
 
   const handleFlavorClick = useCallback(
