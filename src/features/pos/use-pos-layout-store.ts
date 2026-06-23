@@ -39,10 +39,33 @@ export type PanelConfig = {
   size: PanelSize;
 };
 
+export type TextColorMode = "auto" | "light" | "dark";
+
+export type SalesSizeOverride = {
+  label: string;
+  priceCents: number;
+  order: number;
+  backgroundColor: string;
+  textColorMode: TextColorMode;
+  imageDataUrl: string | null;
+};
+
+export function computeTextColor(mode: TextColorMode, bgHex: string): string {
+  if (mode === "light") return "#ffffff";
+  if (mode === "dark") return "#1a1a1a";
+  const hex = bgHex.replace("#", "");
+  const r = parseInt(hex.slice(0, 2), 16) || 0;
+  const g = parseInt(hex.slice(2, 4), 16) || 0;
+  const b = parseInt(hex.slice(4, 6), 16) || 0;
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.5 ? "#1a1a1a" : "#ffffff";
+}
+
 export type LayoutConfig = {
   panels: PanelConfig[];
   toggles: Record<ToggleId, boolean>;
   sizeVisibility: Record<string, boolean>; // which sizes appear in the sales UI
+  salesSizes: Record<string, SalesSizeOverride>; // label/price overrides per size
   // Fine-grained size controls
   flavorCardSize: number;    // 110–240 px, default 140
   sizeColumnWidth: number;   // 120–240 px, default 176  (= w-44)
@@ -72,6 +95,11 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
     "letzte-bestellung": true,
   },
   sizeVisibility: { klein: true, mittel: true, gross: true },
+  salesSizes: {
+    klein: { label: "Klein", priceCents: 250, order: 1, backgroundColor: "#F6F2E8", textColorMode: "auto", imageDataUrl: null },
+    mittel: { label: "Mittel", priceCents: 350, order: 2, backgroundColor: "#F8E3A0", textColorMode: "auto", imageDataUrl: null },
+    gross:  { label: "Groß",  priceCents: 500, order: 3, backgroundColor: "#F4C96D", textColorMode: "auto", imageDataUrl: null },
+  },
   flavorCardSize: 140,
   sizeColumnWidth: 176,
   qtyButtonSize: 44,
@@ -160,6 +188,12 @@ function loadState(): StoreState {
       ...(parsed.active ?? {}),
       toggles: { ...DEFAULT_LAYOUT.toggles, ...(parsed.active?.toggles ?? {}) },
       sizeVisibility: { ...DEFAULT_LAYOUT.sizeVisibility, ...(parsed.active?.sizeVisibility ?? {}) },
+      salesSizes: Object.fromEntries(
+        Object.entries(DEFAULT_LAYOUT.salesSizes).map(([id, def]) => [
+          id,
+          { ...def, ...(parsed.active?.salesSizes?.[id] ?? {}) },
+        ])
+      ) as Record<string, SalesSizeOverride>,
     };
     return { active, profiles: parsed.profiles ?? [] };
   } catch {

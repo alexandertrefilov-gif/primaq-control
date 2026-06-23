@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { CartItem, DailySummary, Order, PaymentMethod, PosState } from "./pos-types";
-import { SIZES } from "./pos-config";
 
 const STORAGE_KEY = "primaq-pos-state";
 
@@ -64,10 +63,7 @@ export function usePosStore() {
     writeStorage(state);
   }, [state, hydrated]);
 
-  const addToCart = useCallback((sizeId: string, flavorId: string) => {
-    const sizeConfig = SIZES.find((s) => s.id === sizeId);
-    if (!sizeConfig) return;
-    const unitPriceCents = sizeConfig.priceCents;
+  const addToCart = useCallback((sizeId: string, flavorId: string, unitPriceCents: number) => {
     setState((current) => {
       const existing = current.cart.find((i) => i.size === sizeId && i.flavor === flavorId);
       if (existing) {

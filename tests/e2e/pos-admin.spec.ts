@@ -129,6 +129,7 @@ test("Admin 5: PIN 1234 gibt Admin-Zugang zu Tagesabschluss", async ({ page }) =
 
 test("Admin 7: Letzte Buchung stornieren – Daily auf 0 reduziert", async ({ page }) => {
   await seedEmptyPos(page);
+  await seedAdmin(page);
   await blockSupabase(page);
   await page.goto("/verkauf");
   await waitLoaded(page);
@@ -161,6 +162,7 @@ test("Admin 7: Letzte Buchung stornieren – Daily auf 0 reduziert", async ({ pa
 
 test("Admin 8: Storno letzter von zwei Buchungen – erste bleibt erhalten", async ({ page }) => {
   await seedEmptyPos(page);
+  await seedAdmin(page);
   await blockSupabase(page);
   await page.goto("/verkauf");
   await waitLoaded(page);

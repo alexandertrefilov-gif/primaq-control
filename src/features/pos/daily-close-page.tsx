@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { Download, Lock, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { usePosStore } from "./use-pos-store";
+import { usePosYearStore } from "./use-pos-year-store";
 import { useAdmin } from "./admin-context";
 import { getFlavorName, getSizeName } from "./pos-config";
 import type { DailySummary } from "./pos-types";
@@ -50,6 +51,7 @@ function downloadCsv(daily: DailySummary) {
 
 export function DailyClosePage() {
   const { daily, resetDaily, hydrated } = usePosStore();
+  const { saveDay } = usePosYearStore();
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
   const [confirming, setConfirming] = useState(false);
 
@@ -58,9 +60,12 @@ export function DailyClosePage() {
       setConfirming(true);
       return;
     }
+    if (daily.orderCount > 0) {
+      saveDay(daily);
+    }
     resetDaily();
     setConfirming(false);
-  }, [confirming, resetDaily]);
+  }, [confirming, daily, saveDay, resetDaily]);
 
   if (!hydrated || !adminHydrated) {
     return <div className="flex h-40 items-center justify-center text-black/40">Laden…</div>;

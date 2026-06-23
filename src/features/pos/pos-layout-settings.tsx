@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { GripVertical, Lock, Unlock, RotateCcw, Save, Trash2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { AlertTriangle, GripVertical, Lock, Unlock, RotateCcw, Save, Trash2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SIZES } from "./pos-config";
 import {
@@ -21,8 +21,11 @@ import type {
   PanelId,
   PanelSize,
   PresetId,
+  SalesSizeOverride,
+  TextColorMode,
   ToggleId,
 } from "./use-pos-layout-store";
+import { computeTextColor } from "./use-pos-layout-store";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -250,6 +253,274 @@ function SegmentControl<T extends string>({
   );
 }
 
+function fmtPrice(cents: number): string {
+  return (cents / 100).toFixed(2).replace(".", ",");
+}
+
+// ── Size card preview ──────────────────────────────────────────────
+
+function SizePreview({ ov, defaultImageSrc }: { ov: SalesSizeOverride; defaultImageSrc: string }) {
+  const textColor = computeTextColor(ov.textColorMode, ov.backgroundColor);
+  return (
+    <div
+      className="flex h-28 w-24 shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl shadow-md"
+      style={{ backgroundColor: ov.backgroundColor }}
+    >
+      {ov.imageDataUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={ov.imageDataUrl} alt="" className="max-h-12 max-w-[72px] object-contain drop-shadow" />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={defaultImageSrc} alt="" className="max-h-12 max-w-[72px] object-contain drop-shadow" />
+      )}
+      <span className="px-1 text-center text-sm font-black leading-tight" style={{ color: textColor }}>
+        {ov.label}
+      </span>
+      <span className="text-[11px] font-bold" style={{ color: textColor, opacity: 0.75 }}>
+        {fmtPrice(ov.priceCents)} €
+      </span>
+    </div>
+  );
+}
+
+// ── Per-size config card ───────────────────────────────────────────
+
+function SizeConfigCard({
+  defaultImageSrc,
+  ov,
+  enabled,
+  isLast,
+  editMode,
+  onUpdate,
+  onToggle,
+}: {
+  defaultImageSrc: string;
+  ov: SalesSizeOverride;
+  enabled: boolean;
+  isLast: boolean;
+  editMode: boolean;
+  onUpdate: (updates: Partial<SalesSizeOverride>) => void;
+  onToggle: (v: boolean) => void;
+}) {
+  const [nameInput, setNameInput]   = useState(ov.label);
+  const [priceInput, setPriceInput] = useState(fmtPrice(ov.priceCents));
+  const [hexInput, setHexInput]     = useState(ov.backgroundColor);
+  const [priceError, setPriceError] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setNameInput(ov.label); }, [ov.label]);
+  useEffect(() => { setPriceInput(fmtPrice(ov.priceCents)); setPriceError(false); }, [ov.priceCents]);
+  useEffect(() => { setHexInput(ov.backgroundColor); }, [ov.backgroundColor]);
+
+  function handleNameBlur() {
+    const t = nameInput.trim();
+    if (!t) { setNameInput(ov.label); return; }
+    if (t !== ov.label) onUpdate({ label: t });
+  }
+
+  function handlePriceBlur() {
+    const euros = parseFloat(priceInput.replace(",", "."));
+    if (isNaN(euros) || euros <= 0 || euros > 99.99) {
+      setPriceError(true);
+      setPriceInput(fmtPrice(ov.priceCents));
+      return;
+    }
+    const cents = Math.round(euros * 100);
+    setPriceError(false);
+    if (cents !== ov.priceCents) onUpdate({ priceCents: cents });
+  }
+
+  function handleHexBlur() {
+    const val = hexInput.trim();
+    if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
+      if (val.toLowerCase() !== ov.backgroundColor.toLowerCase()) onUpdate({ backgroundColor: val });
+    } else {
+      setHexInput(ov.backgroundColor);
+    }
+  }
+
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setUploadError("Bild ist zu groß. Maximal 2 MB.");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    setUploadError(null);
+    const reader = new FileReader();
+    reader.onload = () => onUpdate({ imageDataUrl: reader.result as string });
+    reader.readAsDataURL(file);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  const textModes: { id: TextColorMode; label: string }[] = [
+    { id: "auto", label: "Auto" },
+    { id: "light", label: "Hell" },
+    { id: "dark", label: "Dunkel" },
+  ];
+
+  return (
+    <div className="overflow-hidden rounded-2xl bg-white shadow">
+      {/* Header */}
+      <div className="flex min-w-0 items-center gap-3 border-b border-black/5 px-4 py-3">
+        <span className="flex-1 text-sm font-bold text-ink">{ov.label}</span>
+        {isLast && (
+          <span className="shrink-0" title="Mindestens eine Größe muss aktiv bleiben">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+          </span>
+        )}
+        <Toggle checked={enabled} onChange={onToggle} disabled={!editMode || isLast} />
+      </div>
+
+      {/* Body: form left, preview right */}
+      <div className="flex gap-4 p-4">
+
+        <div className="min-w-0 flex-1 space-y-3">
+
+          {/* Name + Price */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="mb-1 text-[11px] font-semibold text-black/40">Name</p>
+              <input
+                type="text"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                onBlur={handleNameBlur}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                disabled={!editMode}
+                className="w-full rounded-lg border border-black/10 bg-black/[0.03] px-2.5 py-1.5 text-sm font-bold text-ink outline-none focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20 disabled:opacity-60"
+              />
+            </div>
+            <div>
+              <p className="mb-1 text-[11px] font-semibold text-black/40">Preis</p>
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={priceInput}
+                  onChange={(e) => { setPriceInput(e.target.value); setPriceError(false); }}
+                  onBlur={handlePriceBlur}
+                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                  disabled={!editMode}
+                  className={cn(
+                    "min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 text-right text-sm font-bold tabular-nums outline-none focus:ring-2 disabled:opacity-60",
+                    priceError
+                      ? "border-red-400 bg-red-50 text-red-600 focus:ring-red-400/20"
+                      : "border-black/10 bg-black/[0.03] text-ink focus:border-primaq-500 focus:ring-primaq-500/20"
+                  )}
+                />
+                <span className="shrink-0 text-sm font-bold text-black/40">€</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Background color */}
+          <div>
+            <p className="mb-1 text-[11px] font-semibold text-black/40">Hintergrundfarbe</p>
+            <div className="flex items-center gap-2">
+              <div
+                className={cn(
+                  "relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-black/20",
+                  !editMode && "pointer-events-none opacity-60"
+                )}
+                style={{ backgroundColor: ov.backgroundColor }}
+              >
+                <input
+                  type="color"
+                  value={ov.backgroundColor}
+                  onChange={(e) => { setHexInput(e.target.value); onUpdate({ backgroundColor: e.target.value }); }}
+                  disabled={!editMode}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  title="Farbe wählen"
+                />
+              </div>
+              <input
+                type="text"
+                value={hexInput}
+                onChange={(e) => setHexInput(e.target.value.slice(0, 7))}
+                onBlur={handleHexBlur}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                disabled={!editMode}
+                placeholder="#F6F2E8"
+                className="flex-1 rounded-lg border border-black/10 bg-black/[0.03] px-2.5 py-1.5 font-mono text-xs text-ink outline-none focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20 disabled:opacity-60"
+                maxLength={7}
+              />
+            </div>
+          </div>
+
+          {/* Text color mode */}
+          <div>
+            <p className="mb-1 text-[11px] font-semibold text-black/40">Textfarbe</p>
+            <div className={cn("flex gap-1", !editMode && "pointer-events-none opacity-40")}>
+              {textModes.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => onUpdate({ textColorMode: m.id })}
+                  className={cn(
+                    "flex-1 rounded-lg py-1.5 text-xs font-bold transition-colors",
+                    ov.textColorMode === m.id
+                      ? "bg-primaq-500 text-white shadow-sm"
+                      : "bg-black/5 text-black/50 hover:bg-black/10"
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Image upload */}
+          <div>
+            <p className="mb-1 text-[11px] font-semibold text-black/40">Bild / Icon</p>
+            <div className="flex flex-wrap gap-2">
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/15 bg-white px-3 py-1.5 text-xs font-bold text-black/60 shadow-sm transition-colors hover:bg-black/5",
+                  !editMode && "pointer-events-none opacity-50"
+                )}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                Hochladen
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  className="hidden"
+                  disabled={!editMode}
+                  onChange={handleImageUpload}
+                />
+              </label>
+              {ov.imageDataUrl && (
+                <button
+                  onClick={() => { onUpdate({ imageDataUrl: null }); setUploadError(null); }}
+                  disabled={!editMode}
+                  className="flex items-center gap-1.5 rounded-xl border border-black/15 bg-white px-3 py-1.5 text-xs font-bold text-red-500 shadow-sm transition-colors hover:bg-red-50 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Entfernen
+                </button>
+              )}
+            </div>
+            {uploadError && (
+              <p className="mt-1 text-xs font-semibold text-red-500">{uploadError}</p>
+            )}
+          </div>
+
+        </div>
+
+        {/* Preview */}
+        <div className="flex shrink-0 flex-col items-center gap-1">
+          <p className="text-[11px] font-semibold text-black/40">Vorschau</p>
+          <SizePreview ov={ov} defaultImageSrc={defaultImageSrc} />
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────
 
 export function PosLayoutSettings() {
@@ -369,43 +640,45 @@ export function PosLayoutSettings() {
       </div>
 
       {/* ── Verkaufsgrößen ─────────────────────────────────────── */}
-      <div className="overflow-hidden rounded-2xl bg-white shadow">
-        <div className="border-b border-black/5 px-4 py-3">
+      <div className="space-y-3">
+        <div>
           <p className="text-xs font-bold uppercase tracking-widest text-black/40">Verkaufsgrößen</p>
-          <p className="mt-0.5 text-xs text-black/40">Welche Größen im Verkauf angezeigt werden</p>
+          <p className="mt-0.5 text-xs text-black/40">Name, Preis, Farbe und Bild pro Größe – Änderungen wirken sofort.</p>
         </div>
-        <div className="divide-y divide-black/5">
-          {SIZES.map((size) => {
-            const enabled = active.sizeVisibility[size.id] !== false;
-            const activeCount = SIZES.filter((s) => active.sizeVisibility[s.id] !== false).length;
-            const isLast = enabled && activeCount === 1;
-            return (
-              <div key={size.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-ink">{size.name}</p>
-                  <p className="text-xs text-black/40">
-                    {(size.priceCents / 100).toFixed(2).replace(".", ",")} €
-                  </p>
-                </div>
-                {isLast && (
-                  <span className="text-[11px] font-semibold text-amber-600 mr-1">
-                    Mindestens eine
-                  </span>
-                )}
-                <Toggle
-                  checked={enabled}
-                  onChange={(v) =>
-                    update({
-                      ...active,
-                      sizeVisibility: { ...active.sizeVisibility, [size.id]: v },
-                    })
-                  }
-                  disabled={!editMode || isLast}
-                />
-              </div>
-            );
-          })}
-        </div>
+        {SIZES.map((size) => {
+          const ov: SalesSizeOverride = {
+            ...DEFAULT_LAYOUT.salesSizes[size.id],
+            ...(active.salesSizes?.[size.id] ?? {}),
+          };
+          const enabled = active.sizeVisibility[size.id] !== false;
+          const activeCount = SIZES.filter((s) => active.sizeVisibility[s.id] !== false).length;
+          const isLast = enabled && activeCount === 1;
+          return (
+            <SizeConfigCard
+              key={size.id}
+              defaultImageSrc={size.imageSrc}
+              ov={ov}
+              enabled={enabled}
+              isLast={isLast}
+              editMode={editMode}
+              onUpdate={(updates) =>
+                update({
+                  ...active,
+                  salesSizes: {
+                    ...active.salesSizes,
+                    [size.id]: { ...ov, ...updates },
+                  },
+                })
+              }
+              onToggle={(v) =>
+                update({
+                  ...active,
+                  sizeVisibility: { ...active.sizeVisibility, [size.id]: v },
+                })
+              }
+            />
+          );
+        })}
       </div>
 
       {/* ── Sorten-Buttons Größe ────────────────────────────────── */}

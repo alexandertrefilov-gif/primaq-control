@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, createContext, useContext } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, createContext, useContext } from "react";
 import { Check, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
 import { usePosStore } from "./use-pos-store";
 import { usePosFlavorStore } from "./use-pos-flavor-store";
 import { usePosLayoutStore } from "./use-pos-layout-store";
-import type { CartFontSize } from "./use-pos-layout-store";
+import { useAdmin } from "./admin-context";
+import type { CartFontSize, TextColorMode } from "./use-pos-layout-store";
+import { computeTextColor } from "./use-pos-layout-store";
 import {
   FLAVORS,
   MACHINE_GROUP_LABELS,
@@ -16,6 +18,12 @@ import {
 } from "./pos-config";
 import type { FlavorConfig, SizeConfig } from "./pos-config";
 import type { CartItem, PaymentMethod } from "./pos-types";
+
+type EffectiveSizeConfig = SizeConfig & {
+  backgroundColor: string;
+  textColorMode: TextColorMode;
+  imageDataUrl: string | null;
+};
 
 // Dynamic flavor context – populated by SalesPage from usePosFlavorStore
 const FlavorsCtx = createContext<import("./pos-config").FlavorConfig[]>(FLAVORS);
@@ -298,15 +306,13 @@ function FlavorGroup({
 function SizeRow({
   selectedId,
   onSelect,
-  sizeVisibility,
+  effectiveSizes,
 }: {
   selectedId: string | null;
   onSelect: (id: string) => void;
-  sizeVisibility: Record<string, boolean>;
+  effectiveSizes: EffectiveSizeConfig[];
 }) {
-  const visibleSizes = SIZES.filter((s) => sizeVisibility[s.id] !== false);
-
-  if (visibleSizes.length === 0) {
+  if (effectiveSizes.length === 0) {
     return (
       <div className="shrink-0 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-center">
         <p className="text-sm font-bold text-amber-700">
@@ -322,34 +328,41 @@ function SizeRow({
         Größe wählen
       </p>
       <div className="flex gap-3">
-        {visibleSizes.map((size: SizeConfig) => {
-          const active = selectedId === size.id;
+        {effectiveSizes.map((size) => {
+          const isActive = selectedId === size.id;
+          const textColor = computeTextColor(size.textColorMode, size.backgroundColor);
           return (
             <button
               key={size.id}
               onClick={() => onSelect(size.id)}
               className={cn(
-                "relative flex h-[160px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl border-2 bg-white shadow transition-all select-none",
-                active
-                  ? "border-primaq-500 bg-primaq-50 shadow-lg shadow-primaq-500/20 ring-2 ring-primaq-500/30"
-                  : "border-transparent hover:border-primaq-300 hover:bg-primaq-50/60 active:scale-[0.97]"
+                "relative flex h-[160px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl border-2 shadow transition-all select-none",
+                isActive
+                  ? "border-primaq-500 shadow-lg shadow-primaq-500/20 ring-2 ring-primaq-500/30"
+                  : "border-transparent hover:border-primaq-300 active:scale-[0.97]"
               )}
+              style={{ backgroundColor: size.backgroundColor }}
             >
-              {active && (
+              {isActive && (
                 <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-primaq-500 text-white">
                   <Check className="h-3 w-3" />
                 </span>
               )}
-              <ProductImage
-                src={size.imageSrc}
-                fallbackSrc={size.fallbackImageSrc}
-                alt=""
-                className="max-h-20 w-auto object-contain drop-shadow"
-              />
-              <span className={cn("text-xl font-black", active ? "text-primaq-700" : "text-ink")}>
+              {size.imageDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={size.imageDataUrl} alt="" className="max-h-20 w-auto object-contain drop-shadow" />
+              ) : (
+                <ProductImage
+                  src={size.imageSrc}
+                  fallbackSrc={size.fallbackImageSrc}
+                  alt=""
+                  className="max-h-20 w-auto object-contain drop-shadow"
+                />
+              )}
+              <span className="text-xl font-black" style={{ color: textColor }}>
                 {size.name}
               </span>
-              <span className={cn("text-base font-bold", active ? "text-primaq-500" : "text-black/50")}>
+              <span className="text-base font-bold" style={{ color: textColor, opacity: 0.75 }}>
                 {fmt(size.priceCents)}
               </span>
             </button>
@@ -710,14 +723,46 @@ function SalesStatusBar({
   showLastBooking?: boolean;
   showStats?: boolean;
 }) {
+  const { isAdmin, login } = useAdmin();
   const last = daily.orders.length > 0 ? daily.orders[daily.orders.length - 1] : null;
   const [confirming, setConfirming] = useState(false);
 
+  // PIN modal state (for non-admin storno)
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [voidPin, setVoidPin] = useState("");
+  const [voidPinError, setVoidPinError] = useState(false);
+  const pinInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showPinModal) setTimeout(() => pinInputRef.current?.focus(), 50);
+  }, [showPinModal]);
+
   const handleVoidClick = useCallback(() => {
-    if (!confirming) { setConfirming(true); return; }
-    onVoid();
-    setConfirming(false);
-  }, [confirming, onVoid]);
+    if (isAdmin) {
+      // Admin already logged in: keep the 2-tap confirm flow
+      if (!confirming) { setConfirming(true); return; }
+      onVoid();
+      setConfirming(false);
+    } else {
+      // Not admin: require PIN before storno
+      setVoidPin("");
+      setVoidPinError(false);
+      setShowPinModal(true);
+    }
+  }, [confirming, isAdmin, onVoid]);
+
+  const handlePinConfirm = useCallback(() => {
+    if (login(voidPin)) {
+      setShowPinModal(false);
+      setVoidPin("");
+      setVoidPinError(false);
+      onVoid();
+    } else {
+      setVoidPinError(true);
+      setVoidPin("");
+      setTimeout(() => pinInputRef.current?.focus(), 50);
+    }
+  }, [login, voidPin, onVoid]);
 
   const portionen = daily.orders.reduce(
     (sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0),
@@ -725,6 +770,7 @@ function SalesStatusBar({
   );
 
   return (
+    <>
     <div
       data-testid="last-booking-bar"
       className="shrink-0 flex items-center gap-3 rounded-2xl bg-white/90 px-5 py-2.5 shadow backdrop-blur-sm"
@@ -813,6 +859,68 @@ function SalesStatusBar({
         </div>
       )}
     </div>
+
+    {/* Admin-PIN modal for storno (shown when not already logged in as admin) */}
+    {showPinModal && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        onClick={() => setShowPinModal(false)}
+      >
+        <div
+          className="w-80 rounded-3xl bg-white p-8 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-6 flex flex-col items-center gap-2 text-center">
+            <div className="grid h-12 w-12 place-items-center rounded-full bg-red-100">
+              <X className="h-6 w-6 text-red-600" />
+            </div>
+            <h2 className="text-xl font-black text-ink">Admin-Berechtigung erforderlich</h2>
+            <p className="text-sm text-black/50">Storno nur mit Admin-PIN</p>
+          </div>
+          <input
+            ref={pinInputRef}
+            type="password"
+            inputMode="numeric"
+            maxLength={6}
+            value={voidPin}
+            aria-label="Admin PIN"
+            onChange={(e) => {
+              setVoidPin(e.target.value.replace(/\D/g, ""));
+              setVoidPinError(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handlePinConfirm();
+              if (e.key === "Escape") setShowPinModal(false);
+            }}
+            placeholder="· · · ·"
+            className={cn(
+              "mb-1 w-full rounded-xl border px-4 py-3 text-center text-2xl font-black tracking-[0.5em] outline-none transition-colors",
+              voidPinError
+                ? "border-red-400 bg-red-50 focus:ring-2 focus:ring-red-400/30"
+                : "border-black/20 bg-black/[0.02] focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20"
+            )}
+          />
+          {voidPinError && (
+            <p className="mb-3 text-center text-sm font-semibold text-red-600">Falscher PIN</p>
+          )}
+          {!voidPinError && <div className="mb-3 h-5" />}
+          <button
+            data-testid="void-pin-confirm"
+            onClick={handlePinConfirm}
+            className="mb-2 w-full rounded-xl bg-red-600 py-3 font-bold text-white hover:bg-red-700 transition-colors"
+          >
+            Storno bestätigen
+          </button>
+          <button
+            onClick={() => setShowPinModal(false)}
+            className="w-full rounded-xl py-2.5 text-sm font-semibold text-black/45 hover:bg-black/5 transition-colors"
+          >
+            Abbrechen
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -844,24 +952,40 @@ export function SalesPage() {
   const change = cashCents - cartTotal;
   const showPayment = layout.toggles.zahlung;
 
-  // Auto-select the first visible size when the current selection becomes inactive
+  // Effective sizes: merge static defaults with salesSizes overrides, filter by visibility
+  const effectiveSizes = useMemo<EffectiveSizeConfig[]>(() => {
+    return SIZES
+      .map((s) => {
+        const ov = layout.salesSizes?.[s.id];
+        return {
+          ...s,
+          name:            ov?.label           ?? s.name,
+          priceCents:      ov?.priceCents       ?? s.priceCents,
+          backgroundColor: ov?.backgroundColor  ?? "#ffffff",
+          textColorMode:   ov?.textColorMode    ?? "auto",
+          imageDataUrl:    ov?.imageDataUrl     ?? null,
+        };
+      })
+      .filter((s) => layout.sizeVisibility[s.id] !== false);
+  }, [layout]);
+
+  // Auto-select first active size when selected size becomes inactive
   useEffect(() => {
     if (!selectedSizeId) return;
-    if (layout.sizeVisibility[selectedSizeId] === false) {
-      const first = SIZES.find((s) => layout.sizeVisibility[s.id] !== false);
-      setSelectedSizeId(first?.id ?? null);
+    if (!effectiveSizes.find((s) => s.id === selectedSizeId)) {
+      setSelectedSizeId(effectiveSizes[0]?.id ?? null);
     }
-  }, [layout.sizeVisibility, selectedSizeId]);
-  // When payment section is hidden, always allow booking (payment method check bypassed)
+  }, [effectiveSizes, selectedSizeId]);
+
   const canBook = cart.length > 0 && (showPayment ? (payment !== "bar" || cashCents >= cartTotal) : true);
-  const selectedSize = SIZES.find((s) => s.id === selectedSizeId) ?? null;
+  const selectedSize = effectiveSizes.find((s) => s.id === selectedSizeId) ?? null;
 
   const handleFlavorClick = useCallback(
     (flavor: FlavorConfig) => {
-      if (!selectedSizeId) return;
-      addToCart(selectedSizeId, flavor.id);
+      if (!selectedSizeId || !selectedSize) return;
+      addToCart(selectedSizeId, flavor.id, selectedSize.priceCents);
     },
-    [selectedSizeId, addToCart]
+    [selectedSizeId, selectedSize, addToCart]
   );
 
   const handlePaymentChange = useCallback((method: PaymentMethod) => {
@@ -894,7 +1018,6 @@ export function SalesPage() {
   return (
     <FlavorsCtx.Provider value={allFlavors}>
     <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
-      <div className="shrink-0 rounded-lg bg-primaq-500 px-3 py-1 text-center text-xs font-black text-white">LAYOUT SIZE ROW AKTIV</div>
       {/* Main area: [SizeRow + FlavorColumn] | [CartColumn] */}
       <div className="flex flex-1 min-h-0 gap-3 overflow-hidden">
         {/* Left: stacked selection area */}
@@ -902,7 +1025,7 @@ export function SalesPage() {
           <SizeRow
             selectedId={selectedSizeId}
             onSelect={setSelectedSizeId}
-            sizeVisibility={layout.sizeVisibility}
+            effectiveSizes={effectiveSizes}
           />
           <FlavorColumn
             selectedSize={selectedSize}

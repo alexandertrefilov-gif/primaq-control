@@ -1,14 +1,14 @@
 import { PageHeader } from "@/components/ui/page-header";
-import { YearCloseClient } from "@/features/mvp/year-close-client";
+import { JahresabschlussClient } from "@/features/pos/jahresabschluss-client";
 
 export default function JahresabschlussPage() {
   return (
     <>
       <PageHeader
         title="Jahresabschluss"
-        description="Jahresuebersicht fuer Steuerberater-Export, Einsaetze, Verkaeufe, Lager und MwSt-Auswertung."
+        description="Jahresübersicht für den Steuerberater – Umsatz, Zahlungsarten, Monatswerte und Artikel-Statistik mit Export."
       />
-      <YearCloseClient />
+      <JahresabschlussClient />
     </>
   );
 }
