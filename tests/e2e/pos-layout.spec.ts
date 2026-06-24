@@ -31,8 +31,8 @@ async function seedEmpty(page: import("@playwright/test").Page) {
 }
 
 async function addItem(page: import("@playwright/test").Page, size: string, flavor: string) {
-  await page.getByRole("button", { name: new RegExp(`^${size}`) }).click();
   await page.getByRole("button", { name: flavor, exact: true }).click();
+  await page.getByRole("button", { name: new RegExp(`^${size}`) }).click();
 }
 
 function isInViewport(
@@ -112,10 +112,9 @@ for (const { width, height, label } of VIEWPORTS) {
       const scrollPos = await page.evaluate(() => window.scrollY);
       expect(scrollPos).toBe(0);
 
-      // Größen-Buttons sichtbar
-      await expect(page.getByRole("button", { name: /^Klein/ })).toBeVisible();
-      await expect(page.getByRole("button", { name: /^Mittel/ })).toBeVisible();
-      await expect(page.getByRole("button", { name: /^Groß/ })).toBeVisible();
+      // Sorten-Buttons sichtbar
+      await expect(page.getByRole("button", { name: "Vanille", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Schokolade", exact: true })).toBeVisible();
     });
   }
 }

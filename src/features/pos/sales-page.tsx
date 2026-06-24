@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef, createContext, useContext } from "react";
-import { Check, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
+import { Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
 import { usePosStore } from "./use-pos-store";
@@ -68,6 +68,7 @@ function ProductImage({
     <img
       src={imgSrc}
       alt={alt}
+      draggable={false}
       className={className}
       style={style}
       onError={() => {
@@ -77,6 +78,26 @@ function ProductImage({
           setFailed(true);
         }
       }}
+    />
+  );
+}
+
+// ── Unified flavor image renderer ────────────────────────────────────────────
+
+function FlavorImage({ src, fallbackSrc, alt = "", scale = 100, className }: {
+  src?: string;
+  fallbackSrc?: string;
+  alt?: string;
+  scale?: number;
+  className?: string;
+}) {
+  return (
+    <ProductImage
+      src={src}
+      fallbackSrc={fallbackSrc}
+      alt={alt}
+      className={cn("block h-full w-full object-contain", className)}
+      style={scale !== 100 ? { transform: `scale(${scale / 100})`, transformOrigin: "center" } : undefined}
     />
   );
 }
@@ -126,43 +147,28 @@ function FlavorCard({
           <div className="absolute inset-0" style={{ background: flavor.backgroundColor }} />
         )}
 
-        {/* Mix icons: each at the geometric centroid of its triangle */}
+        {/* Mix icons: clipped containers at triangle centroids to prevent overflow */}
         {isMix && part1?.imageSrc && (
           <div
-            className="pointer-events-none absolute z-10"
-            style={{ left: "33%", top: "33%", transform: "translate(-50%, -50%)" }}
+            className="pointer-events-none absolute overflow-hidden"
+            style={{ width: "38%", height: "38%", left: "32%", top: "35%", transform: "translate(-50%, -50%)" }}
           >
-            <ProductImage
-              src={part1.imageSrc}
-              fallbackSrc={part1.fallbackImageSrc}
-              alt=""
-              className="h-16 w-16 object-contain drop-shadow-md"
-            />
+            <FlavorImage src={part1.imageSrc} fallbackSrc={part1.fallbackImageSrc} scale={part1.imageScale ?? 100} className="drop-shadow-md" />
           </div>
         )}
         {isMix && part2?.imageSrc && (
           <div
-            className="pointer-events-none absolute z-10"
-            style={{ left: "67%", top: "67%", transform: "translate(-50%, -50%)" }}
+            className="pointer-events-none absolute overflow-hidden"
+            style={{ width: "38%", height: "38%", left: "68%", top: "65%", transform: "translate(-50%, -50%)" }}
           >
-            <ProductImage
-              src={part2.imageSrc}
-              fallbackSrc={part2.fallbackImageSrc}
-              alt=""
-              className="h-16 w-16 object-contain drop-shadow-md"
-            />
+            <FlavorImage src={part2.imageSrc} fallbackSrc={part2.fallbackImageSrc} scale={part2.imageScale ?? 100} className="drop-shadow-md" />
           </div>
         )}
 
-        {/* Regular product image: large and centered */}
+        {/* Regular product image: fills inset area, clipped to avoid leaking over ring */}
         {!isMix && flavor.imageSrc && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <ProductImage
-              src={flavor.imageSrc}
-              fallbackSrc={flavor.fallbackImageSrc}
-              alt=""
-              className="h-[82%] w-[82%] object-contain drop-shadow-xl"
-            />
+          <div className="pointer-events-none absolute inset-[10%] overflow-hidden">
+            <FlavorImage src={flavor.imageSrc} fallbackSrc={flavor.fallbackImageSrc} scale={flavor.imageScale ?? 100} className="drop-shadow-xl" />
           </div>
         )}
 
@@ -211,43 +217,26 @@ function CartItemBadge({ item, large }: { item: CartItem; large?: boolean }) {
       ) : (
         <div className="absolute inset-0" style={{ background: flavor.backgroundColor }} />
       )}
-      {/* Mix icons: each anchored at the geometric centroid of its triangle */}
+      {/* Mix icons: clipped containers at triangle centroids */}
       {isMix && part1?.imageSrc && (
         <div
-          className="absolute z-10"
-          style={{ left: "33%", top: "33%", transform: "translate(-50%, -50%)" }}
+          className="absolute overflow-hidden"
+          style={{ width: "38%", height: "38%", left: "32%", top: "35%", transform: "translate(-50%, -50%)" }}
         >
-          <ProductImage
-            src={part1.imageSrc}
-            fallbackSrc={part1.fallbackImageSrc}
-            alt=""
-            className={large ? "h-7 w-7 object-contain drop-shadow-sm" : "h-5 w-5 object-contain drop-shadow-sm"}
-          />
+          <FlavorImage src={part1.imageSrc} fallbackSrc={part1.fallbackImageSrc} scale={part1.imageScale ?? 100} className="drop-shadow-sm" />
         </div>
       )}
       {isMix && part2?.imageSrc && (
         <div
-          className="absolute z-10"
-          style={{ left: "67%", top: "67%", transform: "translate(-50%, -50%)" }}
+          className="absolute overflow-hidden"
+          style={{ width: "38%", height: "38%", left: "68%", top: "65%", transform: "translate(-50%, -50%)" }}
         >
-          <ProductImage
-            src={part2.imageSrc}
-            fallbackSrc={part2.fallbackImageSrc}
-            alt=""
-            className={large ? "h-7 w-7 object-contain drop-shadow-sm" : "h-5 w-5 object-contain drop-shadow-sm"}
-          />
+          <FlavorImage src={part2.imageSrc} fallbackSrc={part2.fallbackImageSrc} scale={part2.imageScale ?? 100} className="drop-shadow-sm" />
         </div>
       )}
-      {!isMix && (
-        <div className="relative z-10 flex h-full w-full items-center justify-center">
-          {flavor.imageSrc && (
-            <ProductImage
-              src={flavor.imageSrc}
-              fallbackSrc={flavor.fallbackImageSrc}
-              alt=""
-              className={large ? "h-9 w-9 object-contain drop-shadow-sm" : "h-6 w-6 object-contain drop-shadow-sm"}
-            />
-          )}
+      {!isMix && flavor.imageSrc && (
+        <div className="absolute inset-[10%] overflow-hidden">
+          <FlavorImage src={flavor.imageSrc} fallbackSrc={flavor.fallbackImageSrc} scale={flavor.imageScale ?? 100} className="drop-shadow-sm" />
         </div>
       )}
     </div>
@@ -330,85 +319,119 @@ function FlavorGroup({
   );
 }
 
-// ── Size row – horizontal strip above the flavor grid ────────────────────────
+// ── Size picker modal – appears after flavor tap ──────────────────────────────
 
-function SizeRow({
-  selectedId,
-  onSelect,
-  effectiveSizes,
+function SizePickerModal({
+  flavor,
+  sizes,
+  onPick,
+  onClose,
 }: {
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  effectiveSizes: EffectiveSizeConfig[];
+  flavor: FlavorConfig;
+  sizes: EffectiveSizeConfig[];
+  onPick: (sizeId: string, priceCents: number) => void;
+  onClose: () => void;
 }) {
-  if (effectiveSizes.length === 0) {
-    return (
-      <div className="shrink-0 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-center">
-        <p className="text-sm font-bold text-amber-700">
-          Keine Verkaufsgröße aktiv. Bitte in Einstellungen → Verkaufsoberfläche mindestens eine Größe aktivieren.
-        </p>
-      </div>
-    );
-  }
+  const allFlavors = useFlavorList();
+  const isMix = !!flavor.isMix && !!flavor.mixColors;
+  const part1 = isMix && flavor.mixParts ? allFlavors.find((f) => f.id === flavor.mixParts![0]) : null;
+  const part2 = isMix && flavor.mixParts ? allFlavors.find((f) => f.id === flavor.mixParts![1]) : null;
 
   return (
-    <div className="shrink-0">
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-black/40">
-        Größe wählen
-      </p>
-      <div className="flex gap-3">
-        {effectiveSizes.map((size) => {
-          const isActive = selectedId === size.id;
-          const textColor = computeTextColor(size.textColorMode, size.backgroundColor);
-          return (
-            <button
-              key={size.id}
-              onClick={() => onSelect(size.id)}
-              className={cn(
-                "relative flex h-[160px] flex-1 flex-col overflow-hidden rounded-2xl border-2 shadow transition-all select-none",
-                isActive
-                  ? "border-primaq-500 shadow-lg shadow-primaq-500/20 ring-2 ring-primaq-500/30"
-                  : "border-transparent hover:border-primaq-300 active:scale-[0.97]"
-              )}
-              style={{ backgroundColor: size.backgroundColor }}
-            >
-              {isActive && (
-                <span className="absolute right-2 top-2 z-10 grid h-5 w-5 place-items-center rounded-full bg-primaq-500 text-white">
-                  <Check className="h-3 w-3" />
-                </span>
-              )}
-              {/* Image zone: 72 % of button height; overflow-hidden keeps zoom within zone */}
-              <div className="flex w-full items-center justify-center overflow-hidden" style={{ height: "72%" }}>
-                {size.imageDataUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={size.imageDataUrl}
-                    alt=""
-                    className="block h-[95%] w-[95%] object-contain drop-shadow-lg"
-                    style={{ transform: `scale(${(size.imageScale ?? 100) / 100})`, transformOrigin: "center" }}
-                  />
-                ) : (
-                  <ProductImage
-                    src={size.imageSrc}
-                    fallbackSrc={size.fallbackImageSrc}
-                    alt=""
-                    className="block h-[95%] w-[95%] object-contain drop-shadow-lg"
-                    style={{ transform: `scale(${(size.imageScale ?? 100) / 100})`, transformOrigin: "center" }}
-                  />
-                )}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px]"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm mx-4 overflow-hidden rounded-3xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header: flavor icon + name */}
+        <div className="flex items-center gap-4 border-b border-black/8 px-5 py-4">
+          <div
+            className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full shadow-md"
+            style={{ background: flavor.backgroundColor }}
+          >
+            {isMix && flavor.mixColors && (
+              <>
+                <div className="absolute inset-0" style={{ clipPath: "polygon(0 0, 100% 0, 0 100%)", background: flavor.mixColors[0] }} />
+                <div className="absolute inset-0" style={{ clipPath: "polygon(100% 0, 100% 100%, 0 100%)", background: flavor.mixColors[1] }} />
+                <div className="absolute inset-0 bg-black/10" />
+              </>
+            )}
+            {isMix && part1?.imageSrc && (
+              <div className="pointer-events-none absolute overflow-hidden"
+                style={{ width: "38%", height: "38%", left: "32%", top: "35%", transform: "translate(-50%, -50%)" }}>
+                <FlavorImage src={part1.imageSrc} fallbackSrc={part1.fallbackImageSrc} scale={part1.imageScale ?? 100} />
               </div>
-              {/* Text zone: 28 % of button height */}
-              <div className="flex flex-col items-center justify-center" style={{ height: "28%" }}>
-                <span className="text-xl font-black leading-tight" style={{ color: textColor }}>
-                  {size.name}
-                </span>
-                <span className="text-sm font-bold leading-tight" style={{ color: textColor, opacity: 0.75 }}>
-                  {fmt(size.priceCents)}
-                </span>
+            )}
+            {isMix && part2?.imageSrc && (
+              <div className="pointer-events-none absolute overflow-hidden"
+                style={{ width: "38%", height: "38%", left: "68%", top: "65%", transform: "translate(-50%, -50%)" }}>
+                <FlavorImage src={part2.imageSrc} fallbackSrc={part2.fallbackImageSrc} scale={part2.imageScale ?? 100} />
               </div>
-            </button>
-          );
-        })}
+            )}
+            {!isMix && flavor.imageSrc && (
+              <div className="pointer-events-none absolute inset-[10%] overflow-hidden">
+                <FlavorImage src={flavor.imageSrc} fallbackSrc={flavor.fallbackImageSrc} scale={flavor.imageScale ?? 100} />
+              </div>
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-black/40">Größe wählen</p>
+            <p className="truncate text-xl font-black leading-tight text-black/85">{flavor.name}</p>
+          </div>
+        </div>
+
+        {/* Size buttons */}
+        <div className="space-y-2 p-3">
+          {sizes.length === 0 ? (
+            <p className="py-4 text-center text-sm font-semibold text-black/40">
+              Keine Größe aktiv. Bitte in Einstellungen aktivieren.
+            </p>
+          ) : (
+            sizes.map((size) => {
+              const textColor = computeTextColor(size.textColorMode, size.backgroundColor);
+              return (
+                <button
+                  key={size.id}
+                  onClick={() => onPick(size.id, size.priceCents)}
+                  className="flex h-[88px] w-full items-center gap-3 overflow-hidden rounded-2xl px-4 transition-all active:scale-[0.97] hover:brightness-95 select-none"
+                  style={{ backgroundColor: size.backgroundColor }}
+                >
+                  <div className="flex h-[72%] w-14 shrink-0 items-center justify-center overflow-hidden">
+                    {size.imageDataUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={size.imageDataUrl} alt=""
+                        className="h-full w-full object-contain drop-shadow"
+                        style={{ transform: `scale(${(size.imageScale ?? 100) / 100})`, transformOrigin: "center" }} />
+                    ) : (
+                      <ProductImage src={size.imageSrc} fallbackSrc={size.fallbackImageSrc} alt=""
+                        className="h-full w-full object-contain drop-shadow"
+                        style={{ transform: `scale(${(size.imageScale ?? 100) / 100})`, transformOrigin: "center" }} />
+                    )}
+                  </div>
+                  <span className="flex-1 text-left text-2xl font-black leading-none" style={{ color: textColor }}>
+                    {size.name}
+                  </span>
+                  <span className="shrink-0 text-2xl font-black tabular-nums" style={{ color: textColor, opacity: 0.75 }}>
+                    {fmt(size.priceCents)}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {/* Cancel */}
+        <div className="px-3 pb-3">
+          <button
+            onClick={onClose}
+            className="w-full rounded-2xl bg-black/5 py-3 text-base font-semibold text-black/50 hover:bg-black/10 transition-colors"
+          >
+            Abbrechen
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -417,11 +440,9 @@ function SizeRow({
 // ── Middle column – flavors ───────────────────────────────────────────────────
 
 function FlavorColumn({
-  selectedSize,
   onFlavorClick,
   cardSize,
 }: {
-  selectedSize: SizeConfig | null;
   onFlavorClick: (flavor: FlavorConfig) => void;
   cardSize: number;
 }) {
@@ -430,24 +451,11 @@ function FlavorColumn({
 
   return (
     <div className="flex flex-1 flex-col rounded-2xl bg-white shadow min-h-0">
-      <div className="shrink-0 px-3 pt-3 pb-2 flex items-baseline gap-2">
+      <div className="shrink-0 px-3 pt-3 pb-2">
         <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">
           Sorte wählen
         </p>
-        {selectedSize && (
-          <p className="text-sm font-bold text-primaq-500 ml-auto">
-            {selectedSize.name} – {fmt(selectedSize.priceCents)}
-          </p>
-        )}
       </div>
-      {!selectedSize ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center px-4">
-          <div className="grid h-14 w-14 place-items-center rounded-full bg-primaq-100">
-            <ShoppingCart className="h-7 w-7 text-primaq-500" />
-          </div>
-          <p className="text-base font-bold text-black/40">Bitte oben eine Größe wählen</p>
-        </div>
-      ) : (
       <div className="flex-1 overflow-y-auto min-h-0 px-3 pb-3 space-y-3">
         {groups.map(([groupId, groupLabel]) => {
           const flavors = allFlavors.filter((f) => f.group === groupId);
@@ -462,7 +470,6 @@ function FlavorColumn({
           );
         })}
       </div>
-      )}
     </div>
   );
 }
@@ -916,7 +923,7 @@ export function SalesPage() {
   const { allFlavors, hydrated: flavorsHydrated } = usePosFlavorStore();
   const { active: layout, hydrated: layoutHydrated } = usePosLayoutStore();
 
-  const [selectedSizeId, setSelectedSizeId] = useState<string | null>(null);
+  const [pendingFlavor, setPendingFlavor] = useState<FlavorConfig | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("bar");
   const [cashInput, setCashInput] = useState("");
   const [showQr, setShowQr] = useState(false);
@@ -943,24 +950,17 @@ export function SalesPage() {
       .filter((s) => layout.sizeVisibility[s.id] !== false);
   }, [layout]);
 
-  // Auto-select first active size when selected size becomes inactive
-  useEffect(() => {
-    if (!selectedSizeId) return;
-    if (!effectiveSizes.find((s) => s.id === selectedSizeId)) {
-      setSelectedSizeId(effectiveSizes[0]?.id ?? null);
-    }
-  }, [effectiveSizes, selectedSizeId]);
-
   const canBook = cart.length > 0 && (showPayment ? (payment !== "bar" || cashCents >= cartTotal) : true);
-  const selectedSize = effectiveSizes.find((s) => s.id === selectedSizeId) ?? null;
 
-  const handleFlavorClick = useCallback(
-    (flavor: FlavorConfig) => {
-      if (!selectedSizeId || !selectedSize) return;
-      addToCart(selectedSizeId, flavor.id, selectedSize.priceCents);
-    },
-    [selectedSizeId, selectedSize, addToCart]
-  );
+  const handleFlavorClick = useCallback((flavor: FlavorConfig) => {
+    setPendingFlavor(flavor);
+  }, []);
+
+  const handleSizePick = useCallback((sizeId: string, priceCents: number) => {
+    if (!pendingFlavor) return;
+    addToCart(sizeId, pendingFlavor.id, priceCents);
+    setPendingFlavor(null);
+  }, [pendingFlavor, addToCart]);
 
   const handlePaymentChange = useCallback((method: PaymentMethod) => {
     setPayment(method);
@@ -994,15 +994,9 @@ export function SalesPage() {
     <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
       {/* Main area: [SizeRow + FlavorColumn] | [CartColumn] */}
       <div className="flex flex-1 min-h-0 gap-3 overflow-hidden">
-        {/* Left: stacked selection area */}
-        <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-hidden">
-          <SizeRow
-            selectedId={selectedSizeId}
-            onSelect={setSelectedSizeId}
-            effectiveSizes={effectiveSizes}
-          />
+        {/* Left: flavor selection – full height */}
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
           <FlavorColumn
-            selectedSize={selectedSize}
             onFlavorClick={handleFlavorClick}
             cardSize={layout.flavorCardSize}
           />
@@ -1036,6 +1030,16 @@ export function SalesPage() {
           onVoid={voidLastOrder}
           showLastBooking={layout.toggles["live-monitor"]}
           showStats={layout.toggles["verkaufszaehler"]}
+        />
+      )}
+
+      {/* Size picker – appears after flavor tap */}
+      {pendingFlavor && (
+        <SizePickerModal
+          flavor={pendingFlavor}
+          sizes={effectiveSizes}
+          onPick={handleSizePick}
+          onClose={() => setPendingFlavor(null)}
         />
       )}
 

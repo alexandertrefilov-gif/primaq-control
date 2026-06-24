@@ -63,8 +63,8 @@ test("1: Klein Vanille hinzufügen – Summe korrekt", async ({ page }) => {
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  await clickSize(page, "Klein");
   await clickFlavor(page, "Vanille");
+  await clickSize(page, "Klein");
 
   await expect(page.getByText("Klein Vanille")).toBeVisible();
   // Cart total shows 2,50 € as the Gesamt value
@@ -79,14 +79,14 @@ test("2: Klein + Mittel + Groß – Gesamtsumme 11,00 €", async ({ page }) => 
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  await clickSize(page, "Klein");
   await clickFlavor(page, "Vanille");
+  await clickSize(page, "Klein");
 
-  await clickSize(page, "Mittel");
   await clickFlavor(page, "Schokolade");
+  await clickSize(page, "Mittel");
 
-  await clickSize(page, "Groß");
   await clickFlavor(page, "Mix Vanille/Schokolade");
+  await clickSize(page, "Groß");
 
   // Gesamt: 2,50 + 3,50 + 5,00 = 11,00
   await expect(page.getByText("11,00 €")).toBeVisible();
@@ -100,8 +100,8 @@ test("3: Barzahlung 20 € → Rückgeld 9,00 €", async ({ page }) => {
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  await clickSize(page, "Groß");
   await clickFlavor(page, "Cheesecake");
+  await clickSize(page, "Groß");
   // 5,00 €
 
   // Zahlungsart Bar ist Default – Schnellbutton 10 €
@@ -123,8 +123,8 @@ test("4: Bestellung buchen → Warenkorb leer, Tagesumsatz korrekt", async ({ pa
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  await clickSize(page, "Klein");
   await clickFlavor(page, "Erdbeere");
+  await clickSize(page, "Klein");
 
   await page.getByRole("button", { name: "5€" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
@@ -148,8 +148,8 @@ test("5: Kartenzahlung buchen → cardCents korrekt", async ({ page }) => {
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  await clickSize(page, "Mittel");
   await clickFlavor(page, "Vanille");
+  await clickSize(page, "Mittel");
 
   await page.getByRole("button", { name: "Karte" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
@@ -168,8 +168,8 @@ test("6: QR-Popup öffnen und Zahlung bestätigen", async ({ page }) => {
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  await clickSize(page, "Groß");
   await clickFlavor(page, "Mix Cheesecake/Erdbeere");
+  await clickSize(page, "Groß");
 
   await page.getByRole("button", { name: "QR" }).click();
   await page.getByRole("button", { name: "QR anzeigen" }).click();
@@ -194,20 +194,20 @@ test("7: Drei Buchungen – Gesamtumsatz korrekt summiert", async ({ page }) => 
   await waitLoaded(page);
 
   // Bar: 2,50
-  await clickSize(page, "Klein");
   await clickFlavor(page, "Vanille");
+  await clickSize(page, "Klein");
   await page.getByRole("button", { name: "5€" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   // Karte: 3,50
-  await clickSize(page, "Mittel");
   await clickFlavor(page, "Schokolade");
+  await clickSize(page, "Mittel");
   await page.getByRole("button", { name: "Karte" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   // Karte: 5,00
-  await clickSize(page, "Groß");
   await clickFlavor(page, "Cheesecake");
+  await clickSize(page, "Groß");
   await page.getByRole("button", { name: "Karte" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
@@ -227,8 +227,8 @@ test("8: Tagesabschluss zeigt Umsatz aus /verkauf", async ({ page }) => {
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  await clickSize(page, "Groß");
   await clickFlavor(page, "Vanille");
+  await clickSize(page, "Groß");
   await page.getByRole("button", { name: "Karte" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
@@ -247,8 +247,8 @@ test("9: Reload – Tagesumsatz bleibt erhalten", async ({ page }) => {
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  await clickSize(page, "Mittel");
   await clickFlavor(page, "Erdbeere");
+  await clickSize(page, "Mittel");
   await page.getByRole("button", { name: "Karte" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
@@ -268,12 +268,12 @@ test("10: Menge erhöhen, verringern, Artikel entfernen", async ({ page }) => {
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  await clickSize(page, "Klein");
   await clickFlavor(page, "Vanille");
+  await clickSize(page, "Klein");
 
   // Gleicher Artikel nochmal → Menge 2
-  await clickSize(page, "Klein");
   await clickFlavor(page, "Vanille");
+  await clickSize(page, "Klein");
 
   await expect(page.getByText("2").first()).toBeVisible(); // Menge 2
   // Cart total: 2 × 2,50 = 5,00 €
@@ -318,5 +318,5 @@ test("12: Navigation zwischen Verkauf und Tagesabschluss (mit Admin)", async ({ 
 
   await page.getByRole("link", { name: "Verkauf" }).click();
   await waitLoaded(page);
-  await expect(page.getByText("Größe wählen").first()).toBeVisible();
+  await expect(page.getByText("Sorte wählen").first()).toBeVisible();
 });

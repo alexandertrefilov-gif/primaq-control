@@ -55,8 +55,8 @@ test.describe("Visual: Warenkorb mit 10 Artikeln", () => {
 
     // Add 10 items
     for (const [size, flavor] of COMBOS) {
-      await clickSize(page, size);
       await clickFlavor(page, flavor);
+      await clickSize(page, size);
     }
 
     // Screenshot: 10 items loaded
@@ -98,12 +98,12 @@ test.describe("Visual: Warenkorb mit 10 Artikeln", () => {
     await waitLoaded(page);
 
     // Add 3 items so the list isn't empty after deletion
-    await clickSize(page, "Klein");
     await clickFlavor(page, "Vanille");
-    await clickSize(page, "Mittel");
+    await clickSize(page, "Klein");
     await clickFlavor(page, "Schokolade");
-    await clickSize(page, "Groß");
+    await clickSize(page, "Mittel");
     await clickFlavor(page, "Cheesecake");
+    await clickSize(page, "Groß");
 
     await page.screenshot({ path: `${DIR}/02a-vor-delete.png` });
 
@@ -132,8 +132,8 @@ test.describe("Visual: Warenkorb mit 10 Artikeln", () => {
     await page.goto("/verkauf");
     await waitLoaded(page);
 
-    await clickSize(page, "Klein");
     await clickFlavor(page, "Vanille");
+    await clickSize(page, "Klein");
 
     // First tap
     const firstItem = page.locator("li").first();
@@ -159,10 +159,10 @@ test.describe("Visual: Warenkorb mit 10 Artikeln", () => {
     await waitLoaded(page);
 
     // Add 4 items
-    await clickSize(page, "Klein");   await clickFlavor(page, "Vanille");
-    await clickSize(page, "Mittel");  await clickFlavor(page, "Schokolade");
-    await clickSize(page, "Groß");    await clickFlavor(page, "Cheesecake");
-    await clickSize(page, "Klein");   await clickFlavor(page, "Erdbeere");
+    await clickFlavor(page, "Vanille");    await clickSize(page, "Klein");
+    await clickFlavor(page, "Schokolade"); await clickSize(page, "Mittel");
+    await clickFlavor(page, "Cheesecake"); await clickSize(page, "Groß");
+    await clickFlavor(page, "Erdbeere");   await clickSize(page, "Klein");
 
     // First tap on "Leeren"
     await page.getByRole("button", { name: "Leeren" }).click();

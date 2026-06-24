@@ -62,8 +62,8 @@ test("Admin 2: Bottom-Bar zeigt letzte Buchung nach Bestellung", async ({ page }
   await waitLoaded(page);
 
   // Book Klein Vanille (Bar, 5 €)
-  await page.getByRole("button", { name: /^Klein/ }).click();
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
+  await page.getByRole("button", { name: /^Klein/ }).click();
   await page.getByRole("button", { name: "5€" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
@@ -137,8 +137,8 @@ test("Admin 7: Letzte Buchung stornieren – Daily auf 0 reduziert", async ({ pa
   await waitLoaded(page);
 
   // Book one order: Klein Vanille Bar (2,50 €)
-  await page.getByRole("button", { name: /^Klein/ }).click();
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
+  await page.getByRole("button", { name: /^Klein/ }).click();
   await page.getByRole("button", { name: "5€" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
@@ -170,14 +170,14 @@ test("Admin 8: Storno letzter von zwei Buchungen – erste bleibt erhalten", asy
   await waitLoaded(page);
 
   // Buchung 1: Klein Vanille Bar (2,50 €)
-  await page.getByRole("button", { name: /^Klein/ }).click();
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
+  await page.getByRole("button", { name: /^Klein/ }).click();
   await page.getByRole("button", { name: "5€" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   // Buchung 2: Mittel Schokolade Karte (3,50 €)
-  await page.getByRole("button", { name: /^Mittel/ }).click();
   await page.getByRole("button", { name: "Schokolade", exact: true }).click();
+  await page.getByRole("button", { name: /^Mittel/ }).click();
   await page.getByRole("button", { name: "Karte" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 

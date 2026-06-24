@@ -21,6 +21,7 @@ export type FlavorConfig = {
   backgroundColor: string;
   textColor: string;
   isActive?: boolean;
+  imageScale?: number; // zoom 50–250, default 100
   isMix?: true;
   mixColors?: [string, string];
   mixParts?: [string, string];  // IDs of the two component flavors (for mix card images)

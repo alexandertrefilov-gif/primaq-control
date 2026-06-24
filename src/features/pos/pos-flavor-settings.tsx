@@ -1,11 +1,77 @@
 "use client";
 
 import { useCallback, useId, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MACHINE_GROUP_LABELS } from "./pos-config";
 import { usePosFlavorStore } from "./use-pos-flavor-store";
 import type { MutableFlavor } from "./use-pos-flavor-store";
+
+// ── Image compression ─────────────────────────────────────────────────────────
+
+const MAX_IMG_PX = 512;       // longest edge after resize
+const IMG_QUALITY = 0.85;
+const MAX_BYTES = 500 * 1024; // 500 KB hard cap (actual bytes)
+// base64 chars for MAX_BYTES: each 3 bytes → 4 chars
+const MAX_B64_CHARS = Math.ceil(MAX_BYTES * (4 / 3));
+
+type CompressResult = { dataUrl: string; error?: string };
+
+async function compressImage(file: File): Promise<CompressResult> {
+  // SVG: store as-is, but reject if too large
+  if (file.type === "image/svg+xml") {
+    if (file.size > 100 * 1024) {
+      return { dataUrl: "", error: "SVG ist zu groß (max. 100 KB). Bitte als PNG oder WebP exportieren." };
+    }
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onerror = () => resolve({ dataUrl: "", error: "Bild konnte nicht gelesen werden." });
+      reader.onload = (e) => resolve({ dataUrl: e.target?.result as string });
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Raster: resize via canvas → WebP (or JPEG fallback)
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve({ dataUrl: "", error: "Bild konnte nicht gelesen werden." });
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => resolve({ dataUrl: "", error: "Bild konnte nicht geladen werden." });
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > MAX_IMG_PX || height > MAX_IMG_PX) {
+          if (width >= height) {
+            height = Math.round((height / width) * MAX_IMG_PX);
+            width = MAX_IMG_PX;
+          } else {
+            width = Math.round((width / height) * MAX_IMG_PX);
+            height = MAX_IMG_PX;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve({ dataUrl: "", error: "Canvas nicht verfügbar." });
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // WebP preferred; PNG as fallback (preserves transparency, unlike JPEG)
+        let dataUrl = canvas.toDataURL("image/webp", IMG_QUALITY);
+        if (!dataUrl.startsWith("data:image/webp")) {
+          dataUrl = canvas.toDataURL("image/png");
+        }
+
+        if (dataUrl.length > MAX_B64_CHARS) {
+          return resolve({ dataUrl: "", error: "Bild ist zu groß. Bitte ein kleineres Bild verwenden." });
+        }
+        resolve({ dataUrl });
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -35,27 +101,24 @@ function uid() {
 // ── Mini preview card ─────────────────────────────────────────────────────────
 
 function FlavorPreviewCard({ flavor }: { flavor: MutableFlavor }) {
+  const scale = (flavor.imageScale ?? 100) / 100;
   return (
     <div
-      className="relative flex h-20 w-16 flex-col items-center justify-end overflow-hidden rounded-xl shadow"
+      className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full shadow-md"
       style={{ background: flavor.backgroundColor }}
     >
       {flavor.imageSrc && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={flavor.imageSrc}
-          alt=""
-          className="absolute inset-0 m-auto h-12 w-12 object-contain drop-shadow"
-        />
+        <div className="absolute inset-[10%] overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={flavor.imageSrc}
+            alt=""
+            draggable={false}
+            className="block h-full w-full object-contain drop-shadow"
+            style={scale !== 1 ? { transform: `scale(${scale})`, transformOrigin: "center" } : undefined}
+          />
+        </div>
       )}
-      <div className="relative z-10 w-full bg-black/25 px-1 py-1 text-center backdrop-blur-[2px]">
-        <span
-          className="block truncate text-[9px] font-black leading-tight"
-          style={{ color: flavor.textColor, textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
-        >
-          {flavor.displayName?.trim() || flavor.name || "Sorte"}
-        </span>
-      </div>
     </div>
   );
 }
@@ -100,6 +163,7 @@ function FlavorEditForm({
   onRemove: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [uploadWarning, setUploadWarning] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formId = useId();
 
@@ -109,16 +173,17 @@ function FlavorEditForm({
   );
 
   const handleImageUpload = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const base64 = ev.target?.result as string;
-        set({ imageSrc: base64 });
-      };
-      reader.readAsDataURL(file);
       e.target.value = "";
+      if (!file) return;
+      setUploadWarning(null);
+      const result = await compressImage(file);
+      if (result.error) {
+        setUploadWarning(result.error);
+        return;
+      }
+      set({ imageSrc: result.dataUrl });
     },
     [set]
   );
@@ -275,12 +340,15 @@ function FlavorEditForm({
             <div className="flex items-center gap-3">
               {flavor.imageSrc ? (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={flavor.imageSrc}
-                    alt=""
-                    className="h-12 w-12 rounded-xl border border-black/10 object-contain p-1 bg-black/5"
-                  />
+                  <div
+                    className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl shadow-sm"
+                    style={{ background: flavor.backgroundColor }}
+                  >
+                    <div className="absolute inset-[8%]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={flavor.imageSrc} alt="" draggable={false} className="block h-full w-full object-contain" />
+                    </div>
+                  </div>
                   <button
                     onClick={() => set({ imageSrc: undefined })}
                     className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-semibold text-black/50 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
@@ -304,6 +372,44 @@ function FlavorEditForm({
                 onChange={handleImageUpload}
               />
             </div>
+            {uploadWarning && (
+              <p className="mt-2 text-xs font-semibold text-red-600">{uploadWarning}</p>
+            )}
+          </div>
+
+          {/* Image zoom */}
+          <div>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-black/40">Bild-Zoom</p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => set({ imageScale: Math.max(50, (flavor.imageScale ?? 100) - 10) })}
+                disabled={(flavor.imageScale ?? 100) <= 50}
+                className="grid h-7 w-7 place-items-center rounded-lg border border-black/15 bg-white text-base font-black text-black/60 shadow-sm hover:bg-black/5 disabled:opacity-30 transition-colors"
+              >
+                −
+              </button>
+              <span className="w-14 text-center text-sm font-bold tabular-nums text-black/70">
+                {flavor.imageScale ?? 100} %
+              </span>
+              <button
+                onClick={() => set({ imageScale: Math.min(250, (flavor.imageScale ?? 100) + 10) })}
+                disabled={(flavor.imageScale ?? 100) >= 250}
+                className="grid h-7 w-7 place-items-center rounded-lg border border-black/15 bg-white text-base font-black text-black/60 shadow-sm hover:bg-black/5 disabled:opacity-30 transition-colors"
+              >
+                +
+              </button>
+              {(flavor.imageScale ?? 100) !== 100 && (
+                <button
+                  onClick={() => set({ imageScale: 100 })}
+                  className="rounded-lg border border-black/15 bg-white px-2 py-1 text-[10px] font-semibold text-black/40 shadow-sm hover:bg-black/5 transition-colors"
+                >
+                  Standard
+                </button>
+              )}
+            </div>
+            {flavor.imageSrc && (flavor.imageScale ?? 100) === 100 && (
+              <p className="mt-1 text-[10px] text-black/35">Für Bilder mit transparentem Rand: Zoom erhöhen.</p>
+            )}
           </div>
 
           {/* Machine assignment */}
@@ -375,6 +481,7 @@ function MachineGroupSection({
               backgroundColor: "#FFF3B0",
               textColor: "#5C4200",
               isActive: true,
+              imageScale: 100,
             })
           }
           className="flex items-center gap-1 rounded-lg border border-black/15 px-2.5 py-1 text-xs font-semibold text-black/50 hover:border-primaq-400 hover:text-primaq-700 transition-colors"
@@ -415,7 +522,7 @@ export function PosFlavorSettings({
 }: {
   legacySettings?: React.ReactNode;
 }) {
-  const { base, hydrated, update, add, remove } = usePosFlavorStore();
+  const { base, hydrated, update, add, remove, storageError, clearStorageError } = usePosFlavorStore();
   const [legacyOpen, setLegacyOpen] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("primaq-legacy-settings-open") === "1";
@@ -436,24 +543,68 @@ export function PosFlavorSettings({
 
   const groups = Object.entries(MACHINE_GROUP_LABELS);
 
+  // Base64 chars that correspond to MAX_BYTES actual data
+  const hasOversizedImages = base.some(
+    (f) => f.imageSrc?.startsWith("data:") && f.imageSrc.length > MAX_B64_CHARS
+  );
+
+  const handleCleanupImages = () => {
+    base.forEach((f) => {
+      if (f.imageSrc?.startsWith("data:") && f.imageSrc.length > MAX_B64_CHARS) {
+        update(f.id, { imageSrc: undefined });
+      }
+    });
+  };
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
+      {/* Storage error banner */}
+      {storageError && (
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+          <p className="flex-1 text-sm font-semibold text-red-700">{storageError}</p>
+          <button
+            onClick={clearStorageError}
+            className="mt-0.5 shrink-0 text-red-400 hover:text-red-600 transition-colors"
+            aria-label="Fehler schließen"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Oversized image cleanup */}
+      {hasOversizedImages && (
+        <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-800">
+            Übergroße Bilder gefunden (über 500 KB). Diese können den Speicher füllen.
+          </p>
+          <button
+            onClick={handleCleanupImages}
+            className="ml-4 shrink-0 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-100 transition-colors"
+          >
+            Bildspeicher bereinigen
+          </button>
+        </div>
+      )}
+
       {/* Flavor groups */}
-      {groups.map(([groupId, groupLabel]) => {
-        const groupFlavors = base.filter((f) => f.group === groupId);
-        return (
-          <MachineGroupSection
-            key={groupId}
-            groupId={groupId}
-            groupLabel={groupLabel}
-            flavors={groupFlavors}
-            allFlavors={base}
-            onUpdate={update}
-            onRemove={remove}
-            onAdd={add}
-          />
-        );
-      })}
+      <div className="space-y-8">
+        {groups.map(([groupId, groupLabel]) => {
+          const groupFlavors = base.filter((f) => f.group === groupId);
+          return (
+            <MachineGroupSection
+              key={groupId}
+              groupId={groupId}
+              groupLabel={groupLabel}
+              flavors={groupFlavors}
+              allFlavors={base}
+              onUpdate={update}
+              onRemove={remove}
+              onAdd={add}
+            />
+          );
+        })}
+      </div>
 
       {/* Legacy data collapse */}
       {legacySettings && (
