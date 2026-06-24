@@ -23,6 +23,7 @@ type EffectiveSizeConfig = SizeConfig & {
   backgroundColor: string;
   textColorMode: TextColorMode;
   imageDataUrl: string | null;
+  imageScale: number;
 };
 
 // Dynamic flavor context – populated by SalesPage from usePosFlavorStore
@@ -48,11 +49,13 @@ function ProductImage({
   fallbackSrc,
   alt,
   className,
+  style,
 }: {
   src?: string;
   fallbackSrc?: string;
   alt: string;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   const initial = src ?? fallbackSrc;
   const [imgSrc, setImgSrc] = useState(initial);
@@ -66,6 +69,7 @@ function ProductImage({
       src={imgSrc}
       alt={alt}
       className={className}
+      style={style}
       onError={() => {
         if (fallbackSrc && imgSrc !== fallbackSrc) {
           setImgSrc(fallbackSrc);
@@ -373,26 +377,28 @@ function SizeRow({
                   <Check className="h-3 w-3" />
                 </span>
               )}
-              {/* Image zone: 70 % of button height */}
-              <div className="flex w-full items-center justify-center" style={{ height: "70%" }}>
+              {/* Image zone: 72 % of button height; overflow-hidden keeps zoom within zone */}
+              <div className="flex w-full items-center justify-center overflow-hidden" style={{ height: "72%" }}>
                 {size.imageDataUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={size.imageDataUrl}
                     alt=""
-                    className="block h-[85%] w-[85%] object-contain drop-shadow-lg"
+                    className="block h-[95%] w-[95%] object-contain drop-shadow-lg"
+                    style={{ transform: `scale(${(size.imageScale ?? 100) / 100})`, transformOrigin: "center" }}
                   />
                 ) : (
                   <ProductImage
                     src={size.imageSrc}
                     fallbackSrc={size.fallbackImageSrc}
                     alt=""
-                    className="block h-[85%] w-[85%] object-contain drop-shadow-lg"
+                    className="block h-[95%] w-[95%] object-contain drop-shadow-lg"
+                    style={{ transform: `scale(${(size.imageScale ?? 100) / 100})`, transformOrigin: "center" }}
                   />
                 )}
               </div>
-              {/* Text zone: 30 % of button height */}
-              <div className="flex flex-col items-center justify-center" style={{ height: "30%" }}>
+              {/* Text zone: 28 % of button height */}
+              <div className="flex flex-col items-center justify-center" style={{ height: "28%" }}>
                 <span className="text-xl font-black leading-tight" style={{ color: textColor }}>
                   {size.name}
                 </span>
@@ -931,6 +937,7 @@ export function SalesPage() {
           backgroundColor: ov?.backgroundColor  ?? "#ffffff",
           textColorMode:   ov?.textColorMode    ?? "auto",
           imageDataUrl:    ov?.imageDataUrl     ?? null,
+          imageScale:      ov?.imageScale       ?? 100,
         };
       })
       .filter((s) => layout.sizeVisibility[s.id] !== false);

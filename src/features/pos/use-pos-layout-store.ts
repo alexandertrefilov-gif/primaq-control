@@ -48,6 +48,7 @@ export type SalesSizeOverride = {
   backgroundColor: string;
   textColorMode: TextColorMode;
   imageDataUrl: string | null;
+  imageScale: number; // zoom 50–200, default 100
 };
 
 export function computeTextColor(mode: TextColorMode, bgHex: string): string {
@@ -96,9 +97,9 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
   },
   sizeVisibility: { klein: true, mittel: true, gross: true },
   salesSizes: {
-    klein: { label: "Klein", priceCents: 250, order: 1, backgroundColor: "#F6F2E8", textColorMode: "auto", imageDataUrl: null },
-    mittel: { label: "Mittel", priceCents: 350, order: 2, backgroundColor: "#F8E3A0", textColorMode: "auto", imageDataUrl: null },
-    gross:  { label: "Groß",  priceCents: 500, order: 3, backgroundColor: "#F4C96D", textColorMode: "auto", imageDataUrl: null },
+    klein: { label: "Klein", priceCents: 250, order: 1, backgroundColor: "#F6F2E8", textColorMode: "auto", imageDataUrl: null, imageScale: 100 },
+    mittel: { label: "Mittel", priceCents: 350, order: 2, backgroundColor: "#F8E3A0", textColorMode: "auto", imageDataUrl: null, imageScale: 100 },
+    gross:  { label: "Groß",  priceCents: 500, order: 3, backgroundColor: "#F4C96D", textColorMode: "auto", imageDataUrl: null, imageScale: 100 },
   },
   flavorCardSize: 140,
   sizeColumnWidth: 176,
