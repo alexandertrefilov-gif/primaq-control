@@ -14,6 +14,7 @@ export type Order = {
   items: CartItem[];
   totalCents: number;
   paymentMethod: PaymentMethod;
+  dailyNumber: number;
 };
 
 export type DailySummary = {

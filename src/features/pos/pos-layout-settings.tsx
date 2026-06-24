@@ -261,24 +261,30 @@ function fmtPrice(cents: number): string {
 
 function SizePreview({ ov, defaultImageSrc }: { ov: SalesSizeOverride; defaultImageSrc: string }) {
   const textColor = computeTextColor(ov.textColorMode, ov.backgroundColor);
+  const imgSrc = ov.imageDataUrl ?? defaultImageSrc;
   return (
     <div
-      className="flex h-28 w-24 shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl shadow-md"
+      className="flex h-28 w-24 shrink-0 flex-col overflow-hidden rounded-2xl shadow-md"
       style={{ backgroundColor: ov.backgroundColor }}
     >
-      {ov.imageDataUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={ov.imageDataUrl} alt="" className="max-h-12 max-w-[72px] object-contain drop-shadow" />
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={defaultImageSrc} alt="" className="max-h-12 max-w-[72px] object-contain drop-shadow" />
-      )}
-      <span className="px-1 text-center text-sm font-black leading-tight" style={{ color: textColor }}>
-        {ov.label}
-      </span>
-      <span className="text-[11px] font-bold" style={{ color: textColor, opacity: 0.75 }}>
-        {fmtPrice(ov.priceCents)} €
-      </span>
+      {/* Image zone: 70 % of height */}
+      <div className="flex w-full items-center justify-center" style={{ height: "70%" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imgSrc}
+          alt=""
+          className="block h-[85%] w-[85%] object-contain drop-shadow"
+        />
+      </div>
+      {/* Text zone: 30 % of height */}
+      <div className="flex flex-col items-center justify-center" style={{ height: "30%" }}>
+        <span className="px-1 text-center text-sm font-black leading-none" style={{ color: textColor }}>
+          {ov.label}
+        </span>
+        <span className="text-[10px] font-bold leading-none" style={{ color: textColor, opacity: 0.75 }}>
+          {fmtPrice(ov.priceCents)} €
+        </span>
+      </div>
     </div>
   );
 }

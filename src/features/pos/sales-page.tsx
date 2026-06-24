@@ -95,69 +95,84 @@ function FlavorCard({
     <button
       aria-label={flavor.name}
       onClick={onClick}
-      className="relative flex w-full aspect-square flex-col items-center justify-end overflow-hidden rounded-2xl shadow-md transition-all active:scale-[0.97] hover:shadow-xl hover:ring-2 hover:ring-primaq-500/40 select-none"
-      style={{ color: flavor.textColor }}
+      className="group flex w-full flex-col items-center gap-1.5 select-none focus-visible:outline-none"
     >
-      {/* Background */}
-      {isMix ? (
-        <>
-          <div
-            className="absolute inset-0"
-            style={{ clipPath: "polygon(0 0, 100% 0, 0 100%)", background: flavor.mixColors![0] }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{ clipPath: "polygon(100% 0, 100% 100%, 0 100%)", background: flavor.mixColors![1] }}
-          />
-          <div className="absolute inset-0 bg-black/10" />
-        </>
-      ) : (
-        <div className="absolute inset-0" style={{ background: flavor.backgroundColor }} />
-      )}
-
-      {/* Image area (flex-1 so it fills all space above the label) */}
-      <div className="relative z-10 flex min-h-0 flex-1 w-full items-center justify-center">
+      {/* Circle icon */}
+      <div
+        className={cn(
+          "relative w-full aspect-square overflow-hidden rounded-full shadow-lg transition-all",
+          "group-hover:shadow-2xl group-hover:ring-4 group-hover:ring-primaq-400/50 group-hover:ring-offset-2 group-hover:ring-offset-white",
+          "group-active:scale-[0.92]"
+        )}
+      >
+        {/* Background */}
         {isMix ? (
-          /* Mix: show both component images side by side */
-          <div className="flex w-full items-center justify-around px-3 py-2">
-            {part1?.imageSrc && (
-              <ProductImage
-                src={part1.imageSrc}
-                fallbackSrc={part1.fallbackImageSrc}
-                alt=""
-                className="h-14 w-14 object-contain drop-shadow-md opacity-90"
-              />
-            )}
-            {part2?.imageSrc && (
-              <ProductImage
-                src={part2.imageSrc}
-                fallbackSrc={part2.fallbackImageSrc}
-                alt=""
-                className="h-14 w-14 object-contain drop-shadow-md opacity-90"
-              />
-            )}
-          </div>
+          <>
+            <div
+              className="absolute inset-0"
+              style={{ clipPath: "polygon(0 0, 100% 0, 0 100%)", background: flavor.mixColors![0] }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{ clipPath: "polygon(100% 0, 100% 100%, 0 100%)", background: flavor.mixColors![1] }}
+            />
+            <div className="absolute inset-0 bg-black/10" />
+          </>
         ) : (
-          flavor.imageSrc && (
+          <div className="absolute inset-0" style={{ background: flavor.backgroundColor }} />
+        )}
+
+        {/* Mix icons: each at the geometric centroid of its triangle */}
+        {isMix && part1?.imageSrc && (
+          <div
+            className="pointer-events-none absolute z-10"
+            style={{ left: "33%", top: "33%", transform: "translate(-50%, -50%)" }}
+          >
+            <ProductImage
+              src={part1.imageSrc}
+              fallbackSrc={part1.fallbackImageSrc}
+              alt=""
+              className="h-16 w-16 object-contain drop-shadow-md"
+            />
+          </div>
+        )}
+        {isMix && part2?.imageSrc && (
+          <div
+            className="pointer-events-none absolute z-10"
+            style={{ left: "67%", top: "67%", transform: "translate(-50%, -50%)" }}
+          >
+            <ProductImage
+              src={part2.imageSrc}
+              fallbackSrc={part2.fallbackImageSrc}
+              alt=""
+              className="h-16 w-16 object-contain drop-shadow-md"
+            />
+          </div>
+        )}
+
+        {/* Regular product image: large and centered */}
+        {!isMix && flavor.imageSrc && (
+          <div className="absolute inset-0 flex items-center justify-center">
             <ProductImage
               src={flavor.imageSrc}
               fallbackSrc={flavor.fallbackImageSrc}
               alt=""
-              className="max-h-24 max-w-full object-contain drop-shadow-lg p-2"
+              className="h-[82%] w-[82%] object-contain drop-shadow-xl"
             />
-          )
+          </div>
         )}
+
+        {/* Depth vignette */}
+        <div
+          className="pointer-events-none absolute inset-0 rounded-full"
+          style={{ boxShadow: "inset 0 -6px 18px rgba(0,0,0,0.20), inset 0 2px 8px rgba(255,255,255,0.16)" }}
+        />
       </div>
 
-      {/* Name label at bottom */}
-      <div className="relative z-10 w-full shrink-0 bg-black/30 px-2 py-2.5 text-center backdrop-blur-[2px]">
-        <span
-          className="block text-base font-black leading-tight"
-          style={{ textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}
-        >
-          {flavor.name}
-        </span>
-      </div>
+      {/* Name below circle */}
+      <span className="w-full text-center text-sm font-black leading-tight text-ink line-clamp-2 px-0.5">
+        {flavor.name}
+      </span>
     </button>
   );
 }
@@ -169,7 +184,7 @@ function CartItemBadge({ item, large }: { item: CartItem; large?: boolean }) {
   const flavor = allFlavors.find((f) => f.id === item.flavor);
 
   if (!flavor) {
-    return <div className={cn("shrink-0 rounded-xl bg-black/10", large ? "h-14 w-14" : "h-9 w-9")} />;
+    return <div className={cn("shrink-0 rounded-full bg-black/10", large ? "h-14 w-14" : "h-9 w-9")} />;
   }
 
   const isMix = !!flavor.isMix && !!flavor.mixColors;
@@ -177,7 +192,7 @@ function CartItemBadge({ item, large }: { item: CartItem; large?: boolean }) {
   const part2 = isMix && flavor.mixParts ? allFlavors.find((f) => f.id === flavor.mixParts![1]) : null;
 
   return (
-    <div className={cn("relative shrink-0 overflow-hidden rounded-xl", large ? "h-14 w-14" : "h-9 w-9")}>
+    <div className={cn("relative shrink-0 overflow-hidden rounded-full", large ? "h-14 w-14" : "h-9 w-9")}>
       {isMix ? (
         <>
           <div
@@ -192,35 +207,45 @@ function CartItemBadge({ item, large }: { item: CartItem; large?: boolean }) {
       ) : (
         <div className="absolute inset-0" style={{ background: flavor.backgroundColor }} />
       )}
-      <div className="relative z-10 flex h-full w-full items-center justify-center">
-        {isMix ? (
-          <div className="flex w-full items-center justify-around px-0.5">
-            {part1?.imageSrc && (
-              <ProductImage
-                src={part1.imageSrc}
-                fallbackSrc={part1.fallbackImageSrc}
-                alt=""
-                className={large ? "h-6 w-6 object-contain drop-shadow-sm" : "h-4 w-4 object-contain drop-shadow-sm"}
-              />
-            )}
-            {part2?.imageSrc && (
-              <ProductImage
-                src={part2.imageSrc}
-                fallbackSrc={part2.fallbackImageSrc}
-                alt=""
-                className={large ? "h-6 w-6 object-contain drop-shadow-sm" : "h-4 w-4 object-contain drop-shadow-sm"}
-              />
-            )}
-          </div>
-        ) : flavor.imageSrc ? (
+      {/* Mix icons: each anchored at the geometric centroid of its triangle */}
+      {isMix && part1?.imageSrc && (
+        <div
+          className="absolute z-10"
+          style={{ left: "33%", top: "33%", transform: "translate(-50%, -50%)" }}
+        >
           <ProductImage
-            src={flavor.imageSrc}
-            fallbackSrc={flavor.fallbackImageSrc}
+            src={part1.imageSrc}
+            fallbackSrc={part1.fallbackImageSrc}
             alt=""
-            className={large ? "h-9 w-9 object-contain drop-shadow-sm" : "h-6 w-6 object-contain drop-shadow-sm"}
+            className={large ? "h-7 w-7 object-contain drop-shadow-sm" : "h-5 w-5 object-contain drop-shadow-sm"}
           />
-        ) : null}
-      </div>
+        </div>
+      )}
+      {isMix && part2?.imageSrc && (
+        <div
+          className="absolute z-10"
+          style={{ left: "67%", top: "67%", transform: "translate(-50%, -50%)" }}
+        >
+          <ProductImage
+            src={part2.imageSrc}
+            fallbackSrc={part2.fallbackImageSrc}
+            alt=""
+            className={large ? "h-7 w-7 object-contain drop-shadow-sm" : "h-5 w-5 object-contain drop-shadow-sm"}
+          />
+        </div>
+      )}
+      {!isMix && (
+        <div className="relative z-10 flex h-full w-full items-center justify-center">
+          {flavor.imageSrc && (
+            <ProductImage
+              src={flavor.imageSrc}
+              fallbackSrc={flavor.fallbackImageSrc}
+              alt=""
+              className={large ? "h-9 w-9 object-contain drop-shadow-sm" : "h-6 w-6 object-contain drop-shadow-sm"}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -287,7 +312,7 @@ function FlavorGroup({
       </div>
       {/* auto-fit + justify-center → cards always centered, exact cardSize columns */}
       <div
-        className="grid gap-2"
+        className="grid gap-3"
         style={{
           gridTemplateColumns: `repeat(auto-fit, ${cardSize}px)`,
           justifyContent: "center",
@@ -336,7 +361,7 @@ function SizeRow({
               key={size.id}
               onClick={() => onSelect(size.id)}
               className={cn(
-                "relative flex h-[160px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl border-2 shadow transition-all select-none",
+                "relative flex h-[160px] flex-1 flex-col overflow-hidden rounded-2xl border-2 shadow transition-all select-none",
                 isActive
                   ? "border-primaq-500 shadow-lg shadow-primaq-500/20 ring-2 ring-primaq-500/30"
                   : "border-transparent hover:border-primaq-300 active:scale-[0.97]"
@@ -344,27 +369,37 @@ function SizeRow({
               style={{ backgroundColor: size.backgroundColor }}
             >
               {isActive && (
-                <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-primaq-500 text-white">
+                <span className="absolute right-2 top-2 z-10 grid h-5 w-5 place-items-center rounded-full bg-primaq-500 text-white">
                   <Check className="h-3 w-3" />
                 </span>
               )}
-              {size.imageDataUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={size.imageDataUrl} alt="" className="max-h-20 w-auto object-contain drop-shadow" />
-              ) : (
-                <ProductImage
-                  src={size.imageSrc}
-                  fallbackSrc={size.fallbackImageSrc}
-                  alt=""
-                  className="max-h-20 w-auto object-contain drop-shadow"
-                />
-              )}
-              <span className="text-xl font-black" style={{ color: textColor }}>
-                {size.name}
-              </span>
-              <span className="text-base font-bold" style={{ color: textColor, opacity: 0.75 }}>
-                {fmt(size.priceCents)}
-              </span>
+              {/* Image zone: 70 % of button height */}
+              <div className="flex w-full items-center justify-center" style={{ height: "70%" }}>
+                {size.imageDataUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={size.imageDataUrl}
+                    alt=""
+                    className="block h-[85%] w-[85%] object-contain drop-shadow-lg"
+                  />
+                ) : (
+                  <ProductImage
+                    src={size.imageSrc}
+                    fallbackSrc={size.fallbackImageSrc}
+                    alt=""
+                    className="block h-[85%] w-[85%] object-contain drop-shadow-lg"
+                  />
+                )}
+              </div>
+              {/* Text zone: 30 % of button height */}
+              <div className="flex flex-col items-center justify-center" style={{ height: "30%" }}>
+                <span className="text-xl font-black leading-tight" style={{ color: textColor }}>
+                  {size.name}
+                </span>
+                <span className="text-sm font-bold leading-tight" style={{ color: textColor, opacity: 0.75 }}>
+                  {fmt(size.priceCents)}
+                </span>
+              </div>
             </button>
           );
         })}
@@ -723,75 +758,63 @@ function SalesStatusBar({
   showLastBooking?: boolean;
   showStats?: boolean;
 }) {
-  const { isAdmin, login } = useAdmin();
+  const { isAdmin } = useAdmin();
   const last = daily.orders.length > 0 ? daily.orders[daily.orders.length - 1] : null;
   const [confirming, setConfirming] = useState(false);
 
-  // PIN modal state (for non-admin storno)
-  const [showPinModal, setShowPinModal] = useState(false);
-  const [voidPin, setVoidPin] = useState("");
-  const [voidPinError, setVoidPinError] = useState(false);
-  const pinInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (showPinModal) setTimeout(() => pinInputRef.current?.focus(), 50);
-  }, [showPinModal]);
-
   const handleVoidClick = useCallback(() => {
-    if (isAdmin) {
-      // Admin already logged in: keep the 2-tap confirm flow
-      if (!confirming) { setConfirming(true); return; }
-      onVoid();
-      setConfirming(false);
-    } else {
-      // Not admin: require PIN before storno
-      setVoidPin("");
-      setVoidPinError(false);
-      setShowPinModal(true);
-    }
-  }, [confirming, isAdmin, onVoid]);
-
-  const handlePinConfirm = useCallback(() => {
-    if (login(voidPin)) {
-      setShowPinModal(false);
-      setVoidPin("");
-      setVoidPinError(false);
-      onVoid();
-    } else {
-      setVoidPinError(true);
-      setVoidPin("");
-      setTimeout(() => pinInputRef.current?.focus(), 50);
-    }
-  }, [login, voidPin, onVoid]);
+    if (!confirming) { setConfirming(true); return; }
+    onVoid();
+    setConfirming(false);
+  }, [confirming, onVoid]);
 
   const portionen = daily.orders.reduce(
     (sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0),
     0
   );
 
+  // Fallback for orders saved before dailyNumber was introduced
+  const orderNum = last
+    ? (last.dailyNumber ?? daily.orders.length)
+    : null;
+
   return (
-    <>
     <div
       data-testid="last-booking-bar"
       className="shrink-0 flex items-center gap-3 rounded-2xl bg-white/90 px-5 py-2.5 shadow backdrop-blur-sm"
     >
-      {/* Left: last booking – controlled by live-monitor toggle */}
+      {/* Left: last booking */}
       {showLastBooking && (
         <>
           <span className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-black/40">
             Letzte Buchung
           </span>
           <div className="h-4 w-px shrink-0 bg-black/15" />
-          {last ? (
+          {last && orderNum !== null ? (
             <>
-              <span className="text-base font-black text-ink tabular-nums">
-                {fmt(last.totalCents)}
+              {/* Order number – always visible */}
+              <span className="text-sm font-bold text-black/70 tabular-nums">
+                #{String(orderNum).padStart(4, "0")}
               </span>
               <div className="h-4 w-px shrink-0 bg-black/15" />
+
+              {/* Betrag – admin only */}
+              {isAdmin && (
+                <>
+                  <span className="text-base font-black text-ink tabular-nums">
+                    {fmt(last.totalCents)}
+                  </span>
+                  <div className="h-4 w-px shrink-0 bg-black/15" />
+                </>
+              )}
+
+              {/* Zahlungsart – always visible */}
               <span className="text-sm font-semibold text-black/55">
                 {BOOKING_PAYMENT_LABEL[last.paymentMethod] ?? last.paymentMethod}
               </span>
               <div className="h-4 w-px shrink-0 bg-black/15" />
+
+              {/* Uhrzeit – always visible */}
               <span className="text-sm font-semibold text-black/55 tabular-nums">
                 {new Date(last.createdAt).toLocaleTimeString("de-DE", {
                   hour: "2-digit",
@@ -799,36 +822,42 @@ function SalesStatusBar({
                 })}
               </span>
               <div className="h-4 w-px shrink-0 bg-black/15" />
+
+              {/* Artikel – always visible */}
               <span className="text-xs text-black/35">
                 {last.items.reduce((s, i) => s + i.quantity, 0)} Artikel
               </span>
-              <div className="flex items-center gap-2 shrink-0">
-                {confirming ? (
-                  <>
+
+              {/* Stornieren – admin only, 2-tap confirm */}
+              {isAdmin && (
+                <div className="flex items-center gap-2 shrink-0">
+                  {confirming ? (
+                    <>
+                      <button
+                        data-testid="void-confirm"
+                        onClick={handleVoidClick}
+                        className="rounded-lg bg-red-600 px-3 py-1 text-xs font-bold text-white hover:bg-red-700 transition-colors"
+                      >
+                        Wirklich stornieren?
+                      </button>
+                      <button
+                        onClick={() => setConfirming(false)}
+                        className="rounded-lg bg-black/5 px-2 py-1 text-xs font-semibold text-black/50 hover:bg-black/10 transition-colors"
+                      >
+                        Abbrechen
+                      </button>
+                    </>
+                  ) : (
                     <button
-                      data-testid="void-confirm"
+                      data-testid="void-last-order"
                       onClick={handleVoidClick}
-                      className="rounded-lg bg-red-600 px-3 py-1 text-xs font-bold text-white hover:bg-red-700 transition-colors"
+                      className="rounded-lg border border-black/15 bg-white px-3 py-1 text-xs font-semibold text-black/50 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
                     >
-                      Wirklich stornieren?
+                      Stornieren
                     </button>
-                    <button
-                      onClick={() => setConfirming(false)}
-                      className="rounded-lg bg-black/5 px-2 py-1 text-xs font-semibold text-black/50 hover:bg-black/10 transition-colors"
-                    >
-                      Abbrechen
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    data-testid="void-last-order"
-                    onClick={handleVoidClick}
-                    className="rounded-lg border border-black/15 bg-white px-3 py-1 text-xs font-semibold text-black/50 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
-                  >
-                    Stornieren
-                  </button>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <span className="text-sm text-black/35">noch keine</span>
@@ -836,8 +865,8 @@ function SalesStatusBar({
         </>
       )}
 
-      {/* Right: daily totals – controlled by verkaufszaehler toggle */}
-      {showStats && (
+      {/* Right: daily totals – admin only, respects verkaufszaehler toggle */}
+      {isAdmin && showStats && (
         <div className={cn(
           "flex items-center gap-4 shrink-0 pl-3 border-l border-black/10",
           showLastBooking ? "ml-auto" : "ml-0"
@@ -859,68 +888,6 @@ function SalesStatusBar({
         </div>
       )}
     </div>
-
-    {/* Admin-PIN modal for storno (shown when not already logged in as admin) */}
-    {showPinModal && (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-        onClick={() => setShowPinModal(false)}
-      >
-        <div
-          className="w-80 rounded-3xl bg-white p-8 shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="mb-6 flex flex-col items-center gap-2 text-center">
-            <div className="grid h-12 w-12 place-items-center rounded-full bg-red-100">
-              <X className="h-6 w-6 text-red-600" />
-            </div>
-            <h2 className="text-xl font-black text-ink">Admin-Berechtigung erforderlich</h2>
-            <p className="text-sm text-black/50">Storno nur mit Admin-PIN</p>
-          </div>
-          <input
-            ref={pinInputRef}
-            type="password"
-            inputMode="numeric"
-            maxLength={6}
-            value={voidPin}
-            aria-label="Admin PIN"
-            onChange={(e) => {
-              setVoidPin(e.target.value.replace(/\D/g, ""));
-              setVoidPinError(false);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handlePinConfirm();
-              if (e.key === "Escape") setShowPinModal(false);
-            }}
-            placeholder="· · · ·"
-            className={cn(
-              "mb-1 w-full rounded-xl border px-4 py-3 text-center text-2xl font-black tracking-[0.5em] outline-none transition-colors",
-              voidPinError
-                ? "border-red-400 bg-red-50 focus:ring-2 focus:ring-red-400/30"
-                : "border-black/20 bg-black/[0.02] focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20"
-            )}
-          />
-          {voidPinError && (
-            <p className="mb-3 text-center text-sm font-semibold text-red-600">Falscher PIN</p>
-          )}
-          {!voidPinError && <div className="mb-3 h-5" />}
-          <button
-            data-testid="void-pin-confirm"
-            onClick={handlePinConfirm}
-            className="mb-2 w-full rounded-xl bg-red-600 py-3 font-bold text-white hover:bg-red-700 transition-colors"
-          >
-            Storno bestätigen
-          </button>
-          <button
-            onClick={() => setShowPinModal(false)}
-            className="w-full rounded-xl py-2.5 text-sm font-semibold text-black/45 hover:bg-black/5 transition-colors"
-          >
-            Abbrechen
-          </button>
-        </div>
-      </div>
-    )}
-    </>
   );
 }
 

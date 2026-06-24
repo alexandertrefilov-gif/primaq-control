@@ -119,6 +119,7 @@ export function usePosStore() {
         items: current.cart,
         totalCents,
         paymentMethod,
+        dailyNumber: current.daily.orderCount + 1,
       };
       const d = current.daily;
       return {

@@ -68,8 +68,10 @@ test("Admin 2: Bottom-Bar zeigt letzte Buchung nach Bestellung", async ({ page }
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   const bar = page.getByTestId("last-booking-bar");
-  await expect(bar.getByText("2,50 €").first()).toBeVisible();
+  // Non-admin: order number and payment method visible, price hidden
+  await expect(bar.getByText("#0001")).toBeVisible();
   await expect(bar.getByText("Bar")).toBeVisible();
+  await expect(bar.getByText("2,50 €")).not.toBeVisible();
 });
 
 // ── Test 3: /tagesabschluss ohne Admin zeigt Sperre ──────────────────────────
