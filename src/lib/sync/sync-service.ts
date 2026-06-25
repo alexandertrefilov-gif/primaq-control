@@ -290,12 +290,8 @@ class SyncService {
       `| local=${localUpdatedAt ?? "null (kein Meta)"}`
     );
 
-    const payload = row.payload as SettingsPayload;
-    await dbSet(row.settings_key, JSON.stringify(payload.data));
-    await dbSet(
-      metaKey,
-      JSON.stringify({ updatedAt: cloudUpdatedAt, deviceId: row.device_id }),
-    );
+    await dbSet(row.settings_key, JSON.stringify(row.data));
+    await dbSet(metaKey, JSON.stringify({ updatedAt: cloudUpdatedAt }));
     return true;
   }
 

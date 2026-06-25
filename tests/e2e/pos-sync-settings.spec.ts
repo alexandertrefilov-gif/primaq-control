@@ -45,14 +45,7 @@ async function mockSupabaseWithRemoteSettings(
     id: `default:${settingsKey}`,
     business_id: "default",
     settings_key: settingsKey,
-    payload: {
-      businessId: "default",
-      deviceId: "remote-device",
-      settingsKey,
-      data: settingsData,
-      updatedAt,
-    },
-    device_id: "remote-device",
+    data: settingsData,
     updated_at: updatedAt,
   };
 
@@ -61,7 +54,7 @@ async function mockSupabaseWithRemoteSettings(
     const method = route.request().method();
     if (method === "HEAD") {
       await route.fulfill({ status: 200 });
-    } else if (url.includes("/settings") && !url.includes("limit=0")) {
+    } else if (url.includes("pos_settings") && !url.includes("limit=0")) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",

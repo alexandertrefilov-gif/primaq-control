@@ -36,7 +36,7 @@ export async function checkConnection(): Promise<ConnectionStatus> {
  * Must only be called when checkConnection() returned "CONNECTED".
  */
 export async function checkTables(): Promise<void> {
-  const required = ["settings", "pos_year_history"] as const;
+  const required = ["pos_settings", "pos_year_history"] as const;
   for (const table of required) {
     const { error } = await supabase.from(table as string).select("id").limit(0);
     if (error) {
@@ -143,36 +143,33 @@ export interface SettingsRow {
   id: string;
   business_id: string;
   settings_key: string;
-  /** Full payload including data + timestamps, stored as jsonb. */
-  payload: SettingsPayload;
-  device_id: string;
+  data: unknown;
   updated_at: string;
 }
 
 /**
- * Upserts one settings snapshot into settings.
+ * Upserts one settings snapshot into pos_settings.
  * id = "businessId:settingsKey" so repeated upserts are idempotent.
  * Throws on error so the caller can call markFailed().
  */
 export async function upsertSettings(payload: SettingsPayload): Promise<void> {
-  const { error } = await supabase.from("settings").upsert({
+  const { error } = await supabase.from("pos_settings").upsert({
     id: `${payload.businessId}:${payload.settingsKey}`,
     business_id: payload.businessId,
     settings_key: payload.settingsKey,
-    payload: payload,
-    device_id: payload.deviceId,
+    data: payload.data,
     updated_at: payload.updatedAt,
   });
   if (error) throw error;
 }
 
 /**
- * Fetches all settings rows for a given businessId.
+ * Fetches all pos_settings rows for a given businessId.
  * Throws on error so the caller can catch and log.
  */
 export async function pullSettings(businessId: string): Promise<SettingsRow[]> {
   const { data, error } = await supabase
-    .from("settings")
+    .from("pos_settings")
     .select("*")
     .eq("business_id", businessId);
   if (error) throw error;

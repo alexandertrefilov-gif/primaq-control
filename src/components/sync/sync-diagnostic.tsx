@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { dbGet, getDb } from "@/lib/db";
 import type { SyncOp } from "@/lib/db";
-import { pullSettings } from "@/lib/sync/supabase-sync";
+import { pullSettings, upsertSettings } from "@/lib/sync/supabase-sync";
 
 const DIAG_KEYS = ["primaq-pos-flavors-v1", "primaq-pos-layout-v1"] as const;
 type DiagKey = (typeof DIAG_KEYS)[number];
@@ -85,11 +85,63 @@ export function SyncDiagnostic() {
   const [ranAt, setRanAt] = useState<string | null>(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
 
+  // ── Direct write test ──────────────────────────────────────────────────────
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [testRunning, setTestRunning] = useState(false);
+
+  const handleWriteTest = useCallback(async () => {
+    setTestRunning(true);
+    setTestResult(null);
+    try {
+      await upsertSettings({
+        businessId: "default",
+        deviceId: "diag-test",
+        settingsKey: "__diag_test__",
+        data: { test: true, ts: Date.now() },
+        updatedAt: new Date().toISOString(),
+      });
+      setTestResult("✓ Schreiben erfolgreich — kein Supabase-Fehler");
+      console.log("[Diag] Schreibtest erfolgreich");
+    } catch (err) {
+      const e = err as Record<string, unknown>;
+      const detail = {
+        message: e.message,
+        code: e.code,
+        details: e.details,
+        hint: e.hint,
+        raw: err,
+      };
+      setTestResult(JSON.stringify({ message: e.message, code: e.code, details: e.details, hint: e.hint }, null, 2));
+      console.error("[Diag] Schreibtest FEHLER:", detail);
+    } finally {
+      setTestRunning(false);
+    }
+  }, []);
+
+  // ── Clear failed ops ───────────────────────────────────────────────────────
+  const [clearing, setClearing] = useState(false);
+
+  const handleClearFailed = useCallback(async () => {
+    setClearing(true);
+    try {
+      const db = getDb();
+      const allOps = await db.sync_queue.toArray();
+      const failedIds = allOps.filter((op: SyncOp) => op.status === "failed").map((op: SyncOp) => op.id);
+      for (const id of failedIds) {
+        await db.sync_queue.delete(id);
+      }
+      setFailedOps([]);
+      console.log(`[Diag] ${failedIds.length} fehlgeschlagene Ops gelöscht`);
+    } finally {
+      setClearing(false);
+    }
+  }, []);
+
+  // ── Main diagnostic run ────────────────────────────────────────────────────
   const run = useCallback(async () => {
     setRunning(true);
     setCloudError(null);
     try {
-      // ── Read failed ops from queue ──────────────────────────────────────────
       const allOps = await getDb().sync_queue.toArray();
       const failed = allOps.filter((op) => op.status === "failed");
       const failedSummaries: FailedOpSummary[] = failed.map((op: SyncOp) => {
@@ -108,10 +160,8 @@ export function SyncDiagnostic() {
         };
       });
       setFailedOps(failedSummaries);
-
       console.log("[Diag] Fehlgeschlagene Ops:", failedSummaries);
 
-      // ── Read Supabase rows ─────────────────────────────────────────────────
       let cloudRows: Awaited<ReturnType<typeof pullSettings>> = [];
       try {
         cloudRows = await pullSettings("default");
@@ -119,28 +169,21 @@ export function SyncDiagnostic() {
         setCloudError(extractErrText(err));
       }
 
-      // ── Compare local vs cloud per key ─────────────────────────────────────
       const result: DiagRow[] = [];
 
       for (const key of DIAG_KEYS) {
         const localRaw = await dbGet(key);
         const metaRaw = await dbGet(`${key}-meta`);
-        const localMeta = metaRaw
-          ? (JSON.parse(metaRaw) as { updatedAt: string })
-          : null;
+        const localMeta = metaRaw ? (JSON.parse(metaRaw) as { updatedAt: string }) : null;
         const cloudRow = cloudRows.find((r) => r.settings_key === key);
 
         const localData = localRaw ? (JSON.parse(localRaw) as unknown) : null;
-        const cloudData = cloudRow ? cloudRow.payload?.data : null;
+        const cloudData = cloudRow ? cloudRow.data : null;
 
         const localFlavor =
-          key === "primaq-pos-flavors-v1" && localData
-            ? firstFlavor(localData)
-            : { count: null, name: null };
+          key === "primaq-pos-flavors-v1" && localData ? firstFlavor(localData) : { count: null, name: null };
         const cloudFlavor =
-          key === "primaq-pos-flavors-v1" && cloudData
-            ? firstFlavor(cloudData)
-            : { count: null, name: null };
+          key === "primaq-pos-flavors-v1" && cloudData ? firstFlavor(cloudData) : { count: null, name: null };
 
         const localUpdatedAt = localMeta?.updatedAt ?? null;
         const cloudUpdatedAt = cloudRow?.updated_at ?? null;
@@ -203,26 +246,57 @@ export function SyncDiagnostic() {
 
   return (
     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-amber-700">
+      <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-amber-700">
         Admin-Diagnose
       </p>
 
-      <button
-        onClick={run}
-        disabled={running}
-        className="mb-3 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
-      >
-        {running ? "Analysiere…" : "Diagnose ausführen"}
-      </button>
+      {/* ── Schreibtest ───────────────────────────────────────────────────── */}
+      <div className="mb-3 rounded-lg border border-amber-200 bg-white p-3">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-black/40">
+          Supabase Schreibtest (kein Bild)
+        </p>
+        <button
+          onClick={handleWriteTest}
+          disabled={testRunning}
+          className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-60"
+        >
+          {testRunning ? "Teste…" : "Kleines Objekt schreiben"}
+        </button>
+        {testResult !== null && (
+          <pre className={`mt-2 rounded p-2 text-[10px] leading-relaxed whitespace-pre-wrap break-all ${testResult.startsWith("✓") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+            {testResult}
+          </pre>
+        )}
+      </div>
+
+      {/* ── Diagnose + Fehlgeschlagene leeren ─────────────────────────────── */}
+      <div className="mb-3 flex gap-2">
+        <button
+          onClick={run}
+          disabled={running}
+          className="flex-1 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
+        >
+          {running ? "Analysiere…" : "Diagnose ausführen"}
+        </button>
+        {failedOps.length > 0 && (
+          <button
+            onClick={handleClearFailed}
+            disabled={clearing}
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 disabled:opacity-60"
+          >
+            {clearing ? "Lösche…" : `${failedOps.length} Fehlgeschl. löschen`}
+          </button>
+        )}
+      </div>
 
       {cloudError && (
-        <p className="mb-2 rounded bg-red-100 p-2 text-xs font-mono text-red-700">
-          Supabase-Fehler: {cloudError}
+        <p className="mb-2 rounded bg-red-100 p-2 font-mono text-xs text-red-700">
+          Supabase-Lesefehler: {cloudError}
         </p>
       )}
       {ranAt && (
         <p className="mb-3 text-[10px] text-amber-600">
-          Stand: {new Date(ranAt).toLocaleTimeString("de-DE")} — Details in DevTools (console.log)
+          Stand: {new Date(ranAt).toLocaleTimeString("de-DE")} — Details auch in DevTools (console.log)
         </p>
       )}
 
@@ -236,11 +310,11 @@ export function SyncDiagnostic() {
           </div>
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-black/5 bg-black/2">
-                <th className="px-3 py-1 text-left font-medium text-black/40">entity / key</th>
-                <th className="px-3 py-1 text-left font-medium text-black/40">retries</th>
+              <tr className="border-b border-black/5">
+                <th className="px-3 py-1 text-left font-medium text-black/40">Key</th>
+                <th className="px-3 py-1 text-left font-medium text-black/40">Retries</th>
                 <th className="px-3 py-1 text-left font-medium text-black/40">Payload</th>
-                <th className="px-3 py-1 text-left font-medium text-black/40">erstellt</th>
+                <th className="px-3 py-1 text-left font-medium text-black/40">Erstellt</th>
               </tr>
             </thead>
             <tbody>
@@ -259,12 +333,9 @@ export function SyncDiagnostic() {
         </div>
       )}
 
-      {/* ── Settings-Vergleich ───────────────────────────────────────────── */}
+      {/* ── Settings-Vergleich lokal vs. Cloud ──────────────────────────── */}
       {rows.map((row) => (
-        <div
-          key={row.key}
-          className="mb-3 overflow-hidden rounded-lg border border-amber-200 bg-white"
-        >
+        <div key={row.key} className="mb-3 overflow-hidden rounded-lg border border-amber-200 bg-white">
           <div className="bg-amber-100 px-3 py-1.5">
             <span className="font-mono text-xs font-bold text-amber-800">{row.key}</span>
           </div>
@@ -272,42 +343,22 @@ export function SyncDiagnostic() {
             <tbody>
               <Section label="Lokal" />
               <R label="vorhanden" v={row.localExists ? "ja" : "NEIN"} warn={!row.localExists} />
-              {row.localCount !== null && (
-                <R label="Anzahl Sorten" v={String(row.localCount)} />
-              )}
-              {row.localFirstName && (
-                <R label="Erste Sorte" v={row.localFirstName} />
-              )}
+              {row.localCount !== null && <R label="Anzahl Sorten" v={String(row.localCount)} />}
+              {row.localFirstName && <R label="Erste Sorte" v={row.localFirstName} />}
               <R
                 label="Bild-Bytes (1. Eintrag)"
-                v={
-                  row.localImageLen === null
-                    ? "—"
-                    : row.localImageLen === 0
-                      ? "kein base64-Bild"
-                      : `${row.localImageLen.toLocaleString()} Bytes`
-                }
+                v={row.localImageLen === null ? "—" : row.localImageLen === 0 ? "kein base64-Bild" : `${row.localImageLen.toLocaleString()} Bytes`}
               />
               <R label="Meta-Key" v={row.localMetaExists ? "ja" : "NEIN"} />
               <R label="lokales updatedAt" v={row.localUpdatedAt ?? "—"} />
 
               <Section label="Cloud (Supabase)" />
               <R label="vorhanden" v={row.cloudExists ? "ja" : "NEIN"} warn={!row.cloudExists} />
-              {row.cloudCount !== null && (
-                <R label="Anzahl Sorten" v={String(row.cloudCount)} />
-              )}
-              {row.cloudFirstName && (
-                <R label="Erste Sorte" v={row.cloudFirstName} />
-              )}
+              {row.cloudCount !== null && <R label="Anzahl Sorten" v={String(row.cloudCount)} />}
+              {row.cloudFirstName && <R label="Erste Sorte" v={row.cloudFirstName} />}
               <R
                 label="Bild-Bytes (1. Eintrag)"
-                v={
-                  row.cloudImageLen === null
-                    ? "—"
-                    : row.cloudImageLen === 0
-                      ? "kein base64-Bild"
-                      : `${row.cloudImageLen.toLocaleString()} Bytes`
-                }
+                v={row.cloudImageLen === null ? "—" : row.cloudImageLen === 0 ? "kein base64-Bild" : `${row.cloudImageLen.toLocaleString()} Bytes`}
               />
               <R label="cloud updated_at" v={row.cloudUpdatedAt ?? "—"} />
 
@@ -329,10 +380,7 @@ export function SyncDiagnostic() {
 function Section({ label }: { label: string }) {
   return (
     <tr>
-      <td
-        colSpan={2}
-        className="bg-black/3 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-black/40"
-      >
+      <td colSpan={2} className="bg-black/3 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-black/40">
         {label}
       </td>
     </tr>
