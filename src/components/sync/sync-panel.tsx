@@ -1,13 +1,22 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useAdmin } from "@/features/pos/admin-context";
+import { dbRemove } from "@/lib/db";
+import { getSyncService } from "@/lib/sync/sync-service";
+import { useSyncStatus } from "./use-sync-status";
 
 const COMMIT_SHORT =
   process.env.NEXT_PUBLIC_COMMIT_SHA && process.env.NEXT_PUBLIC_COMMIT_SHA !== "unknown"
     ? process.env.NEXT_PUBLIC_COMMIT_SHA.slice(0, 7)
     : null;
-import { useSyncStatus } from "./use-sync-status";
-import { getSyncService } from "@/lib/sync/sync-service";
+
+const SETTINGS_KEYS = [
+  "primaq-pos-flavors-v1",
+  "primaq-pos-flavors-v1-meta",
+  "primaq-pos-layout-v1",
+  "primaq-pos-layout-v1-meta",
+];
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -32,16 +41,36 @@ function StatRow({ label, value, error }: { label: string; value: string | numbe
 
 export function SyncPanel() {
   const { status, stats } = useSyncStatus();
+  const { isAdmin } = useAdmin();
   const [flushing, setFlushing] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const handleManualSync = useCallback(async () => {
     setFlushing(true);
     try {
       const service = getSyncService();
       await service.flush();
-      await service.pull(); // pull after manual sync to get latest remote state
+      await service.pull();
     } finally {
       setFlushing(false);
+    }
+  }, []);
+
+  const handleResetAndPull = useCallback(async () => {
+    const confirmed = window.confirm(
+      "Lokale POS-Einstellungen (Sorten, Layout) löschen und aus Supabase neu laden?\n\n" +
+        "Jahres- und Tagesumsätze sind nicht betroffen.\n\n" +
+        "Diese Aktion kann nicht rückgängig gemacht werden."
+    );
+    if (!confirmed) return;
+
+    setResetting(true);
+    try {
+      await Promise.all(SETTINGS_KEYS.map((k) => dbRemove(k)));
+      await getSyncService().pull();
+      window.location.reload();
+    } catch {
+      setResetting(false);
     }
   }, []);
 
@@ -74,6 +103,17 @@ export function SyncPanel() {
       >
         {flushing || status === "syncing" ? "Synchronisiert…" : "Jetzt synchronisieren"}
       </button>
+
+      {isAdmin && (
+        <button
+          data-testid="reset-and-pull-btn"
+          onClick={handleResetAndPull}
+          disabled={resetting}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 active:scale-[0.97] disabled:opacity-60"
+        >
+          {resetting ? "Wird geladen…" : "Lokale Einstellungen zurücksetzen und neu laden"}
+        </button>
+      )}
 
       {COMMIT_SHORT && (
         <p className="mt-3 text-center text-[10px] text-black/30">Build: {COMMIT_SHORT}</p>
