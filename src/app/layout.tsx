@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { AppShell } from "@/components/navigation/app-shell";
+import { SyncFoundation } from "@/components/sync/sync-foundation";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -34,6 +35,7 @@ export default function RootLayout({
   return (
     <html lang="de">
       <body>
+        <SyncFoundation />
         <AppShell>{children}</AppShell>
       </body>
     </html>

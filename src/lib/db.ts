@@ -7,18 +7,32 @@ interface KvEntry {
   value: string;
 }
 
+export interface SyncOp {
+  id: string;
+  entity: string;
+  operation: "upsert" | "delete";
+  payload: string;   // JSON-serialisiertes Objekt
+  deviceId: string;
+  createdAt: string; // ISO 8601
+  retryCount: number;
+  status: "pending" | "failed";
+}
+
 class PrimaqPosDb extends Dexie {
   kv!: Table<KvEntry, string>;
+  sync_queue!: Table<SyncOp, string>;
 
   constructor() {
     super(DB_NAME);
     this.version(1).stores({ kv: "key" });
+    // Version 2: adds sync_queue — kv is unchanged, no data loss.
+    this.version(2).stores({ kv: "key", sync_queue: "id, status" });
   }
 }
 
 // Lazy singleton — only instantiated in browser (useEffect never runs on server).
 let _db: PrimaqPosDb | undefined;
-function getDb(): PrimaqPosDb {
+export function getDb(): PrimaqPosDb {
   if (!_db) _db = new PrimaqPosDb();
   return _db;
 }
