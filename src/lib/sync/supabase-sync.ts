@@ -83,3 +83,27 @@ export async function readHealthCheck(deviceId: string): Promise<HealthCheckReco
   if (error) throw error;
   return (data?.[0] as HealthCheckRecord) ?? null;
 }
+
+export interface YearHistoryPayload {
+  businessId: string;
+  deviceId: string;
+  date: string;
+  summary: unknown; // DailySummary — opaque to the sync layer
+}
+
+/**
+ * Upserts one daily summary row into pos_year_history.
+ * id is derived as "businessId:deviceId:date" so repeated calls are idempotent.
+ * Throws on Supabase write error so the caller can call markFailed().
+ */
+export async function upsertYearHistory(payload: YearHistoryPayload): Promise<void> {
+  const { error } = await supabase.from("pos_year_history").upsert({
+    id: `${payload.businessId}:${payload.deviceId}:${payload.date}`,
+    business_id: payload.businessId,
+    device_id: payload.deviceId,
+    date: payload.date,
+    summary: payload.summary,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+}

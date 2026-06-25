@@ -2,7 +2,28 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { dbGet, dbSet } from "@/lib/db";
+import { enqueue } from "@/lib/sync/sync-queue";
+import { getDeviceId } from "@/lib/sync/device-registry";
 import type { DailySummary } from "./pos-types";
+
+async function enqueueDaySync(day: DailySummary): Promise<void> {
+  try {
+    const deviceId = await getDeviceId();
+    await enqueue({
+      entity: "pos_year_history",
+      operation: "upsert",
+      payload: JSON.stringify({
+        businessId: "default",
+        deviceId,
+        date: day.date,
+        summary: day,
+      }),
+      deviceId,
+    });
+  } catch {
+    // sync errors must never disrupt the local POS flow
+  }
+}
 
 const LS_KEY = "primaq-pos-year-history";
 
@@ -30,6 +51,7 @@ export function usePosYearStore() {
       void dbSet(LS_KEY, JSON.stringify(next));
       return next;
     });
+    void enqueueDaySync(day);
   }, []);
 
   return { history, saveDay, hydrated };

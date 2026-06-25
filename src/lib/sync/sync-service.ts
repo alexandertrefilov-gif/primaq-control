@@ -1,11 +1,13 @@
 import { getDeviceId } from "./device-registry";
 import { getNetworkMonitor } from "./network-monitor";
-import { getPending, ack } from "./sync-queue";
+import { getPending, ack, markFailed } from "./sync-queue";
 import {
   checkConnection,
   checkTables,
   writeHealthCheck,
   readHealthCheck,
+  upsertYearHistory,
+  type YearHistoryPayload,
 } from "./supabase-sync";
 
 const isDev = process.env.NODE_ENV === "development";
@@ -58,9 +60,21 @@ class SyncService {
 
       if (pending.length === 0) return;
       log(`Flush gestartet — ${pending.length} ausstehend`);
-      // Phase 2.3 simulation: ack without real entity writes.
-      // Phase 2.4 replaces this block with entity-specific Supabase upserts.
-      await ack(pending.map((op) => op.id));
+
+      for (const op of pending) {
+        if (op.entity === "pos_year_history" && op.operation === "upsert") {
+          try {
+            await upsertYearHistory(JSON.parse(op.payload) as YearHistoryPayload);
+            await ack([op.id]);
+          } catch {
+            await markFailed(op.id);
+          }
+        } else {
+          // Unknown or test entities — ack without Supabase write.
+          await ack([op.id]);
+        }
+      }
+
       log("Flush beendet");
     } catch (err) {
       log("flush error:", err);
@@ -76,9 +90,13 @@ class SyncService {
     this._running = true;
     try {
       await this.init();
-      this.unsubscribeNetwork = getNetworkMonitor().subscribe((online) => {
-        if (online) void this.flush();
-      });
+      // Guard: don't subscribe again if stop() was called during async init()
+      // or if a concurrent start() (React strict-mode double-mount) already subscribed.
+      if (this._running && !this.unsubscribeNetwork) {
+        this.unsubscribeNetwork = getNetworkMonitor().subscribe((online) => {
+          if (online) void this.flush();
+        });
+      }
     } catch (err) {
       log("start error:", err);
     }
