@@ -107,3 +107,74 @@ export async function upsertYearHistory(payload: YearHistoryPayload): Promise<vo
   });
   if (error) throw error;
 }
+
+export interface YearHistoryRow {
+  id: string;
+  business_id: string;
+  device_id: string;
+  date: string;
+  summary: unknown;
+}
+
+/**
+ * Fetches all pos_year_history rows for a given businessId.
+ * Throws on Supabase read error so the caller can catch and log.
+ */
+export async function pullYearHistory(businessId: string): Promise<YearHistoryRow[]> {
+  const { data, error } = await supabase
+    .from("pos_year_history")
+    .select("*")
+    .eq("business_id", businessId);
+  if (error) throw error;
+  return (data ?? []) as YearHistoryRow[];
+}
+
+// ── POS Settings ──────────────────────────────────────────────────────────────
+
+export interface SettingsPayload {
+  businessId: string;
+  deviceId: string;
+  settingsKey: string;
+  data: unknown;
+  updatedAt: string;
+}
+
+export interface SettingsRow {
+  id: string;
+  business_id: string;
+  settings_key: string;
+  /** Full payload including data + timestamps, stored as jsonb. */
+  payload: SettingsPayload;
+  device_id: string;
+  updated_at: string;
+}
+
+/**
+ * Upserts one settings snapshot into pos_settings.
+ * id = "businessId:settingsKey" so repeated upserts are idempotent.
+ * Throws on error so the caller can call markFailed().
+ */
+export async function upsertSettings(payload: SettingsPayload): Promise<void> {
+  const { error } = await supabase.from("pos_settings").upsert({
+    id: `${payload.businessId}:${payload.settingsKey}`,
+    business_id: payload.businessId,
+    settings_key: payload.settingsKey,
+    payload: payload,
+    device_id: payload.deviceId,
+    updated_at: payload.updatedAt,
+  });
+  if (error) throw error;
+}
+
+/**
+ * Fetches all pos_settings rows for a given businessId.
+ * Throws on error so the caller can catch and log.
+ */
+export async function pullSettings(businessId: string): Promise<SettingsRow[]> {
+  const { data, error } = await supabase
+    .from("pos_settings")
+    .select("*")
+    .eq("business_id", businessId);
+  if (error) throw error;
+  return (data ?? []) as SettingsRow[];
+}

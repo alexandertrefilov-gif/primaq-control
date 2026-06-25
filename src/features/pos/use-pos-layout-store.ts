@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { dbGet, dbSet } from "@/lib/db";
+import { enqueueSettingsSync } from "@/lib/sync/enqueue-settings";
 
 export type PanelId = "groessen" | "sorten" | "warenkorb";
 export type PanelSize = "klein" | "mittel" | "gross" | "xl";
@@ -217,6 +218,7 @@ export function usePosLayoutStore() {
     setState((prev) => {
       const next = { ...prev, active: config };
       void dbSet(LS_KEY, JSON.stringify(next));
+      void enqueueSettingsSync(LS_KEY, next);
       return next;
     });
   }, []);
@@ -230,6 +232,7 @@ export function usePosLayoutStore() {
       };
       const next = { ...prev, profiles: [...prev.profiles, profile] };
       void dbSet(LS_KEY, JSON.stringify(next));
+      void enqueueSettingsSync(LS_KEY, next);
       return next;
     });
   }, []);
@@ -240,6 +243,7 @@ export function usePosLayoutStore() {
       if (!profile) return prev;
       const next = { ...prev, active: profile.config };
       void dbSet(LS_KEY, JSON.stringify(next));
+      void enqueueSettingsSync(LS_KEY, next);
       return next;
     });
   }, []);
@@ -248,6 +252,7 @@ export function usePosLayoutStore() {
     setState((prev) => {
       const next = { ...prev, profiles: prev.profiles.filter((p) => p.id !== id) };
       void dbSet(LS_KEY, JSON.stringify(next));
+      void enqueueSettingsSync(LS_KEY, next);
       return next;
     });
   }, []);
@@ -256,6 +261,7 @@ export function usePosLayoutStore() {
     setState((prev) => {
       const next = { ...prev, active: DEFAULT_LAYOUT };
       void dbSet(LS_KEY, JSON.stringify(next));
+      void enqueueSettingsSync(LS_KEY, next);
       return next;
     });
   }, []);

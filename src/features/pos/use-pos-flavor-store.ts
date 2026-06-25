@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { dbGet, dbSet } from "@/lib/db";
+import { enqueueSettingsSync } from "@/lib/sync/enqueue-settings";
 import { FLAVORS, MACHINE_GROUP_LABELS } from "./pos-config";
 import type { FlavorConfig } from "./pos-config";
 
@@ -108,6 +109,7 @@ export function usePosFlavorStore() {
           : "Speichern fehlgeschlagen.";
         queueMicrotask(() => setStorageError(msg));
       });
+      void enqueueSettingsSync(STORAGE_KEY, next);
       return next;
     });
   }, []);
@@ -124,6 +126,7 @@ export function usePosFlavorStore() {
           : "Speichern fehlgeschlagen.";
         queueMicrotask(() => setStorageError(msg));
       });
+      void enqueueSettingsSync(STORAGE_KEY, next);
       return next;
     });
   }, []);
@@ -140,6 +143,7 @@ export function usePosFlavorStore() {
           : "Speichern fehlgeschlagen.";
         queueMicrotask(() => setStorageError(msg));
       });
+      void enqueueSettingsSync(STORAGE_KEY, next);
       return next;
     });
   }, []);

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Lock, Shield } from "lucide-react";
 import { adminNavigationItems, navigationItems } from "@/config/navigation";
 import { AdminProvider, useAdmin } from "@/features/pos/admin-context";
+import { SyncStatusPill } from "@/components/sync/sync-status-pill";
 import { cn } from "@/lib/utils";
 
 // ── Inner shell – uses context provided by AdminProvider above ────────────────
@@ -88,7 +89,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       )}
     >
       <header className="shrink-0 border-b border-black/10 bg-[#f7f8f4]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2.5">
+        <div className="mx-auto flex max-w-6xl items-center px-4 py-2.5">
           <Link href="/verkauf" className="flex items-center gap-3">
             <span className="grid h-9 w-9 place-items-center rounded-lg bg-primaq-500 text-base font-black text-white">
               P
@@ -98,6 +99,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               <span className="block text-xs text-black/50">Softeis-Kasse</span>
             </span>
           </Link>
+
+          <div className="flex flex-1 justify-center px-3">
+            <SyncStatusPill />
+          </div>
 
           {/* Admin toggle */}
           {isAdmin ? (

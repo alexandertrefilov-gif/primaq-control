@@ -6,6 +6,7 @@ import { dbGet, dbSet } from "@/lib/db";
 import { PageHeader } from "@/components/ui/page-header";
 import { PosFlavorSettings } from "./pos-flavor-settings";
 import { PosLayoutSettings } from "./pos-layout-settings";
+import { SyncPanel } from "@/components/sync/sync-panel";
 
 // Settings: Sorten, Bilder, Farben, Preise, Größen, Jahresdaten.
 const SETTINGS_KEYS = [
@@ -244,11 +245,12 @@ function BackupSection() {
 
 // ── Tab layout ────────────────────────────────────────────────────────────────
 
-type Tab = "sorten" | "oberflaeche";
+type Tab = "sorten" | "oberflaeche" | "sync";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "sorten", label: "Sorten" },
   { id: "oberflaeche", label: "Verkaufsoberfläche" },
+  { id: "sync", label: "Sync" },
 ];
 
 export function EinstellungenTabs({ legacySettings }: { legacySettings: React.ReactNode }) {
@@ -291,8 +293,22 @@ export function EinstellungenTabs({ legacySettings }: { legacySettings: React.Re
         </>
       )}
 
-      <SettingsTransfer />
-      <BackupSection />
+      {tab === "sync" && (
+        <>
+          <PageHeader
+            title="Synchronisation"
+            description="Jahresdaten mit der Cloud synchronisieren und Queue-Status prüfen."
+          />
+          <SyncPanel />
+        </>
+      )}
+
+      {tab !== "sync" && (
+        <>
+          <SettingsTransfer />
+          <BackupSection />
+        </>
+      )}
     </div>
   );
 }

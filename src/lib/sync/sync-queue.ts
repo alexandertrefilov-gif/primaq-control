@@ -37,6 +37,15 @@ export async function ack(ids: string[]): Promise<void> {
   await getDb().sync_queue.bulkDelete(ids);
 }
 
+/** Return pending and permanently-failed operation counts. */
+export async function getQueueStats(): Promise<{ pending: number; failed: number }> {
+  const all = await getDb().sync_queue.toArray();
+  return {
+    pending: all.filter((o) => o.status === "pending").length,
+    failed: all.filter((o) => o.status === "failed").length,
+  };
+}
+
 /**
  * Increment retryCount for a failed operation.
  * If retryCount reaches 3, status is set to "failed" so it is excluded from

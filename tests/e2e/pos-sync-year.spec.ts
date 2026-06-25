@@ -413,10 +413,11 @@ test("Year 5: Supabase-Fehler − markFailed erhöht retryCount", async ({ page 
   await mockSupabaseYearError(page);
 
   // Register listener BEFORE goto so the log is not missed.
-  // "[Sync] HealthCheck gelesen" fires at the end of init() — ensures the
-  // NetworkMonitor subscription is active before we dispatch the online event.
+  // "[Sync] Init abgeschlossen" is the last statement in init() — by the time
+  // the test receives this console event, the NetworkMonitor subscription is
+  // guaranteed to be active.
   const initDone = page.waitForEvent("console", {
-    predicate: (msg) => msg.text().includes("[Sync] HealthCheck gelesen"),
+    predicate: (msg) => msg.text().includes("[Sync] Init abgeschlossen"),
     timeout: 8000,
   });
 
