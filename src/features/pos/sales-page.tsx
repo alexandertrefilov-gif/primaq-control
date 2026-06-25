@@ -83,21 +83,24 @@ function ProductImage({
 }
 
 // ── Unified flavor image renderer ────────────────────────────────────────────
+// Direct <img> – no wrapper state, no background, transparent areas show
+// the parent's colored background. Used identically in every flavor context.
 
-function FlavorImage({ src, fallbackSrc, alt = "", scale = 100, className }: {
-  src?: string;
-  fallbackSrc?: string;
+function FlavorImage({ src, alt = "", scale = 100, className }: {
+  src?: string | null;
   alt?: string;
   scale?: number;
   className?: string;
 }) {
+  if (!src) return null;
   return (
-    <ProductImage
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
       src={src}
-      fallbackSrc={fallbackSrc}
       alt={alt}
-      className={cn("block h-full w-full object-contain", className)}
-      style={scale !== 100 ? { transform: `scale(${scale / 100})`, transformOrigin: "center" } : undefined}
+      draggable={false}
+      className={cn("block h-full w-full object-contain bg-transparent", className)}
+      style={{ transform: `scale(${scale / 100})`, transformOrigin: "center" }}
     />
   );
 }
@@ -130,16 +133,12 @@ function FlavorCard({
           "group-active:scale-[0.92]"
         )}
       >
-        {/* Background */}
+        {/* Background: linear-gradient diagonal for mix, solid for regular */}
         {isMix ? (
           <>
             <div
               className="absolute inset-0"
-              style={{ clipPath: "polygon(0 0, 100% 0, 0 100%)", background: flavor.mixColors![0] }}
-            />
-            <div
-              className="absolute inset-0"
-              style={{ clipPath: "polygon(100% 0, 100% 100%, 0 100%)", background: flavor.mixColors![1] }}
+              style={{ background: `linear-gradient(135deg, ${flavor.mixColors![0]} 0% 50%, ${flavor.mixColors![1]} 50% 100%)` }}
             />
             <div className="absolute inset-0 bg-black/10" />
           </>
@@ -147,28 +146,22 @@ function FlavorCard({
           <div className="absolute inset-0" style={{ background: flavor.backgroundColor }} />
         )}
 
-        {/* Mix icons: clipped containers at triangle centroids to prevent overflow */}
+        {/* Mix icons: circular clipped containers at diagonal centroids */}
         {isMix && part1?.imageSrc && (
-          <div
-            className="pointer-events-none absolute overflow-hidden"
-            style={{ width: "38%", height: "38%", left: "32%", top: "35%", transform: "translate(-50%, -50%)" }}
-          >
-            <FlavorImage src={part1.imageSrc} fallbackSrc={part1.fallbackImageSrc} scale={part1.imageScale ?? 100} className="drop-shadow-md" />
+          <div className="pointer-events-none absolute left-[32%] top-[32%] h-[42%] w-[42%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full">
+            <FlavorImage src={part1.imageSrc} alt="" scale={part1.imageScale ?? 100} className="drop-shadow-md" />
           </div>
         )}
         {isMix && part2?.imageSrc && (
-          <div
-            className="pointer-events-none absolute overflow-hidden"
-            style={{ width: "38%", height: "38%", left: "68%", top: "65%", transform: "translate(-50%, -50%)" }}
-          >
-            <FlavorImage src={part2.imageSrc} fallbackSrc={part2.fallbackImageSrc} scale={part2.imageScale ?? 100} className="drop-shadow-md" />
+          <div className="pointer-events-none absolute left-[68%] top-[68%] h-[42%] w-[42%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full">
+            <FlavorImage src={part2.imageSrc} alt="" scale={part2.imageScale ?? 100} className="drop-shadow-md" />
           </div>
         )}
 
-        {/* Regular product image: fills inset area, clipped to avoid leaking over ring */}
+        {/* Regular image: circular inner container so transparent areas blend into card color */}
         {!isMix && flavor.imageSrc && (
-          <div className="pointer-events-none absolute inset-[10%] overflow-hidden">
-            <FlavorImage src={flavor.imageSrc} fallbackSrc={flavor.fallbackImageSrc} scale={flavor.imageScale ?? 100} className="drop-shadow-xl" />
+          <div className="pointer-events-none absolute inset-[8%] flex items-center justify-center overflow-hidden rounded-full">
+            <FlavorImage src={flavor.imageSrc} alt="" scale={flavor.imageScale ?? 100} className="drop-shadow-xl" />
           </div>
         )}
 
@@ -207,36 +200,26 @@ function CartItemBadge({ item, large }: { item: CartItem; large?: boolean }) {
         <>
           <div
             className="absolute inset-0"
-            style={{ clipPath: "polygon(0 0, 100% 0, 0 100%)", background: flavor.mixColors![0] }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{ clipPath: "polygon(100% 0, 100% 100%, 0 100%)", background: flavor.mixColors![1] }}
+            style={{ background: `linear-gradient(135deg, ${flavor.mixColors![0]} 0% 50%, ${flavor.mixColors![1]} 50% 100%)` }}
           />
         </>
       ) : (
         <div className="absolute inset-0" style={{ background: flavor.backgroundColor }} />
       )}
-      {/* Mix icons: clipped containers at triangle centroids */}
+      {/* Mix icons: circular containers, same logic as FlavorCard */}
       {isMix && part1?.imageSrc && (
-        <div
-          className="absolute overflow-hidden"
-          style={{ width: "38%", height: "38%", left: "32%", top: "35%", transform: "translate(-50%, -50%)" }}
-        >
-          <FlavorImage src={part1.imageSrc} fallbackSrc={part1.fallbackImageSrc} scale={part1.imageScale ?? 100} className="drop-shadow-sm" />
+        <div className="absolute left-[32%] top-[32%] h-[42%] w-[42%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full">
+          <FlavorImage src={part1.imageSrc} alt="" scale={part1.imageScale ?? 100} className="drop-shadow-sm" />
         </div>
       )}
       {isMix && part2?.imageSrc && (
-        <div
-          className="absolute overflow-hidden"
-          style={{ width: "38%", height: "38%", left: "68%", top: "65%", transform: "translate(-50%, -50%)" }}
-        >
-          <FlavorImage src={part2.imageSrc} fallbackSrc={part2.fallbackImageSrc} scale={part2.imageScale ?? 100} className="drop-shadow-sm" />
+        <div className="absolute left-[68%] top-[68%] h-[42%] w-[42%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full">
+          <FlavorImage src={part2.imageSrc} alt="" scale={part2.imageScale ?? 100} className="drop-shadow-sm" />
         </div>
       )}
       {!isMix && flavor.imageSrc && (
-        <div className="absolute inset-[10%] overflow-hidden">
-          <FlavorImage src={flavor.imageSrc} fallbackSrc={flavor.fallbackImageSrc} scale={flavor.imageScale ?? 100} className="drop-shadow-sm" />
+        <div className="absolute inset-[8%] flex items-center justify-center overflow-hidden rounded-full">
+          <FlavorImage src={flavor.imageSrc} alt="" scale={flavor.imageScale ?? 100} className="drop-shadow-sm" />
         </div>
       )}
     </div>
@@ -319,7 +302,7 @@ function FlavorGroup({
   );
 }
 
-// ── Size picker modal – appears after flavor tap ──────────────────────────────
+// ── Size picker modal – large touch-optimised overlay after flavor tap ────────
 
 function SizePickerModal({
   flavor,
@@ -337,97 +320,138 @@ function SizePickerModal({
   const part1 = isMix && flavor.mixParts ? allFlavors.find((f) => f.id === flavor.mixParts![0]) : null;
   const part2 = isMix && flavor.mixParts ? allFlavors.find((f) => f.id === flavor.mixParts![1]) : null;
 
+  const colCount = Math.min(Math.max(sizes.length, 1), 3);
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[3px] p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm mx-4 overflow-hidden rounded-3xl bg-white shadow-2xl"
+        className="w-full max-w-[820px] max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-[36px] bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header: flavor icon + name */}
-        <div className="flex items-center gap-4 border-b border-black/8 px-5 py-4">
-          <div
-            className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full shadow-md"
-            style={{ background: flavor.backgroundColor }}
-          >
-            {isMix && flavor.mixColors && (
+        {/* ── Header: large flavor circle + name ── */}
+        <div className="flex items-center gap-6 border-b border-black/8 px-8 py-7">
+          {/* Flavor circle 96 px – identical render logic as FlavorCard */}
+          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full shadow-lg">
+            {isMix && flavor.mixColors ? (
               <>
-                <div className="absolute inset-0" style={{ clipPath: "polygon(0 0, 100% 0, 0 100%)", background: flavor.mixColors[0] }} />
-                <div className="absolute inset-0" style={{ clipPath: "polygon(100% 0, 100% 100%, 0 100%)", background: flavor.mixColors[1] }} />
+                <div className="absolute inset-0"
+                  style={{ background: `linear-gradient(135deg, ${flavor.mixColors[0]} 0% 50%, ${flavor.mixColors[1]} 50% 100%)` }} />
                 <div className="absolute inset-0 bg-black/10" />
               </>
+            ) : (
+              <div className="absolute inset-0" style={{ background: flavor.backgroundColor }} />
             )}
             {isMix && part1?.imageSrc && (
-              <div className="pointer-events-none absolute overflow-hidden"
-                style={{ width: "38%", height: "38%", left: "32%", top: "35%", transform: "translate(-50%, -50%)" }}>
-                <FlavorImage src={part1.imageSrc} fallbackSrc={part1.fallbackImageSrc} scale={part1.imageScale ?? 100} />
+              <div className="pointer-events-none absolute left-[32%] top-[32%] h-[42%] w-[42%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full">
+                <FlavorImage src={part1.imageSrc} alt="" scale={part1.imageScale ?? 100} />
               </div>
             )}
             {isMix && part2?.imageSrc && (
-              <div className="pointer-events-none absolute overflow-hidden"
-                style={{ width: "38%", height: "38%", left: "68%", top: "65%", transform: "translate(-50%, -50%)" }}>
-                <FlavorImage src={part2.imageSrc} fallbackSrc={part2.fallbackImageSrc} scale={part2.imageScale ?? 100} />
+              <div className="pointer-events-none absolute left-[68%] top-[68%] h-[42%] w-[42%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full">
+                <FlavorImage src={part2.imageSrc} alt="" scale={part2.imageScale ?? 100} />
               </div>
             )}
             {!isMix && flavor.imageSrc && (
-              <div className="pointer-events-none absolute inset-[10%] overflow-hidden">
-                <FlavorImage src={flavor.imageSrc} fallbackSrc={flavor.fallbackImageSrc} scale={flavor.imageScale ?? 100} />
+              <div className="pointer-events-none absolute inset-[8%] flex items-center justify-center overflow-hidden rounded-full">
+                <FlavorImage src={flavor.imageSrc} alt="" scale={flavor.imageScale ?? 100} />
               </div>
             )}
           </div>
+
+          {/* Name */}
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-black/40">Größe wählen</p>
-            <p className="truncate text-xl font-black leading-tight text-black/85">{flavor.name}</p>
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-black/40">
+              Gewählte Sorte
+            </p>
+            <p className="truncate text-4xl font-black leading-tight text-black/85">
+              {flavor.name}
+            </p>
           </div>
         </div>
 
-        {/* Size buttons */}
-        <div className="space-y-2 p-3">
+        {/* ── Section label ── */}
+        <div className="px-8 pb-4 pt-7">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">Größe wählen</p>
+        </div>
+
+        {/* ── Size cards ── */}
+        <div className="px-6 pb-5">
           {sizes.length === 0 ? (
-            <p className="py-4 text-center text-sm font-semibold text-black/40">
+            <p className="py-10 text-center text-base font-semibold text-black/40">
               Keine Größe aktiv. Bitte in Einstellungen aktivieren.
             </p>
           ) : (
-            sizes.map((size) => {
-              const textColor = computeTextColor(size.textColorMode, size.backgroundColor);
-              return (
-                <button
-                  key={size.id}
-                  onClick={() => onPick(size.id, size.priceCents)}
-                  className="flex h-[88px] w-full items-center gap-3 overflow-hidden rounded-2xl px-4 transition-all active:scale-[0.97] hover:brightness-95 select-none"
-                  style={{ backgroundColor: size.backgroundColor }}
-                >
-                  <div className="flex h-[72%] w-14 shrink-0 items-center justify-center overflow-hidden">
-                    {size.imageDataUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={size.imageDataUrl} alt=""
-                        className="h-full w-full object-contain drop-shadow"
-                        style={{ transform: `scale(${(size.imageScale ?? 100) / 100})`, transformOrigin: "center" }} />
-                    ) : (
-                      <ProductImage src={size.imageSrc} fallbackSrc={size.fallbackImageSrc} alt=""
-                        className="h-full w-full object-contain drop-shadow"
-                        style={{ transform: `scale(${(size.imageScale ?? 100) / 100})`, transformOrigin: "center" }} />
+            <div
+              className="grid gap-4"
+              style={{ gridTemplateColumns: `repeat(${colCount}, 1fr)` }}
+            >
+              {sizes.map((size) => {
+                const textColor = computeTextColor(size.textColorMode, size.backgroundColor);
+                const hasImage = !!(size.imageDataUrl || size.imageSrc);
+                return (
+                  <button
+                    key={size.id}
+                    onClick={() => onPick(size.id, size.priceCents)}
+                    className="flex min-h-[140px] w-full overflow-hidden rounded-3xl shadow-md transition-all active:scale-[0.96] hover:brightness-95 select-none"
+                    style={{ backgroundColor: size.backgroundColor }}
+                  >
+                    {/* Left: image column */}
+                    {hasImage && (
+                      <div className="relative w-32 shrink-0 overflow-hidden">
+                        {size.imageDataUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={size.imageDataUrl}
+                            alt=""
+                            draggable={false}
+                            className="absolute inset-0 h-full w-full object-contain drop-shadow-lg"
+                            style={{ transform: `scale(${(size.imageScale ?? 100) / 100})`, transformOrigin: "center" }}
+                          />
+                        ) : (
+                          <ProductImage
+                            src={size.imageSrc}
+                            fallbackSrc={size.fallbackImageSrc}
+                            alt=""
+                            className="absolute inset-0 h-full w-full object-contain drop-shadow-lg"
+                            style={{ transform: `scale(${(size.imageScale ?? 100) / 100})`, transformOrigin: "center" }}
+                          />
+                        )}
+                      </div>
                     )}
-                  </div>
-                  <span className="flex-1 text-left text-2xl font-black leading-none" style={{ color: textColor }}>
-                    {size.name}
-                  </span>
-                  <span className="shrink-0 text-2xl font-black tabular-nums" style={{ color: textColor, opacity: 0.75 }}>
-                    {fmt(size.priceCents)}
-                  </span>
-                </button>
-              );
-            })
+
+                    {/* Right: name + price */}
+                    <div className={cn(
+                      "flex flex-col justify-center gap-1.5",
+                      hasImage ? "px-5 py-5" : "px-7 py-5"
+                    )}>
+                      <span
+                        className="text-3xl font-black leading-tight"
+                        style={{ color: textColor }}
+                      >
+                        {size.name}
+                      </span>
+                      <span
+                        className="text-2xl font-black tabular-nums"
+                        style={{ color: textColor, opacity: 0.70 }}
+                      >
+                        {fmt(size.priceCents)}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        {/* Cancel */}
-        <div className="px-3 pb-3">
+        {/* ── Cancel ── */}
+        <div className="px-6 pb-7">
           <button
             onClick={onClose}
-            className="w-full rounded-2xl bg-black/5 py-3 text-base font-semibold text-black/50 hover:bg-black/10 transition-colors"
+            className="h-[60px] w-full rounded-2xl bg-black/5 text-lg font-semibold text-black/50 transition-colors hover:bg-black/10 active:bg-black/[0.15]"
           >
             Abbrechen
           </button>
@@ -474,7 +498,123 @@ function FlavorColumn({
   );
 }
 
-// ── Right column – cart + payment ─────────────────────────────────────────────
+// ── Payment + book block – sits below FlavorColumn in the left area ──────────
+
+function PaymentBlock({
+  showPayment,
+  paymentMethod,
+  cashInput,
+  cashCents,
+  cartTotal,
+  change,
+  canBook,
+  onPaymentChange,
+  onCashInput,
+  onBook,
+}: {
+  showPayment: boolean;
+  paymentMethod: PaymentMethod;
+  cashInput: string;
+  cashCents: number;
+  cartTotal: number;
+  change: number;
+  canBook: boolean;
+  onPaymentChange: (m: PaymentMethod) => void;
+  onCashInput: (v: string) => void;
+  onBook: () => void;
+}) {
+  return (
+    <div className="shrink-0 rounded-2xl bg-white p-3 shadow">
+      {showPayment && (
+        <>
+          {/* Payment tabs */}
+          <div className="mb-3 flex gap-1.5">
+            {(["bar", "karte", "qr"] as PaymentMethod[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => onPaymentChange(m)}
+                className={cn(
+                  "flex-1 rounded-xl py-2.5 text-sm font-bold transition-all",
+                  paymentMethod === m
+                    ? "bg-primaq-500 text-white shadow"
+                    : "bg-black/5 text-black/50 hover:bg-black/10"
+                )}
+              >
+                {PAYMENT_LABELS[m]}
+              </button>
+            ))}
+          </div>
+
+          {/* Karte indicator */}
+          {paymentMethod === "karte" && (
+            <div className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 py-3">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600" aria-hidden>
+                <rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>
+              </svg>
+              <span className="text-sm font-semibold text-blue-700">Kartenzahlung gewählt</span>
+            </div>
+          )}
+
+          {/* Cash input */}
+          {paymentMethod === "bar" && (
+            <div className="mb-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-sm font-semibold text-black/50">Gegeben</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.50"
+                  min="0"
+                  value={cashInput}
+                  onChange={(e) => onCashInput(e.target.value)}
+                  placeholder="0,00"
+                  className="flex-1 rounded-xl border border-black/15 bg-black/[0.03] px-2.5 py-1.5 text-right text-lg font-bold outline-none focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20"
+                />
+                <span className="shrink-0 text-sm font-semibold text-black/50">€</span>
+              </div>
+              <div className="flex gap-1">
+                {QUICK_AMOUNTS.map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => onCashInput(String(a))}
+                    className="flex-1 rounded-lg bg-black/5 py-1.5 text-xs font-bold text-black/65 hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 transition-all"
+                  >
+                    {a}€
+                  </button>
+                ))}
+              </div>
+              {cashCents >= cartTotal && cartTotal > 0 && (
+                <div className="flex items-center justify-between rounded-xl bg-green-50 px-3 py-2">
+                  <span className="text-sm font-semibold text-green-700">Rückgeld</span>
+                  <span className="text-xl font-black text-green-700 tabular-nums">
+                    {fmt(change)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Book button */}
+      <button
+        data-testid="book-button"
+        onClick={onBook}
+        disabled={!canBook}
+        className={cn(
+          "w-full rounded-xl py-4 text-base font-black transition-all select-none",
+          canBook
+            ? "bg-primaq-500 text-white shadow-md hover:bg-primaq-700 active:scale-[0.98]"
+            : "cursor-not-allowed bg-black/8 text-black/20"
+        )}
+      >
+        {showPayment && paymentMethod === "qr" ? "QR anzeigen" : "Bestellung buchen"}
+      </button>
+    </div>
+  );
+}
+
+// ── Right column – cart only ──────────────────────────────────────────────────
 
 const CART_FONT_CFG: Record<CartFontSize, { name: string; price: string; qty: string; qtyW: string }> = {
   normal: { name: "text-xl font-bold", price: "text-xl font-black", qty: "text-xl font-black", qtyW: "w-10" },
@@ -485,39 +625,21 @@ const CART_FONT_CFG: Record<CartFontSize, { name: string; price: string; qty: st
 function CartColumn({
   cart,
   cartTotal,
-  paymentMethod,
-  cashInput,
-  cashCents,
-  change,
-  canBook,
-  onPaymentChange,
-  onCashInput,
   onChangeQty,
   onRemove,
   onClear,
-  onBook,
   widthPx,
   qtyBtnSize,
   cartFontSize,
-  showPayment = true,
 }: {
   cart: ReturnType<typeof usePosStore>["cart"];
   cartTotal: number;
-  paymentMethod: PaymentMethod;
-  cashInput: string;
-  cashCents: number;
-  change: number;
-  canBook: boolean;
-  onPaymentChange: (m: PaymentMethod) => void;
-  onCashInput: (v: string) => void;
   onChangeQty: (id: string, delta: number) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
-  onBook: () => void;
   widthPx: number;
   qtyBtnSize: number;
   cartFontSize: CartFontSize;
-  showPayment?: boolean;
 }) {
   const allFlavors = useFlavorList();
   const getLocalFlavorName = (id: string) => allFlavors.find((f) => f.id === id)?.name ?? id;
@@ -553,8 +675,8 @@ function CartColumn({
   useEffect(() => () => clearTimeout(clearTimerRef.current), []);
 
   return (
-    <div className="flex shrink-0 flex-col gap-2 min-h-0" style={{ width: widthPx }}>
-      {/* Cart */}
+    <div className="flex shrink-0 flex-col min-h-0" style={{ width: widthPx }}>
+      {/* Cart – full height */}
       <div className="flex flex-1 flex-col rounded-2xl bg-white shadow min-h-0">
         <div className="flex shrink-0 items-center gap-2 border-b border-black/5 px-4 py-2.5">
           <span className="text-[11px] font-bold uppercase tracking-widest text-black/40 mr-auto">
@@ -662,92 +784,6 @@ function CartColumn({
         </div>
       </div>
 
-      {/* Payment */}
-      <div className="shrink-0 rounded-2xl bg-white p-3 shadow">
-        {showPayment && (
-          <>
-            {/* Payment tabs */}
-            <div className="mb-3 flex gap-1.5">
-              {(["bar", "karte", "qr"] as PaymentMethod[]).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => onPaymentChange(m)}
-                  className={cn(
-                    "flex-1 rounded-xl py-2.5 text-sm font-bold transition-all",
-                    paymentMethod === m
-                      ? "bg-primaq-500 text-white shadow"
-                      : "bg-black/5 text-black/50 hover:bg-black/10"
-                  )}
-                >
-                  {PAYMENT_LABELS[m]}
-                </button>
-              ))}
-            </div>
-
-            {/* Karte indicator */}
-            {paymentMethod === "karte" && (
-              <div className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 py-3">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600" aria-hidden><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
-                <span className="text-sm font-semibold text-blue-700">Kartenzahlung gewählt</span>
-              </div>
-            )}
-
-            {/* Cash input */}
-            {paymentMethod === "bar" && (
-              <div className="mb-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="shrink-0 text-sm font-semibold text-black/50">Gegeben</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.50"
-                    min="0"
-                    value={cashInput}
-                    onChange={(e) => onCashInput(e.target.value)}
-                    placeholder="0,00"
-                    className="flex-1 rounded-xl border border-black/15 bg-black/[0.03] px-2.5 py-1.5 text-right text-lg font-bold outline-none focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20"
-                  />
-                  <span className="shrink-0 text-sm font-semibold text-black/50">€</span>
-                </div>
-                <div className="flex gap-1">
-                  {QUICK_AMOUNTS.map((a) => (
-                    <button
-                      key={a}
-                      onClick={() => onCashInput(String(a))}
-                      className="flex-1 rounded-lg bg-black/5 py-1.5 text-xs font-bold text-black/65 hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 transition-all"
-                    >
-                      {a}€
-                    </button>
-                  ))}
-                </div>
-                {cashCents >= cartTotal && cartTotal > 0 && (
-                  <div className="flex items-center justify-between rounded-xl bg-green-50 px-3 py-2">
-                    <span className="text-sm font-semibold text-green-700">Rückgeld</span>
-                    <span className="text-xl font-black text-green-700 tabular-nums">
-                      {fmt(change)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Book button – always visible */}
-        <button
-          data-testid="book-button"
-          onClick={onBook}
-          disabled={!canBook}
-          className={cn(
-            "w-full rounded-xl py-4 text-base font-black transition-all select-none",
-            canBook
-              ? "bg-primaq-500 text-white shadow-md hover:bg-primaq-700 active:scale-[0.98]"
-              : "cursor-not-allowed bg-black/8 text-black/20"
-          )}
-        >
-          {showPayment && paymentMethod === "qr" ? "QR anzeigen" : "Bestellung buchen"}
-        </button>
-      </div>
     </div>
   );
 }
@@ -994,32 +1030,35 @@ export function SalesPage() {
     <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
       {/* Main area: [SizeRow + FlavorColumn] | [CartColumn] */}
       <div className="flex flex-1 min-h-0 gap-3 overflow-hidden">
-        {/* Left: flavor selection – full height */}
-        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+        {/* Left: flavors + payment block */}
+        <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
           <FlavorColumn
             onFlavorClick={handleFlavorClick}
             cardSize={layout.flavorCardSize}
           />
+          <PaymentBlock
+            showPayment={showPayment}
+            paymentMethod={payment}
+            cashInput={cashInput}
+            cashCents={cashCents}
+            cartTotal={cartTotal}
+            change={change}
+            canBook={canBook}
+            onPaymentChange={handlePaymentChange}
+            onCashInput={setCashInput}
+            onBook={handleBook}
+          />
         </div>
-        {/* Right: cart */}
+        {/* Right: cart – full height */}
         <CartColumn
           widthPx={layout.cartWidth}
           qtyBtnSize={layout.qtyButtonSize}
           cartFontSize={layout.cartFontSize}
-          showPayment={showPayment}
           cart={cart}
           cartTotal={cartTotal}
-          paymentMethod={payment}
-          cashInput={cashInput}
-          cashCents={cashCents}
-          change={change}
-          canBook={canBook}
-          onPaymentChange={handlePaymentChange}
-          onCashInput={setCashInput}
           onChangeQty={changeQty}
           onRemove={removeFromCart}
           onClear={clearCart}
-          onBook={handleBook}
         />
       </div>
 

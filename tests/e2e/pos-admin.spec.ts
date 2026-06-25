@@ -13,7 +13,28 @@ async function seedEmptyPos(page: import("@playwright/test").Page) {
   await page.addInitScript(() => {
     if (window.sessionStorage.getItem("pos-seeded") === "1") return;
     window.sessionStorage.setItem("pos-seeded", "1");
-    window.localStorage.removeItem("primaq-pos-state");
+    indexedDB.deleteDatabase("primaq-pos");
+  });
+}
+
+async function readPosState(page: import("@playwright/test").Page) {
+  return page.evaluate(async () => {
+    return new Promise<{ daily: { totalCents: number; orderCount: number; cashCents: number; cardCents: number; orders: unknown[] } } | null>((resolve) => {
+      const req = indexedDB.open("primaq-pos");
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains("kv")) { db.close(); resolve(null); return; }
+        const tx = db.transaction("kv", "readonly");
+        const get = tx.objectStore("kv").get("primaq-pos-state");
+        get.onsuccess = () => {
+          const row = get.result as { value: string } | undefined;
+          db.close();
+          resolve(row?.value ? JSON.parse(row.value) : null);
+        };
+        get.onerror = () => { db.close(); resolve(null); };
+      };
+      req.onerror = () => resolve(null);
+    });
   });
 }
 
@@ -150,11 +171,8 @@ test("Admin 7: Letzte Buchung stornieren – Daily auf 0 reduziert", async ({ pa
   const bar = page.getByTestId("last-booking-bar");
   await expect(bar.getByText("noch keine")).toBeVisible();
 
-  // localStorage state reset to 0
-  const state = await page.evaluate(() => {
-    const raw = window.localStorage.getItem("primaq-pos-state");
-    return raw ? JSON.parse(raw) as { daily: { totalCents: number; orderCount: number; orders: unknown[] } } : null;
-  });
+  // IndexedDB state reset to 0
+  const state = await readPosState(page);
   expect(state?.daily.totalCents).toBe(0);
   expect(state?.daily.orderCount).toBe(0);
   expect(state?.daily.orders).toHaveLength(0);
@@ -190,11 +208,8 @@ test("Admin 8: Storno letzter von zwei Buchungen – erste bleibt erhalten", asy
   await expect(bar.getByText("2,50 €").first()).toBeVisible();
   await expect(bar.getByText("Bar")).toBeVisible();
 
-  // localStorage: totalCents=250, cardCents=0, orderCount=1
-  const state = await page.evaluate(() => {
-    const raw = window.localStorage.getItem("primaq-pos-state");
-    return raw ? JSON.parse(raw) as { daily: { totalCents: number; cashCents: number; cardCents: number; orderCount: number } } : null;
-  });
+  // IndexedDB: totalCents=250, cardCents=0, orderCount=1
+  const state = await readPosState(page);
   expect(state?.daily.totalCents).toBe(250);
   expect(state?.daily.cashCents).toBe(250);
   expect(state?.daily.cardCents).toBe(0);

@@ -15,7 +15,7 @@ async function blockSupabase(page: import("@playwright/test").Page) {
 async function seedEmptyPos(page: import("@playwright/test").Page) {
   await page.addInitScript(() => {
     window.sessionStorage.setItem("pos-seeded", "1");
-    window.localStorage.removeItem("primaq-pos-state");
+    indexedDB.deleteDatabase("primaq-pos");
   });
 }
 

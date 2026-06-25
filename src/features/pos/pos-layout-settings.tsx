@@ -268,17 +268,20 @@ function SizePreview({ ov, defaultImageSrc }: { ov: SalesSizeOverride; defaultIm
       className="flex h-28 w-24 shrink-0 flex-col overflow-hidden rounded-2xl shadow-md"
       style={{ backgroundColor: ov.backgroundColor }}
     >
-      {/* Image zone: 72 % of height; overflow-hidden clips zoom */}
+      {/* Image zone – no extra background, transparent areas show card color */}
       <div className="flex w-full items-center justify-center overflow-hidden" style={{ height: "72%" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imgSrc}
-          alt=""
-          className="block h-[95%] w-[95%] object-contain drop-shadow"
-          style={{ transform: `scale(${scale})`, transformOrigin: "center" }}
-        />
+        {imgSrc && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imgSrc}
+            alt={ov.label}
+            draggable={false}
+            className="block h-[95%] w-[95%] object-contain bg-transparent"
+            style={{ transform: `scale(${scale})`, transformOrigin: "center" }}
+          />
+        )}
       </div>
-      {/* Text zone: 28 % of height */}
+      {/* Text zone */}
       <div className="flex flex-col items-center justify-center" style={{ height: "28%" }}>
         <span className="px-1 text-center text-sm font-black leading-none" style={{ color: textColor }}>
           {ov.label}

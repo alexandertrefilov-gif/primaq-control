@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { dbGet, dbSet } from "@/lib/db";
 import type { CartItem, DailySummary, Order, PaymentMethod, PosState } from "./pos-types";
 
 const STORAGE_KEY = "primaq-pos-state";
@@ -25,26 +26,6 @@ function initialState(): PosState {
   return { cart: [], daily: emptyDaily() };
 }
 
-function readStorage(): PosState {
-  if (typeof window === "undefined") return initialState();
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return initialState();
-    const parsed = JSON.parse(raw) as PosState;
-    if (!parsed.daily || parsed.daily.date !== todayStr()) {
-      return { cart: parsed.cart ?? [], daily: emptyDaily() };
-    }
-    return parsed;
-  } catch {
-    return initialState();
-  }
-}
-
-function writeStorage(state: PosState) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
 function createId() {
   return `pos_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -54,13 +35,29 @@ export function usePosStore() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setState(readStorage());
-    setHydrated(true);
+    dbGet(STORAGE_KEY)
+      .then((raw) => {
+        try {
+          if (!raw) return;
+          const parsed = JSON.parse(raw) as PosState;
+          if (!parsed.daily || parsed.daily.date !== todayStr()) {
+            setState({ cart: parsed.cart ?? [], daily: emptyDaily() });
+          } else {
+            setState(parsed);
+          }
+        } catch {
+          // keep initialState
+        }
+      })
+      .catch(() => {
+        // keep initialState
+      })
+      .finally(() => setHydrated(true));
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
-    writeStorage(state);
+    void dbSet(STORAGE_KEY, JSON.stringify(state));
   }, [state, hydrated]);
 
   const addToCart = useCallback((sizeId: string, flavorId: string, unitPriceCents: number) => {

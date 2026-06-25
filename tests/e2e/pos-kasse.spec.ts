@@ -16,7 +16,7 @@ async function seedEmptyPos(page: import("@playwright/test").Page) {
   await page.addInitScript(() => {
     if (window.sessionStorage.getItem("pos-seeded") === "1") return;
     window.sessionStorage.setItem("pos-seeded", "1");
-    window.localStorage.removeItem("primaq-pos-state");
+    indexedDB.deleteDatabase("primaq-pos");
   });
 }
 
@@ -31,9 +31,8 @@ async function waitLoaded(page: import("@playwright/test").Page) {
 }
 
 async function readPosState(page: import("@playwright/test").Page) {
-  return page.evaluate(() => {
-    const raw = window.localStorage.getItem("primaq-pos-state");
-    return raw ? (JSON.parse(raw) as {
+  return page.evaluate(async () => {
+    return new Promise<{
       cart: unknown[];
       daily: {
         totalCents: number;
@@ -43,7 +42,22 @@ async function readPosState(page: import("@playwright/test").Page) {
         orderCount: number;
         orders: Array<{ paymentMethod: string; totalCents: number; items: unknown[] }>;
       };
-    }) : null;
+    } | null>((resolve) => {
+      const req = indexedDB.open("primaq-pos");
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains("kv")) { db.close(); resolve(null); return; }
+        const tx = db.transaction("kv", "readonly");
+        const get = tx.objectStore("kv").get("primaq-pos-state");
+        get.onsuccess = () => {
+          const row = get.result as { value: string } | undefined;
+          db.close();
+          resolve(row?.value ? JSON.parse(row.value) : null);
+        };
+        get.onerror = () => { db.close(); resolve(null); };
+      };
+      req.onerror = () => resolve(null);
+    });
   });
 }
 
@@ -319,4 +333,39 @@ test("12: Navigation zwischen Verkauf und Tagesabschluss (mit Admin)", async ({ 
   await page.getByRole("link", { name: "Verkauf" }).click();
   await waitLoaded(page);
   await expect(page.getByText("Sorte wählen").first()).toBeVisible();
+});
+
+// ── Test 13: localStorage-Migration ──────────────────────────────────────────
+
+test("13: localStorage-Migration – Altdaten bleiben nach Dexie-Update erhalten", async ({ page }) => {
+  await page.addInitScript(() => {
+    // Simulate a first launch after the Dexie update: IndexedDB empty, localStorage has old data.
+    indexedDB.deleteDatabase("primaq-pos");
+    const today = new Date().toISOString().slice(0, 10);
+    window.localStorage.setItem("primaq-pos-state", JSON.stringify({
+      cart: [],
+      daily: {
+        date: today,
+        totalCents: 750,
+        cashCents: 500,
+        cardCents: 250,
+        qrCents: 0,
+        orderCount: 2,
+        orders: [],
+      },
+    }));
+  });
+  await seedAdmin(page);
+  await blockSupabase(page);
+  await page.goto("/tagesabschluss");
+  await waitLoaded(page);
+
+  // Migrated total (7,50 €) must appear on the daily close page.
+  await expect(page.getByText("7,50 €").first()).toBeVisible();
+
+  // Verify the data now lives in IndexedDB.
+  const state = await readPosState(page);
+  expect(state?.daily.totalCents).toBe(750);
+  expect(state?.daily.cashCents).toBe(500);
+  expect(state?.daily.orderCount).toBe(2);
 });

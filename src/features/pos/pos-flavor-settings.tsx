@@ -108,14 +108,14 @@ function FlavorPreviewCard({ flavor }: { flavor: MutableFlavor }) {
       style={{ background: flavor.backgroundColor }}
     >
       {flavor.imageSrc && (
-        <div className="absolute inset-[10%] overflow-hidden">
+        <div className="absolute inset-[8%] flex items-center justify-center overflow-hidden rounded-full">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={flavor.imageSrc}
             alt=""
             draggable={false}
-            className="block h-full w-full object-contain drop-shadow"
-            style={scale !== 1 ? { transform: `scale(${scale})`, transformOrigin: "center" } : undefined}
+            className="block h-full w-full object-contain bg-transparent drop-shadow"
+            style={{ transform: `scale(${scale})`, transformOrigin: "center" }}
           />
         </div>
       )}

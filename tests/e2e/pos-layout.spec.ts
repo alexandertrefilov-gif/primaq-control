@@ -26,7 +26,7 @@ async function seedEmpty(page: import("@playwright/test").Page) {
   await page.addInitScript(() => {
     if (window.sessionStorage.getItem("pos-layout-seeded") === "1") return;
     window.sessionStorage.setItem("pos-layout-seeded", "1");
-    window.localStorage.removeItem("primaq-pos-state");
+    indexedDB.deleteDatabase("primaq-pos");
   });
 }
 

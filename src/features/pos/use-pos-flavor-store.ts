@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { dbGet, dbSet } from "@/lib/db";
 import { FLAVORS, MACHINE_GROUP_LABELS } from "./pos-config";
 import type { FlavorConfig } from "./pos-config";
 
@@ -69,51 +70,44 @@ function defaultFlavors(): MutableFlavor[] {
   }));
 }
 
-// Returns the error message on failure, null on success.
-function safePersist(flavors: MutableFlavor[]): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(flavors));
-    return null;
-  } catch (err) {
-    const isQuota =
-      err instanceof DOMException &&
-      (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED");
-    return isQuota
-      ? "Speicher voll. Bitte Bilder in Einstellungen bereinigen oder kleinere Bilder verwenden."
-      : "Speichern fehlgeschlagen.";
-  }
-}
-
 export function usePosFlavorStore() {
   const [base, setBase] = useState<MutableFlavor[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [storageError, setStorageError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as MutableFlavor[];
-        setBase(parsed.map((f) => ({ ...f, imageScale: f.imageScale ?? 100 })));
-      } else {
+    dbGet(STORAGE_KEY)
+      .then((raw) => {
+        try {
+          if (raw) {
+            const parsed = JSON.parse(raw) as MutableFlavor[];
+            setBase(parsed.map((f) => ({ ...f, imageScale: f.imageScale ?? 100 })));
+          } else {
+            setBase(defaultFlavors());
+          }
+        } catch {
+          setBase(defaultFlavors());
+        }
+        setHydrated(true);
+      })
+      .catch(() => {
         setBase(defaultFlavors());
-      }
-    } catch {
-      setBase(defaultFlavors());
-    }
-    setHydrated(true);
+        setHydrated(true);
+      });
   }, []);
 
   const update = useCallback((id: string, patch: Partial<MutableFlavor>) => {
     setBase((curr) => {
       const next = curr.map((f) => (f.id === id ? { ...f, ...patch } : f));
-      const err = safePersist(next);
-      if (err) {
-        // Schedule outside the updater to stay clear of React's render phase
-        queueMicrotask(() => setStorageError(err));
-        return curr; // revert – image is not applied
-      }
+      dbSet(STORAGE_KEY, JSON.stringify(next)).catch((err) => {
+        const isQuota =
+          err instanceof DOMException &&
+          (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED");
+        const msg = isQuota
+          ? "Speicher voll. Bitte Bilder in Einstellungen bereinigen oder kleinere Bilder verwenden."
+          : "Speichern fehlgeschlagen.";
+        queueMicrotask(() => setStorageError(msg));
+      });
       return next;
     });
   }, []);
@@ -121,11 +115,15 @@ export function usePosFlavorStore() {
   const add = useCallback((flavor: MutableFlavor) => {
     setBase((curr) => {
       const next = [...curr, flavor];
-      const err = safePersist(next);
-      if (err) {
-        queueMicrotask(() => setStorageError(err));
-        return curr;
-      }
+      dbSet(STORAGE_KEY, JSON.stringify(next)).catch((err) => {
+        const isQuota =
+          err instanceof DOMException &&
+          (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED");
+        const msg = isQuota
+          ? "Speicher voll. Bitte Bilder in Einstellungen bereinigen oder kleinere Bilder verwenden."
+          : "Speichern fehlgeschlagen.";
+        queueMicrotask(() => setStorageError(msg));
+      });
       return next;
     });
   }, []);
@@ -133,11 +131,15 @@ export function usePosFlavorStore() {
   const remove = useCallback((id: string) => {
     setBase((curr) => {
       const next = curr.filter((f) => f.id !== id);
-      const err = safePersist(next);
-      if (err) {
-        queueMicrotask(() => setStorageError(err));
-        return curr;
-      }
+      dbSet(STORAGE_KEY, JSON.stringify(next)).catch((err) => {
+        const isQuota =
+          err instanceof DOMException &&
+          (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED");
+        const msg = isQuota
+          ? "Speicher voll. Bitte Bilder in Einstellungen bereinigen oder kleinere Bilder verwenden."
+          : "Speichern fehlgeschlagen.";
+        queueMicrotask(() => setStorageError(msg));
+      });
       return next;
     });
   }, []);

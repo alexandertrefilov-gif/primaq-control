@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { dbGet, dbSet } from "@/lib/db";
 
 export type PanelId = "groessen" | "sorten" | "warenkorb";
 export type PanelSize = "klein" | "mittel" | "gross" | "xl";
@@ -178,36 +179,21 @@ export function panelWidthClass(id: PanelId, size: PanelSize): string {
 
 type StoreState = { active: LayoutConfig; profiles: LayoutProfile[] };
 
-function loadState(): StoreState {
-  try {
-    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(LS_KEY) : null;
-    if (!raw) return { active: DEFAULT_LAYOUT, profiles: [] };
-    const parsed = JSON.parse(raw) as Partial<StoreState>;
-    // Spread DEFAULT_LAYOUT first so any newly-added fields get their default values
-    const active: LayoutConfig = {
-      ...DEFAULT_LAYOUT,
-      ...(parsed.active ?? {}),
-      toggles: { ...DEFAULT_LAYOUT.toggles, ...(parsed.active?.toggles ?? {}) },
-      sizeVisibility: { ...DEFAULT_LAYOUT.sizeVisibility, ...(parsed.active?.sizeVisibility ?? {}) },
-      salesSizes: Object.fromEntries(
-        Object.entries(DEFAULT_LAYOUT.salesSizes).map(([id, def]) => [
-          id,
-          { ...def, ...(parsed.active?.salesSizes?.[id] ?? {}) },
-        ])
-      ) as Record<string, SalesSizeOverride>,
-    };
-    return { active, profiles: parsed.profiles ?? [] };
-  } catch {
-    return { active: DEFAULT_LAYOUT, profiles: [] };
-  }
-}
-
-function saveState(state: StoreState) {
-  try {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(LS_KEY, JSON.stringify(state));
-    }
-  } catch { /* quota exceeded */ }
+function parseStoreState(raw: string): StoreState {
+  const parsed = JSON.parse(raw) as Partial<StoreState>;
+  const active: LayoutConfig = {
+    ...DEFAULT_LAYOUT,
+    ...(parsed.active ?? {}),
+    toggles: { ...DEFAULT_LAYOUT.toggles, ...(parsed.active?.toggles ?? {}) },
+    sizeVisibility: { ...DEFAULT_LAYOUT.sizeVisibility, ...(parsed.active?.sizeVisibility ?? {}) },
+    salesSizes: Object.fromEntries(
+      Object.entries(DEFAULT_LAYOUT.salesSizes).map(([id, def]) => [
+        id,
+        { ...def, ...(parsed.active?.salesSizes?.[id] ?? {}) },
+      ])
+    ) as Record<string, SalesSizeOverride>,
+  };
+  return { active, profiles: parsed.profiles ?? [] };
 }
 
 export function usePosLayoutStore() {
@@ -215,14 +201,22 @@ export function usePosLayoutStore() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setState(loadState());
-    setHydrated(true);
+    dbGet(LS_KEY)
+      .then((raw) => {
+        try {
+          if (raw) setState(parseStoreState(raw));
+        } catch {
+          // keep default
+        }
+        setHydrated(true);
+      })
+      .catch(() => setHydrated(true));
   }, []);
 
   const update = useCallback((config: LayoutConfig) => {
     setState((prev) => {
       const next = { ...prev, active: config };
-      saveState(next);
+      void dbSet(LS_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
@@ -235,7 +229,7 @@ export function usePosLayoutStore() {
         config: prev.active,
       };
       const next = { ...prev, profiles: [...prev.profiles, profile] };
-      saveState(next);
+      void dbSet(LS_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
@@ -245,7 +239,7 @@ export function usePosLayoutStore() {
       const profile = prev.profiles.find((p) => p.id === id);
       if (!profile) return prev;
       const next = { ...prev, active: profile.config };
-      saveState(next);
+      void dbSet(LS_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
@@ -253,7 +247,7 @@ export function usePosLayoutStore() {
   const deleteProfile = useCallback((id: string) => {
     setState((prev) => {
       const next = { ...prev, profiles: prev.profiles.filter((p) => p.id !== id) };
-      saveState(next);
+      void dbSet(LS_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
@@ -261,7 +255,7 @@ export function usePosLayoutStore() {
   const resetToDefault = useCallback(() => {
     setState((prev) => {
       const next = { ...prev, active: DEFAULT_LAYOUT };
-      saveState(next);
+      void dbSet(LS_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
