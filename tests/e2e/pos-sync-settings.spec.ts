@@ -61,7 +61,7 @@ async function mockSupabaseWithRemoteSettings(
     const method = route.request().method();
     if (method === "HEAD") {
       await route.fulfill({ status: 200 });
-    } else if (url.includes("pos_settings") && !url.includes("limit=0")) {
+    } else if (url.includes("/settings") && !url.includes("limit=0")) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",

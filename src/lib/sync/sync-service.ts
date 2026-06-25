@@ -194,7 +194,7 @@ class SyncService {
           } catch (err) {
             hadError = true;
             lastErr = extractErrorText(err);
-            console.error("[Sync] Flush-Fehler pos_settings", {
+            console.error("[Sync] Flush-Fehler settings", {
               id: op.id,
               settingsKey: payloadKey,
               retryCount: op.retryCount,
