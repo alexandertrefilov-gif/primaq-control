@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect } from "react";
-import { getDeviceId } from "@/lib/sync/device-registry";
+import { getSyncService } from "@/lib/sync/sync-service";
 
 /**
- * Renders nothing. Initializes the device registry (stable deviceId in IDB)
- * on first mount so it is ready before any sync operations are needed.
+ * Renders nothing. Starts the SyncService on mount (initializing device
+ * registry + network listener) and stops it cleanly on unmount.
  */
 export function SyncFoundation() {
   useEffect(() => {
-    void getDeviceId();
+    const service = getSyncService();
+    void service.start();
+    return () => service.stop();
   }, []);
   return null;
 }
