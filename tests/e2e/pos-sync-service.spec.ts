@@ -9,16 +9,39 @@
  *   5 – online-Event startet flush(): window.dispatchEvent("online") → Queue wird geflusht.
  *   6 – offline-Event startet keinen flush(): window.dispatchEvent("offline") → Queue bleibt.
  *
+ * Hinweis Phase 2.3: flush() prüft jetzt zuerst die Supabase-Verbindung.
+ * Tests 2–6 verwenden mockSupabaseConnected() damit der ack()-Pfad erreichbar bleibt.
+ * Test 1 testet nur deviceId (kein flush nötig) und kann Supabase blockieren.
  * Alle Tests verwenden raw-IDB-Zugriff, kein direkter Import der Sync-Module.
- * SyncService läuft produktiv über SyncFoundation (im Root-Layout eingebunden).
  */
 
 import { expect, test } from "@playwright/test";
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
+/** Aborts all Supabase requests (checkConnection → OFFLINE). */
 async function blockSupabase(page: import("@playwright/test").Page) {
   await page.route(/supabase\.co/, (route) => route.abort());
+  await page.routeWebSocket(/supabase\.co/, () => {});
+}
+
+/**
+ * Mocks Supabase to return 200 for all requests so checkConnection → CONNECTED
+ * and writeHealthCheck/readHealthCheck succeed without a real DB.
+ */
+async function mockSupabaseConnected(page: import("@playwright/test").Page) {
+  await page.route(/supabase\.co/, async (route) => {
+    const method = route.request().method();
+    if (method === "HEAD") {
+      await route.fulfill({ status: 200 });
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "[]",
+      });
+    }
+  });
   await page.routeWebSocket(/supabase\.co/, () => {});
 }
 
@@ -95,27 +118,6 @@ async function putSyncOp(
   );
 }
 
-async function deleteSyncOps(
-  page: import("@playwright/test").Page,
-  ids: string[]
-): Promise<void> {
-  await page.evaluate(
-    (idsToDelete) =>
-      new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open("primaq-pos");
-        req.onsuccess = () => {
-          const db = req.result;
-          const tx = db.transaction("sync_queue", "readwrite");
-          for (const id of idsToDelete) tx.objectStore("sync_queue").delete(id);
-          tx.oncomplete = () => { db.close(); resolve(); };
-          tx.onerror = () => { db.close(); reject(new Error("delete failed")); };
-        };
-        req.onerror = () => reject(new Error("open failed"));
-      }),
-    ids
-  );
-}
-
 /** Wait until sync_queue has exactly `target` ops (polls IDB). */
 async function waitForQueueCount(
   page: import("@playwright/test").Page,
@@ -162,11 +164,11 @@ test("SyncService 1: start() − DeviceId wird beim App-Start in IDB geschrieben
     window.sessionStorage.setItem("ss1-seeded", "1");
     indexedDB.deleteDatabase("primaq-pos");
   });
+  // blockSupabase is fine here: deviceId is written before checkConnection() runs.
   await blockSupabase(page);
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  // SyncFoundation → getSyncService().start() → init() → getDeviceId() writes to IDB.
   const deviceId = await readKvEntry(page, "primaq-device-id");
   expect(deviceId).not.toBeNull();
   expect(deviceId).toMatch(
@@ -182,22 +184,20 @@ test("SyncService 2: stop()+start()-Zyklus − Service arbeitet nach Reload korr
     window.sessionStorage.setItem("ss2-seeded", "1");
     indexedDB.deleteDatabase("primaq-pos");
   });
-  await blockSupabase(page);
+  // flush() requires CONNECTED to ack → use mock.
+  await mockSupabaseConnected(page);
   await page.goto("/verkauf");
   await waitLoaded(page);
 
   const id1 = await readKvEntry(page, "primaq-device-id");
   expect(id1).not.toBeNull();
 
-  // Reload triggers: SyncFoundation unmount (stop) + mount (start) fresh.
   await page.reload();
   await waitLoaded(page);
 
-  // DeviceId must be stable after stop+start cycle.
   const id2 = await readKvEntry(page, "primaq-device-id");
   expect(id2).toBe(id1);
 
-  // Service must accept a flush after restart (online event triggers it).
   await putSyncOp(page, makeSyncOp("ss2-op"));
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await waitForQueueCount(page, 0);
@@ -211,11 +211,10 @@ test("SyncService 3: flush() − liest ausstehende Ops aus der Queue", async ({ 
     window.sessionStorage.setItem("ss3-seeded", "1");
     indexedDB.deleteDatabase("primaq-pos");
   });
-  await blockSupabase(page);
+  await mockSupabaseConnected(page);
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  // Place 3 ops in the queue.
   await putSyncOp(page, makeSyncOp("ss3-op-a"));
   await putSyncOp(page, makeSyncOp("ss3-op-b"));
   await putSyncOp(page, makeSyncOp("ss3-op-c"));
@@ -223,10 +222,7 @@ test("SyncService 3: flush() − liest ausstehende Ops aus der Queue", async ({ 
   const countBefore = await countSyncQueue(page);
   expect(countBefore).toBe(3);
 
-  // Trigger flush via online event (proves flush() reads the queue).
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-
-  // Queue should be empty after flush() read and acked all ops.
   await waitForQueueCount(page, 0);
 });
 
@@ -238,7 +234,7 @@ test("SyncService 4: flush() − leert Queue vollständig im Simulationsmodus", 
     window.sessionStorage.setItem("ss4-seeded", "1");
     indexedDB.deleteDatabase("primaq-pos");
   });
-  await blockSupabase(page);
+  await mockSupabaseConnected(page);
   await page.goto("/verkauf");
   await waitLoaded(page);
 
@@ -248,7 +244,7 @@ test("SyncService 4: flush() − leert Queue vollständig im Simulationsmodus", 
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await waitForQueueCount(page, 0);
 
-  // A second flush on an already-empty queue must be a no-op (no crash).
+  // Second flush on empty queue must be a no-op (no crash).
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await waitForQueueCount(page, 0);
 });
@@ -261,14 +257,13 @@ test("SyncService 5: window.online-Event − startet flush() und leert Queue", a
     window.sessionStorage.setItem("ss5-seeded", "1");
     indexedDB.deleteDatabase("primaq-pos");
   });
-  await blockSupabase(page);
+  await mockSupabaseConnected(page);
   await page.goto("/verkauf");
   await waitLoaded(page);
 
   await putSyncOp(page, makeSyncOp("ss5-op"));
   expect(await countSyncQueue(page)).toBe(1);
 
-  // online event → NetworkMonitor fires listener → SyncService.flush() called.
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await waitForQueueCount(page, 0);
 });
@@ -281,7 +276,8 @@ test("SyncService 6: window.offline-Event − startet keinen flush()", async ({ 
     window.sessionStorage.setItem("ss6-seeded", "1");
     indexedDB.deleteDatabase("primaq-pos");
   });
-  await blockSupabase(page);
+  // mockSupabaseConnected needed for the cleanup flush at the end.
+  await mockSupabaseConnected(page);
   await page.goto("/verkauf");
   await waitLoaded(page);
 
@@ -290,11 +286,10 @@ test("SyncService 6: window.offline-Event − startet keinen flush()", async ({ 
 
   // offline event must NOT trigger flush.
   await page.evaluate(() => window.dispatchEvent(new Event("offline")));
-  // Wait longer than the flush would take to ensure nothing happened.
   await page.waitForTimeout(400);
   expect(await countSyncQueue(page)).toBe(1);
 
-  // Cleanup: trigger flush via online event to leave queue clean.
+  // Cleanup: dispatch online → flush acks the op.
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await waitForQueueCount(page, 0);
 });
