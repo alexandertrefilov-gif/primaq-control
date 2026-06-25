@@ -34,6 +34,22 @@ function log(...args: unknown[]): void {
   if (isDev) console.log("[Sync]", ...args);
 }
 
+/** Extracts a human-readable message from any thrown value, including Supabase PostgrestError objects. */
+function extractErrorText(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null) {
+    const e = err as Record<string, unknown>;
+    const parts: string[] = [];
+    if (e.message) parts.push(String(e.message));
+    if (e.code) parts.push(`[${String(e.code)}]`);
+    if (e.details) parts.push(String(e.details));
+    if (e.hint) parts.push(`Hint: ${String(e.hint)}`);
+    if (parts.length > 0) return parts.join(" ");
+    try { return JSON.stringify(e); } catch { /* ignore */ }
+  }
+  return String(err);
+}
+
 class SyncService {
   private unsubscribeNetwork?: () => void;
   private _running = false;
@@ -158,16 +174,33 @@ class SyncService {
             await ack([op.id]);
           } catch (err) {
             hadError = true;
-            lastErr = err instanceof Error ? err.message : String(err);
+            lastErr = extractErrorText(err);
+            console.error("[Sync] Flush-Fehler pos_year_history", {
+              id: op.id,
+              retryCount: op.retryCount,
+              payloadSize: op.payload.length,
+              error: err,
+            });
             await markFailed(op.id);
           }
         } else if (op.entity === "pos_settings" && op.operation === "upsert") {
+          let payloadKey = "(unbekannt)";
+          try {
+            payloadKey = (JSON.parse(op.payload) as Record<string, unknown>).settingsKey as string ?? payloadKey;
+          } catch { /* ignore parse error */ }
           try {
             await upsertSettings(JSON.parse(op.payload) as SettingsPayload);
             await ack([op.id]);
           } catch (err) {
             hadError = true;
-            lastErr = err instanceof Error ? err.message : String(err);
+            lastErr = extractErrorText(err);
+            console.error("[Sync] Flush-Fehler pos_settings", {
+              id: op.id,
+              settingsKey: payloadKey,
+              retryCount: op.retryCount,
+              payloadBytes: op.payload.length,
+              error: err,
+            });
             await markFailed(op.id);
           }
         } else {
@@ -186,6 +219,7 @@ class SyncService {
       }
     } catch (err) {
       this._isFlushing = false;
+      console.error("[Sync] flush() Fehler:", err);
       log("flush error:", err);
     }
     await this._refreshStats();
@@ -235,12 +269,32 @@ class SyncService {
     const localMeta = metaRaw
       ? (JSON.parse(metaRaw) as { updatedAt: string })
       : null;
-    if (localMeta && row.updated_at <= localMeta.updatedAt) return false;
+
+    const localUpdatedAt = localMeta?.updatedAt ?? null;
+    const cloudUpdatedAt = row.updated_at;
+
+    if (localMeta && cloudUpdatedAt <= localUpdatedAt!) {
+      // Always log this decision so it's visible in DevTools on any device
+      console.log(
+        `[Sync] _applySettingsRow SKIP ${row.settings_key}`,
+        `| cloud=${cloudUpdatedAt}`,
+        `| local=${localUpdatedAt}`,
+        "| Lokal ist neuer oder gleich — kein Überschreiben"
+      );
+      return false;
+    }
+
+    console.log(
+      `[Sync] _applySettingsRow APPLY ${row.settings_key}`,
+      `| cloud=${cloudUpdatedAt}`,
+      `| local=${localUpdatedAt ?? "null (kein Meta)"}`
+    );
+
     const payload = row.payload as SettingsPayload;
     await dbSet(row.settings_key, JSON.stringify(payload.data));
     await dbSet(
       metaKey,
-      JSON.stringify({ updatedAt: row.updated_at, deviceId: row.device_id }),
+      JSON.stringify({ updatedAt: cloudUpdatedAt, deviceId: row.device_id }),
     );
     return true;
   }

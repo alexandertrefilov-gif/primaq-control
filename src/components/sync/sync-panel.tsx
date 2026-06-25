@@ -6,6 +6,7 @@ import { dbGet, dbRemove } from "@/lib/db";
 import { enqueueSettingsSync } from "@/lib/sync/enqueue-settings";
 import { getSyncService } from "@/lib/sync/sync-service";
 import { useSyncStatus } from "./use-sync-status";
+import { SyncDiagnostic } from "./sync-diagnostic";
 
 const PUBLISH_KEYS = ["primaq-pos-flavors-v1", "primaq-pos-layout-v1"] as const;
 
@@ -168,6 +169,8 @@ export function SyncPanel() {
           {resetting ? "Wird geladen…" : "Lokale Einstellungen zurücksetzen und neu laden"}
         </button>
       )}
+
+      {isAdmin && <SyncDiagnostic />}
 
       {COMMIT_SHORT && (
         <p className="mt-3 text-center text-[10px] text-black/30">Build: {COMMIT_SHORT}</p>
