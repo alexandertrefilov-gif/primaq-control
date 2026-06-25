@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useState } from "react";
+
+const COMMIT_SHORT =
+  process.env.NEXT_PUBLIC_COMMIT_SHA && process.env.NEXT_PUBLIC_COMMIT_SHA !== "unknown"
+    ? process.env.NEXT_PUBLIC_COMMIT_SHA.slice(0, 7)
+    : null;
 import { useSyncStatus } from "./use-sync-status";
 import { getSyncService } from "@/lib/sync/sync-service";
 
@@ -69,6 +74,10 @@ export function SyncPanel() {
       >
         {flushing || status === "syncing" ? "Synchronisiert…" : "Jetzt synchronisieren"}
       </button>
+
+      {COMMIT_SHORT && (
+        <p className="mt-3 text-center text-[10px] text-black/30">Build: {COMMIT_SHORT}</p>
+      )}
     </div>
   );
 }
