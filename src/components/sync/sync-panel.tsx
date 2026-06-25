@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAdmin } from "@/features/pos/admin-context";
-import { dbRemove } from "@/lib/db";
+import { dbGet, dbRemove } from "@/lib/db";
+import { enqueueSettingsSync } from "@/lib/sync/enqueue-settings";
 import { getSyncService } from "@/lib/sync/sync-service";
 import { useSyncStatus } from "./use-sync-status";
+
+const PUBLISH_KEYS = ["primaq-pos-flavors-v1", "primaq-pos-layout-v1"] as const;
 
 const COMMIT_SHORT =
   process.env.NEXT_PUBLIC_COMMIT_SHA && process.env.NEXT_PUBLIC_COMMIT_SHA !== "unknown"
@@ -44,6 +47,14 @@ export function SyncPanel() {
   const { isAdmin } = useAdmin();
   const [flushing, setFlushing] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishDone, setPublishDone] = useState(false);
+
+  useEffect(() => {
+    if (!publishDone) return;
+    const t = setTimeout(() => setPublishDone(false), 4000);
+    return () => clearTimeout(t);
+  }, [publishDone]);
 
   const handleManualSync = useCallback(async () => {
     setFlushing(true);
@@ -53,6 +64,31 @@ export function SyncPanel() {
       await service.pull();
     } finally {
       setFlushing(false);
+    }
+  }, []);
+
+  const handlePublishSettings = useCallback(async () => {
+    setPublishing(true);
+    setPublishDone(false);
+    try {
+      let enqueued = 0;
+      for (const key of PUBLISH_KEYS) {
+        const raw = await dbGet(key);
+        if (raw) {
+          try {
+            await enqueueSettingsSync(key, JSON.parse(raw) as unknown);
+            enqueued++;
+          } catch {
+            // skip malformed entry
+          }
+        }
+      }
+      if (enqueued > 0) {
+        await getSyncService().flush();
+      }
+      setPublishDone(true);
+    } finally {
+      setPublishing(false);
     }
   }, []);
 
@@ -103,6 +139,24 @@ export function SyncPanel() {
       >
         {flushing || status === "syncing" ? "Synchronisiert…" : "Jetzt synchronisieren"}
       </button>
+
+      {isAdmin && (
+        <>
+          <button
+            data-testid="publish-settings-btn"
+            onClick={handlePublishSettings}
+            disabled={publishing}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-primaq-200 bg-primaq-50 px-4 py-2.5 text-sm font-semibold text-primaq-700 transition-colors hover:bg-primaq-100 active:scale-[0.97] disabled:opacity-60"
+          >
+            {publishing ? "Wird veröffentlicht…" : "Aktuelle Einstellungen in Cloud veröffentlichen"}
+          </button>
+          {publishDone && (
+            <p className="mt-2 text-center text-xs font-medium text-green-600">
+              Aktuelle POS-Einstellungen wurden veröffentlicht.
+            </p>
+          )}
+        </>
+      )}
 
       {isAdmin && (
         <button
