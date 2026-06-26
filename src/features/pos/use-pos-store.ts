@@ -141,6 +141,7 @@ export function usePosStore() {
         orderCount: d.orderCount + 1,
         orders: [...d.orders, order],
       };
+      console.log("[SalesSync 1] bookOrder finished", `| orderCount=${nextDaily.orderCount}`, `| totalCents=${nextDaily.totalCents}`);
       void enqueueSalesStateSync(nextDaily);
       return { cart: [], daily: nextDaily };
     });

@@ -5,17 +5,18 @@ import type { DailySummary } from "@/features/pos/pos-types";
 
 export const SALES_STATE_META_KEY = "primaq-pos-state-meta";
 
-/**
- * Fire-and-forget: enqueue the current daily sales snapshot for Supabase sync.
- * Writes a metadata entry used for pull conflict resolution (Last Write Wins).
- * Errors are silently swallowed so they can never disrupt the local POS flow.
- */
 export async function enqueueSalesStateSync(daily: DailySummary): Promise<void> {
+  console.log("[SalesSync 2] enqueueSalesStateSync called", `| date=${daily.date}`, `| orderCount=${daily.orderCount}`, `| totalCents=${daily.totalCents}`);
+
   try {
     const deviceId = await getDeviceId();
+    console.log("[Sync:2] deviceId ermittelt:", deviceId.slice(0, 8));
+
     const updatedAt = new Date().toISOString();
     await dbSet(SALES_STATE_META_KEY, JSON.stringify({ updatedAt, date: daily.date }));
-    await enqueue({
+    console.log("[Sync:3] Meta-Key geschrieben:", SALES_STATE_META_KEY, updatedAt);
+
+    const opId = await enqueue({
       entity: "pos_sales_state",
       operation: "upsert",
       payload: JSON.stringify({
@@ -26,18 +27,15 @@ export async function enqueueSalesStateSync(daily: DailySummary): Promise<void> 
       }),
       deviceId,
     });
-    console.log(
-      `[Sync] enqueueSalesStateSync OK`,
-      `| date=${daily.date}`,
-      `| orderCount=${daily.orderCount}`,
-      `| totalCents=${daily.totalCents}`,
-    );
-    // Signal SyncFoundation to flush immediately — without this, the op would
-    // stay in the queue until the user clicks "Jetzt synchronisieren" manually.
+    console.log("[SalesSync 3] SyncOp created", `| opId=${opId}`, "| entity=pos_sales_state");
+
+    // SCHRITT 5 – Auto-Flush triggern
     if (typeof window !== "undefined") {
+      console.log("[Sync:5] Dispatche primaq-sales-state-enqueued");
       window.dispatchEvent(new CustomEvent("primaq-sales-state-enqueued"));
     }
-  } catch {
-    // sync errors must never disrupt the local POS flow
+  } catch (err) {
+    // Fehler explizit loggen – niemals den POS-Fluss stören
+    console.error("[Sync] enqueueSalesStateSync FEHLER:", err);
   }
 }

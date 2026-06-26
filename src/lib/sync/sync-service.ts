@@ -121,9 +121,14 @@ class SyncService {
 
   private _recordSync(): void {
     const now = new Date().toISOString();
+    console.log("[Sync] recordSync", now);
     this._stats.lastSyncAt = now;
     try {
-      if (typeof window !== "undefined") localStorage.setItem("primaq-last-sync", now);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("primaq-last-sync", now);
+        // CustomEvent guarantees UI update independently of the subscription path.
+        window.dispatchEvent(new CustomEvent("primaq-sync-completed", { detail: { at: now } }));
+      }
     } catch { /* ignore — private/storage-blocked contexts */ }
   }
 
@@ -146,10 +151,15 @@ class SyncService {
       if (status === "CONNECTED") {
         log("Connected");
         await checkTables();
-        await writeHealthCheck(this._deviceId);
-        log("HealthCheck geschrieben");
-        await readHealthCheck(this._deviceId);
-        log("HealthCheck gelesen");
+        try {
+          await writeHealthCheck(this._deviceId);
+          log("HealthCheck geschrieben");
+          await readHealthCheck(this._deviceId);
+          log("HealthCheck gelesen");
+        } catch (err) {
+          // sync_health table missing — non-fatal, continue with pull
+          console.warn("[Sync] sync_health nicht verfügbar:", err);
+        }
         await this.pull();
         this._recordSync();
       } else {
@@ -167,6 +177,8 @@ class SyncService {
       const status = await checkConnection();
       this._isOnline = status === "CONNECTED";
       const pending = await getPending();
+
+      console.log("[SalesSync 4] flush started", `| status=${status}`, `| pending=${pending.length}`, `| entities=${pending.map((o) => o.entity).join(", ") || "–"}`);
 
       if (status === "OFFLINE") {
         if (pending.length > 0) {
@@ -191,6 +203,7 @@ class SyncService {
       let lastErr: string | null = null;
 
       for (const op of pending) {
+        console.log("[SalesSync 5] processing entity", op.entity, `| operation=${op.operation}`, `| id=${op.id}`);
         if (op.entity === "pos_year_history" && op.operation === "upsert") {
           try {
             await upsertYearHistory(JSON.parse(op.payload) as YearHistoryPayload);
@@ -228,18 +241,21 @@ class SyncService {
           }
         } else if (op.entity === "pos_sales_state" && op.operation === "upsert") {
           let businessDate = "(unbekannt)";
+          let parsedPayload: SalesStatePayload | null = null;
           try {
-            businessDate =
-              (JSON.parse(op.payload) as Record<string, unknown>).businessDate as string ??
-              businessDate;
+            parsedPayload = JSON.parse(op.payload) as SalesStatePayload;
+            businessDate = parsedPayload.businessDate ?? businessDate;
           } catch { /* ignore parse error */ }
+          console.log("[SalesSync 6] calling upsertSalesState", `| businessDate=${businessDate}`, `| orderCount=${(parsedPayload?.daily as Record<string,unknown>)?.orderCount ?? "?"}`, `| payloadBytes=${op.payload.length}`);
           try {
-            await upsertSalesState(JSON.parse(op.payload) as SalesStatePayload);
+            await upsertSalesState(parsedPayload ?? (JSON.parse(op.payload) as SalesStatePayload));
             await ack([op.id]);
+            console.log("[SalesSync 8] success | businessDate=", businessDate);
           } catch (err) {
             hadError = true;
             lastErr = extractErrorText(err);
-            console.error("[Sync] Flush-Fehler pos_sales_state", {
+            // SCHRITT 8 (Fehler) – Supabase hat Fehler zurückgegeben
+            console.error("[Sync:8] upsertSalesState FEHLER", {
               id: op.id,
               businessDate,
               retryCount: op.retryCount,

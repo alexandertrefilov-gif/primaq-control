@@ -17,7 +17,8 @@ export function SyncFoundation() {
 
   useEffect(() => {
     const onEnqueued = () => {
-      console.log("[Sync] primaq-sales-state-enqueued → auto-flush");
+      // SCHRITT 6 – Event empfangen, flush startet
+      console.log("[Sync:6] primaq-sales-state-enqueued empfangen → starte flush()");
       void getSyncService().flush();
     };
     window.addEventListener("primaq-sales-state-enqueued", onEnqueued);
