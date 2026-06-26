@@ -401,3 +401,44 @@ test("Settings 7: Bestehende POS-Funktionen bleiben unverändert", async ({ page
 
   await expect(page.locator("body")).not.toContainText("Application error");
 });
+
+// ── Test 8: "Letzter Sync" Zeitstempel erscheint nach Button-Klick ─────────────
+
+test("Settings 8: 'Jetzt synchronisieren' zeigt Zeitstempel — nicht mehr '—'", async ({ page }) => {
+  // Covers the bug where _recordSync() was never called on an empty queue,
+  // and where lastSyncAt was in-memory only (reset on every reload).
+  await page.addInitScript(() => {
+    if (window.sessionStorage.getItem("set8-seeded") === "1") return;
+    window.sessionStorage.setItem("set8-seeded", "1");
+    window.sessionStorage.setItem("primaq-admin", "true");
+    indexedDB.deleteDatabase("primaq-pos");
+    try { localStorage.removeItem("primaq-last-sync"); } catch { /* ignore */ }
+  });
+
+  // Start OFFLINE: init() skips pull+_recordSync() so "Letzter Sync" stays "—".
+  await blockSupabase(page);
+  await page.goto("/einstellungen");
+  await waitLoaded(page);
+
+  await page.getByRole("button", { name: "Sync" }).click();
+  await expect(page.getByTestId("manual-sync-btn")).toBeVisible();
+
+  // Verify baseline: "Letzter Sync" row shows "—"
+  await expect(page.getByText("—")).toBeVisible({ timeout: 3000 });
+
+  // Switch to CONNECTED so the button-click flush succeeds
+  await mockSupabaseConnected(page);
+  await page.getByTestId("manual-sync-btn").click();
+
+  // After flush+_recordSync() → CustomEvent "primaq-sync-completed" → setStats
+  // → UI must now show "Gerade eben" (synced less than a minute ago)
+  await expect(page.getByText("Gerade eben")).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText("—")).not.toBeVisible();
+
+  // Verify localStorage was written (survives reload)
+  const saved = await page.evaluate(() => {
+    try { return localStorage.getItem("primaq-last-sync"); } catch { return null; }
+  });
+  expect(saved).not.toBeNull();
+  expect(new Date(saved as string).getTime()).toBeGreaterThan(Date.now() - 10_000);
+});
