@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { dbGet, dbSet } from "@/lib/db";
+import { enqueueSalesStateSync } from "@/lib/sync/enqueue-sales-state";
 import type { CartItem, DailySummary, Order, PaymentMethod, PosState } from "./pos-types";
 
 const STORAGE_KEY = "primaq-pos-state";
@@ -59,6 +60,18 @@ export function usePosStore() {
     if (!hydrated) return;
     void dbSet(STORAGE_KEY, JSON.stringify(state));
   }, [state, hydrated]);
+
+  // Re-apply daily when sync service writes a newer remote state.
+  // Cart is preserved (sync service never overwrites the active cart in IDB).
+  useEffect(() => {
+    const onSynced = (e: Event) => {
+      const daily = (e as CustomEvent<{ daily: DailySummary }>).detail?.daily;
+      if (!daily || daily.date !== todayStr()) return;
+      setState((current) => ({ cart: current.cart, daily }));
+    };
+    window.addEventListener("primaq-pos-state-synced", onSynced);
+    return () => window.removeEventListener("primaq-pos-state-synced", onSynced);
+  }, []);
 
   const addToCart = useCallback((sizeId: string, flavorId: string, unitPriceCents: number) => {
     setState((current) => {
@@ -119,18 +132,17 @@ export function usePosStore() {
         dailyNumber: current.daily.orderCount + 1,
       };
       const d = current.daily;
-      return {
-        cart: [],
-        daily: {
-          ...d,
-          totalCents: d.totalCents + totalCents,
-          cashCents: d.cashCents + (paymentMethod === "bar" ? totalCents : 0),
-          cardCents: d.cardCents + (paymentMethod === "karte" ? totalCents : 0),
-          qrCents: d.qrCents + (paymentMethod === "qr" ? totalCents : 0),
-          orderCount: d.orderCount + 1,
-          orders: [...d.orders, order],
-        },
+      const nextDaily: DailySummary = {
+        ...d,
+        totalCents: d.totalCents + totalCents,
+        cashCents: d.cashCents + (paymentMethod === "bar" ? totalCents : 0),
+        cardCents: d.cardCents + (paymentMethod === "karte" ? totalCents : 0),
+        qrCents: d.qrCents + (paymentMethod === "qr" ? totalCents : 0),
+        orderCount: d.orderCount + 1,
+        orders: [...d.orders, order],
       };
+      void enqueueSalesStateSync(nextDaily);
+      return { cart: [], daily: nextDaily };
     });
   }, []);
 

@@ -11,10 +11,15 @@ import {
   pullYearHistory,
   upsertSettings,
   pullSettings,
+  upsertSalesState,
+  pullSalesState,
   type YearHistoryPayload,
   type SettingsPayload,
   type SettingsRow,
+  type SalesStatePayload,
+  type SalesStateRow,
 } from "./supabase-sync";
+import { SALES_STATE_META_KEY } from "./enqueue-sales-state";
 
 export type SyncStatus = "offline" | "idle" | "syncing" | "error" | "pending";
 
@@ -203,6 +208,28 @@ class SyncService {
             });
             await markFailed(op.id);
           }
+        } else if (op.entity === "pos_sales_state" && op.operation === "upsert") {
+          let businessDate = "(unbekannt)";
+          try {
+            businessDate =
+              (JSON.parse(op.payload) as Record<string, unknown>).businessDate as string ??
+              businessDate;
+          } catch { /* ignore parse error */ }
+          try {
+            await upsertSalesState(JSON.parse(op.payload) as SalesStatePayload);
+            await ack([op.id]);
+          } catch (err) {
+            hadError = true;
+            lastErr = extractErrorText(err);
+            console.error("[Sync] Flush-Fehler pos_sales_state", {
+              id: op.id,
+              businessDate,
+              retryCount: op.retryCount,
+              payloadBytes: op.payload.length,
+              error: err,
+            });
+            await markFailed(op.id);
+          }
         } else {
           await ack([op.id]);
         }
@@ -261,6 +288,17 @@ class SyncService {
     } catch (err) {
       log("pull settings error:", err);
     }
+
+    // Pull sales state for today (Last Write Wins)
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const remoteRow = await pullSalesState("default", today);
+      if (remoteRow && (await this._applySalesStateRow(remoteRow))) {
+        log("Pull: Tagesstand aktualisiert");
+      }
+    } catch (err) {
+      log("pull sales state error:", err);
+    }
   }
 
   private async _applySettingsRow(row: SettingsRow): Promise<boolean> {
@@ -292,6 +330,62 @@ class SyncService {
 
     await dbSet(row.settings_key, JSON.stringify(row.data));
     await dbSet(metaKey, JSON.stringify({ updatedAt: cloudUpdatedAt }));
+    return true;
+  }
+
+  private async _applySalesStateRow(row: SalesStateRow): Promise<boolean> {
+    const metaRaw = await dbGet(SALES_STATE_META_KEY);
+    const localMeta = metaRaw
+      ? (JSON.parse(metaRaw) as { updatedAt: string })
+      : null;
+
+    const localPosRaw = await dbGet("primaq-pos-state");
+    const localPos = localPosRaw
+      ? (JSON.parse(localPosRaw) as { cart: unknown; daily: Record<string, unknown> })
+      : null;
+    const localOrderCount = localPos?.daily?.orderCount ?? 0;
+    const cloudData = row.data as Record<string, unknown>;
+    const cloudOrderCount = cloudData?.orderCount ?? "?";
+
+    if (localMeta && row.updated_at <= localMeta.updatedAt) {
+      console.log(
+        `[Sync] _applySalesStateRow SKIP ${row.business_date}`,
+        `| cloud.updated_at=${row.updated_at}`,
+        `| local.updatedAt=${localMeta.updatedAt}`,
+        `| cloud.orderCount=${cloudOrderCount}`,
+        `| local.orderCount=${localOrderCount}`,
+        `| reason=cloud<=local`,
+      );
+      return false;
+    }
+
+    console.log(
+      `[Sync] _applySalesStateRow APPLY ${row.business_date}`,
+      `| cloud.updated_at=${row.updated_at}`,
+      `| local.updatedAt=${localMeta?.updatedAt ?? "null"}`,
+      `| cloud.orderCount=${cloudOrderCount}`,
+      `| local.orderCount.before=${localOrderCount}`,
+    );
+
+    // Preserve the active cart — only replace daily
+    await dbSet(
+      "primaq-pos-state",
+      JSON.stringify({ cart: localPos?.cart ?? [], daily: row.data }),
+    );
+    await dbSet(SALES_STATE_META_KEY, JSON.stringify({ updatedAt: row.updated_at }));
+
+    console.log(
+      `[Sync] _applySalesStateRow DONE ${row.business_date}`,
+      `| local.orderCount.after=${cloudOrderCount}`,
+    );
+
+    // Notify use-pos-store to re-render — IDB was updated but React state is not
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("primaq-pos-state-synced", { detail: { daily: row.data } }),
+      );
+    }
+
     return true;
   }
 
