@@ -423,6 +423,30 @@ class SyncService {
     return true;
   }
 
+  async syncNow(): Promise<void> {
+    console.log("[SalesSync] syncNow: started");
+    try {
+      const status = await checkConnection();
+      this._isOnline = status === "CONNECTED";
+      console.log("[SalesSync] syncNow: status=", status);
+      if (status === "OFFLINE") {
+        this._deriveStatus();
+        this._notify();
+        return;
+      }
+      console.log("[SalesSync] syncNow: pull() startet");
+      await this.pull();
+      console.log("[SalesSync] syncNow: pull() fertig — flush() startet");
+      await this.flush();
+      console.log("[SalesSync] syncNow: flush() fertig — recordSync()");
+      this._recordSync();
+    } catch (err) {
+      console.error("[Sync] syncNow error:", err);
+      log("syncNow error:", err);
+    }
+    await this._refreshStats();
+  }
+
   async start(): Promise<void> {
     if (this._running) return;
     this._running = true;

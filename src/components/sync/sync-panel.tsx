@@ -60,9 +60,7 @@ export function SyncPanel() {
   const handleManualSync = useCallback(async () => {
     setFlushing(true);
     try {
-      const service = getSyncService();
-      await service.flush();
-      await service.pull();
+      await getSyncService().syncNow();
     } finally {
       setFlushing(false);
     }

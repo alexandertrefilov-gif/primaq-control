@@ -17,11 +17,25 @@ export function useSyncStatus() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const service = getSyncService();
+
     const unsubscribe = service.subscribeStatus((s, st) => {
       setStatus(s);
       setStats(st);
     });
-    return unsubscribe;
+
+    // Belt-and-suspenders: also listen for the CustomEvent that _recordSync()
+    // dispatches. This guarantees the UI updates even if the subscription
+    // callback is missed due to React batching or subscription timing.
+    const onSyncCompleted = (e: Event) => {
+      const at = (e as CustomEvent<{ at: string }>).detail?.at;
+      if (at) setStats((prev) => ({ ...prev, lastSyncAt: at }));
+    };
+    window.addEventListener("primaq-sync-completed", onSyncCompleted);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener("primaq-sync-completed", onSyncCompleted);
+    };
   }, []);
 
   return { status, stats };

@@ -480,3 +480,43 @@ test("Sales 7: Pull-Event aktualisiert use-pos-store ohne Reload (primaq-pos-sta
   // totalCents=1500 is unique (cashCents=500, cardCents=1000 — no duplicates).
   await expect(page.getByText("15,00 €")).toBeVisible({ timeout: 3000 });
 });
+
+// ── Test 8: bookOrder löst Auto-Flush aus (primaq-sales-state-enqueued) ────────
+
+test("Sales 8: bookOrder löst Auto-Flush nach Buchung aus", async ({ page }) => {
+  // Covers the production bug: enqueueSalesStateSync only added to queue but
+  // never triggered flush(). Bookings on iMac stayed local until the user
+  // manually clicked "Jetzt synchronisieren".
+  // Fix: enqueueSalesStateSync dispatches "primaq-sales-state-enqueued";
+  //      SyncFoundation listens and calls getSyncService().flush() immediately.
+  await page.addInitScript(() => {
+    if (window.sessionStorage.getItem("sales8-seeded") === "1") return;
+    window.sessionStorage.setItem("sales8-seeded", "1");
+    indexedDB.deleteDatabase("primaq-pos");
+  });
+
+  await mockSupabaseConnected(page);
+
+  const autoFlushLogged = page.waitForEvent("console", {
+    predicate: (msg) => msg.text().includes("primaq-sales-state-enqueued empfangen"),
+    timeout: 8000,
+  });
+
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  // Book an order via UI (Vanille → Klein → Karte → Buchen)
+  await page.getByRole("button", { name: "Vanille" }).first().click();
+  await expect(page.getByRole("button", { name: /Klein/i }).first()).toBeVisible({ timeout: 3000 });
+  await page.getByRole("button", { name: /Klein/i }).first().click();
+  await page.getByRole("button", { name: "Karte" }).first().click();
+  await expect(page.getByTestId("book-button")).toBeEnabled({ timeout: 2000 });
+  await page.getByTestId("book-button").click();
+
+  // Auto-flush must be triggered by SyncFoundation's "primaq-sales-state-enqueued" listener
+  await autoFlushLogged;
+
+  // Queue must be empty — ack() is only called after upsertSalesState() succeeds,
+  // so an empty queue proves the upload reached Supabase without error.
+  await waitForQueueCount(page, 0, 5000);
+});
