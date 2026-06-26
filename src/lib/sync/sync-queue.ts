@@ -51,6 +51,14 @@ export async function getQueueStats(): Promise<{ pending: number; failed: number
  * If retryCount reaches 3, status is set to "failed" so it is excluded from
  * getPending() and won't be retried automatically.
  */
+/** Delete all queue entries (any status) belonging to the given entity names. */
+export async function removeByEntities(entities: string[]): Promise<void> {
+  if (entities.length === 0) return;
+  const all = await getDb().sync_queue.toArray();
+  const ids = all.filter((op) => entities.includes(op.entity)).map((op) => op.id);
+  if (ids.length > 0) await getDb().sync_queue.bulkDelete(ids);
+}
+
 export async function markFailed(id: string): Promise<void> {
   const op = await getDb().sync_queue.get(id);
   if (!op) return;

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { ChevronDown, Download, FileSpreadsheet, Lock } from "lucide-react";
+import { useCallback, useState, useMemo } from "react";
+import { ChevronDown, Download, FileSpreadsheet, Lock, Trash2 } from "lucide-react";
 import { useAdmin } from "./admin-context";
 import { usePosYearStore } from "./use-pos-year-store";
+import { ResetTestDataDialog } from "./reset-test-data-dialog";
 import { getSizeName, getFlavorName } from "./pos-config";
 import type { DailySummary } from "./pos-types";
 
@@ -278,6 +279,14 @@ export function JahresabschlussClient() {
   const { history, hydrated } = usePosYearStore();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
+
+  const handleResetSuccess = useCallback(() => {
+    setShowResetDialog(false);
+    setResetDone(true);
+    setTimeout(() => window.location.reload(), 2500);
+  }, []);
 
   const years = useMemo(() => {
     const set = new Set(history.map((d) => parseInt(d.date.slice(0, 4))));
@@ -515,6 +524,43 @@ export function JahresabschlussClient() {
           Konten im DATEV-Export (SKR03): Kasse 1000, Bank/Karte 1200, Erlöse 19 % MwSt 8400.
           Bitte mit Ihrem Steuerberater abstimmen.
         </p>
+      )}
+
+      {/* ── Reset test data ──────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
+        <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-red-700/60">
+          Testbetrieb
+        </p>
+        <p className="mb-4 text-sm text-red-800/70">
+          Alle Testverkäufe und Statistiken löschen. Sorten, Bilder und Einstellungen bleiben vollständig erhalten.
+        </p>
+        <button
+          data-testid="reset-test-data-btn"
+          onClick={() => setShowResetDialog(true)}
+          className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-700 active:scale-[0.97]"
+        >
+          <Trash2 className="h-4 w-4" />
+          Testdaten zurücksetzen
+        </button>
+      </div>
+
+      <ResetTestDataDialog
+        open={showResetDialog}
+        onClose={() => setShowResetDialog(false)}
+        onSuccess={handleResetSuccess}
+      />
+
+      {resetDone && (
+        <div
+          data-testid="reset-success-snackbar"
+          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-2xl bg-green-600 px-5 py-3 text-sm font-bold text-white shadow-xl"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          Alle Testdaten wurden erfolgreich gelöscht.
+        </div>
       )}
     </div>
   );

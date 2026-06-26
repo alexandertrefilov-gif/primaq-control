@@ -1,7 +1,7 @@
 import { getDeviceId } from "./device-registry";
 import { getNetworkMonitor } from "./network-monitor";
-import { getPending, ack, markFailed, getQueueStats } from "./sync-queue";
-import { dbGet, dbSet } from "@/lib/db";
+import { getPending, ack, markFailed, getQueueStats, removeByEntities } from "./sync-queue";
+import { dbGet, dbSet, dbRemove } from "@/lib/db";
 import {
   checkConnection,
   checkTables,
@@ -13,6 +13,7 @@ import {
   pullSettings,
   upsertSalesState,
   pullSalesState,
+  clearSalesDataCloud,
   type YearHistoryPayload,
   type SettingsPayload,
   type SettingsRow,
@@ -421,6 +422,23 @@ class SyncService {
     }
 
     return true;
+  }
+
+  /**
+   * Wipes all sales data: cloud first (so a failed cloud delete aborts the local delete),
+   * then local IDB and queue ops. Throws if offline or if the cloud delete fails.
+   */
+  async resetSalesData(): Promise<void> {
+    const status = await checkConnection();
+    if (status === "OFFLINE") {
+      throw new Error("Keine Internetverbindung. Für einen vollständigen Reset ist eine Verbindung erforderlich.");
+    }
+    await clearSalesDataCloud("default");
+    await dbRemove("primaq-pos-state");
+    await dbRemove(SALES_STATE_META_KEY);
+    await dbRemove(YEAR_HISTORY_KEY);
+    await removeByEntities(["pos_sales_state", "pos_year_history"]);
+    await this._refreshStats();
   }
 
   async syncNow(): Promise<void> {

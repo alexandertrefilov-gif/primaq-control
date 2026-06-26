@@ -222,6 +222,25 @@ export async function upsertSalesState(payload: SalesStatePayload): Promise<void
 }
 
 /**
+ * Deletes all pos_sales_state and pos_year_history rows for a given businessId.
+ * Used by the "Testdaten zurücksetzen" admin function to wipe cloud sales data.
+ * Throws on any Supabase error so the caller can abort the local reset.
+ */
+export async function clearSalesDataCloud(businessId: string): Promise<void> {
+  const { error: e1 } = await supabase
+    .from("pos_sales_state")
+    .delete()
+    .eq("business_id", businessId);
+  if (e1) throw e1;
+
+  const { error: e2 } = await supabase
+    .from("pos_year_history")
+    .delete()
+    .eq("business_id", businessId);
+  if (e2) throw e2;
+}
+
+/**
  * Fetches the pos_sales_state row for a specific business day.
  * Returns null if no row exists yet.
  * Throws on error so the caller can catch and log.
