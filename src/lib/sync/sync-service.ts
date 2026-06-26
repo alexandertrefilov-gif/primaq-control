@@ -119,7 +119,23 @@ class SyncService {
     this._notify();
   }
 
+  private _recordSync(): void {
+    const now = new Date().toISOString();
+    this._stats.lastSyncAt = now;
+    try {
+      if (typeof window !== "undefined") localStorage.setItem("primaq-last-sync", now);
+    } catch { /* ignore — private/storage-blocked contexts */ }
+  }
+
   async init(): Promise<void> {
+    // Restore last sync timestamp so the UI never shows "—" after a reload.
+    try {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("primaq-last-sync");
+        if (saved) this._stats.lastSyncAt = saved;
+      }
+    } catch { /* ignore */ }
+
     try {
       this._deviceId = await getDeviceId();
       log("Device:", this._deviceId.slice(0, 8));
@@ -135,6 +151,7 @@ class SyncService {
         await readHealthCheck(this._deviceId);
         log("HealthCheck gelesen");
         await this.pull();
+        this._recordSync();
       } else {
         log("Offline");
       }
@@ -160,6 +177,7 @@ class SyncService {
       }
 
       if (pending.length === 0) {
+        this._recordSync();
         await this._refreshStats();
         return;
       }
@@ -237,7 +255,7 @@ class SyncService {
 
       this._isFlushing = false;
       if (!hadError) {
-        this._stats.lastSyncAt = new Date().toISOString();
+        this._recordSync();
         this._stats.lastError = null;
         log("Flush beendet");
       } else {
