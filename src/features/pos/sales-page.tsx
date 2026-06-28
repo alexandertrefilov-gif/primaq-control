@@ -111,9 +111,11 @@ function FlavorImage({ src, alt = "", scale = 100, className }: {
 function FlavorCard({
   flavor,
   onClick,
+  isSelected = false,
 }: {
   flavor: FlavorConfig;
   onClick: () => void;
+  isSelected?: boolean;
 }) {
   const allFlavors = useFlavorList();
   const isMix = !!flavor.isMix && !!flavor.mixColors;
@@ -131,7 +133,8 @@ function FlavorCard({
         className={cn(
           "relative w-full aspect-square overflow-hidden rounded-full shadow-lg transition-all",
           "group-hover:shadow-2xl group-hover:ring-4 group-hover:ring-primaq-400/50 group-hover:ring-offset-2 group-hover:ring-offset-white",
-          "group-active:scale-[0.92]"
+          "group-active:scale-[0.92]",
+          isSelected && "ring-[4px] ring-primaq-500 ring-offset-[3px] ring-offset-white"
         )}
       >
         {/* Background: linear-gradient diagonal for mix, solid for regular */}
@@ -269,11 +272,13 @@ function FlavorGroup({
   flavors,
   onFlavorClick,
   cardSize,
+  selectedFlavorId,
 }: {
   label: string;
   flavors: FlavorConfig[];
   onFlavorClick: (flavor: FlavorConfig) => void;
   cardSize: number;
+  selectedFlavorId: string | null;
 }) {
   if (flavors.length === 0) return null;
 
@@ -296,7 +301,12 @@ function FlavorGroup({
         }}
       >
         {flavors.map((f) => (
-          <FlavorCard key={f.id} flavor={f} onClick={() => onFlavorClick(f)} />
+          <FlavorCard
+            key={f.id}
+            flavor={f}
+            onClick={() => onFlavorClick(f)}
+            isSelected={f.id === selectedFlavorId}
+          />
         ))}
       </div>
     </div>
@@ -466,10 +476,16 @@ function SizePickerModal({
 
 function FlavorColumn({
   onFlavorClick,
+  onSizePick,
   cardSize,
+  effectiveSizes,
+  pendingFlavor,
 }: {
   onFlavorClick: (flavor: FlavorConfig) => void;
+  onSizePick: (sizeId: string, priceCents: number) => void;
   cardSize: number;
+  effectiveSizes: EffectiveSizeConfig[];
+  pendingFlavor: FlavorConfig | null;
 }) {
   const allFlavors = useFlavorList();
   const groups = Object.entries(MACHINE_GROUP_LABELS);
@@ -491,9 +507,61 @@ function FlavorColumn({
               flavors={flavors}
               onFlavorClick={onFlavorClick}
               cardSize={cardSize}
+              selectedFlavorId={pendingFlavor?.id ?? null}
             />
           );
         })}
+      </div>
+
+      {/* ── Inline size picker – always visible below flavors ────── */}
+      <div className="shrink-0 border-t border-black/5 px-3 pb-3 pt-2">
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-black/40">
+          Größe wählen
+        </p>
+        {effectiveSizes.length === 0 ? (
+          <p className="py-3 text-center text-sm text-black/35">
+            Keine Größe aktiv – bitte in Einstellungen aktivieren.
+          </p>
+        ) : (
+          <div
+            className="grid gap-2"
+            style={{ gridTemplateColumns: `repeat(${Math.min(effectiveSizes.length, 3)}, 1fr)` }}
+          >
+            {effectiveSizes.map((size) => {
+              const textColor = computeTextColor(size.textColorMode, size.backgroundColor);
+              const active = !!pendingFlavor;
+              return (
+                <button
+                  key={size.id}
+                  data-testid={`size-btn-${size.id}`}
+                  onClick={() => { if (active) onSizePick(size.id, size.priceCents); }}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 rounded-2xl transition-all select-none",
+                    "min-h-[90px] px-2 py-3",
+                    active
+                      ? "shadow-md hover:brightness-95 active:scale-[0.96]"
+                      : "opacity-50 cursor-not-allowed"
+                  )}
+                  style={{ backgroundColor: size.backgroundColor }}
+                  aria-disabled={!active}
+                >
+                  <span
+                    className="text-2xl font-black leading-tight text-center"
+                    style={{ color: textColor }}
+                  >
+                    {size.name}
+                  </span>
+                  <span
+                    className="text-lg font-black tabular-nums leading-none"
+                    style={{ color: textColor, opacity: 0.75 }}
+                  >
+                    {fmt(size.priceCents)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1138,7 +1206,10 @@ export function SalesPage() {
         >
           <FlavorColumn
             onFlavorClick={handleFlavorClick}
+            onSizePick={handleSizePick}
             cardSize={layout.flavorCardSize}
+            effectiveSizes={effectiveSizes}
+            pendingFlavor={pendingFlavor}
           />
           <PaymentBlock
             showPayment={showPayment}
@@ -1176,16 +1247,6 @@ export function SalesPage() {
           onVoid={voidLastOrder}
           showLastBooking={layout.toggles["live-monitor"]}
           showStats={layout.toggles["verkaufszaehler"]}
-        />
-      )}
-
-      {/* Size picker – appears after flavor tap */}
-      {pendingFlavor && (
-        <SizePickerModal
-          flavor={pendingFlavor}
-          sizes={effectiveSizes}
-          onPick={handleSizePick}
-          onClose={() => setPendingFlavor(null)}
         />
       )}
 
