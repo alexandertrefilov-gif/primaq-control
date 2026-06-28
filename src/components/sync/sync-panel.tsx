@@ -8,7 +8,11 @@ import { getSyncService } from "@/lib/sync/sync-service";
 import { useSyncStatus } from "./use-sync-status";
 import { SyncDiagnostic } from "./sync-diagnostic";
 
-const PUBLISH_KEYS = ["primaq-pos-flavors-v1", "primaq-pos-layout-v1"] as const;
+const PUBLISH_KEYS = [
+  "primaq-pos-flavors-v1",
+  "primaq-pos-layout-v1",
+  "primaq-pos-vat-rate",
+] as const;
 
 const COMMIT_SHORT =
   process.env.NEXT_PUBLIC_COMMIT_SHA && process.env.NEXT_PUBLIC_COMMIT_SHA !== "unknown"
@@ -20,6 +24,8 @@ const SETTINGS_KEYS = [
   "primaq-pos-flavors-v1-meta",
   "primaq-pos-layout-v1",
   "primaq-pos-layout-v1-meta",
+  "primaq-pos-vat-rate",
+  "primaq-pos-vat-rate-meta",
 ];
 
 function relativeTime(iso: string): string {
@@ -93,7 +99,7 @@ export function SyncPanel() {
 
   const handleResetAndPull = useCallback(async () => {
     const confirmed = window.confirm(
-      "Lokale POS-Einstellungen (Sorten, Layout) löschen und aus Supabase neu laden?\n\n" +
+      "Lokale POS-Einstellungen (Sorten, Layout, Grundeinstellungen) löschen und aus Supabase neu laden?\n\n" +
         "Jahres- und Tagesumsätze sind nicht betroffen.\n\n" +
         "Diese Aktion kann nicht rückgängig gemacht werden."
     );

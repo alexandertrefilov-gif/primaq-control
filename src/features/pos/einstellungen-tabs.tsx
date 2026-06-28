@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { dbGet, dbSet } from "@/lib/db";
+import { usePosVatStore } from "./use-pos-vat-store";
 import { PageHeader } from "@/components/ui/page-header";
 import { PosFlavorSettings } from "./pos-flavor-settings";
 import { PosLayoutSettings } from "./pos-layout-settings";
@@ -12,6 +13,7 @@ import { SyncPanel } from "@/components/sync/sync-panel";
 const SETTINGS_KEYS = [
   "primaq-pos-flavors-v1",
   "primaq-pos-layout-v1",
+  "primaq-pos-vat-rate",
   "primaq-pos-year-history",
 ] as const;
 
@@ -243,11 +245,81 @@ function BackupSection() {
   );
 }
 
+// ── Grundeinstellungen (VAT) ──────────────────────────────────────────────────
+
+function GrundeinstellungenSection() {
+  const { vatRate, setVatRate, hydrated } = usePosVatStore();
+  const [inputValue, setInputValue] = useState("");
+
+  useEffect(() => {
+    if (hydrated) setInputValue(String(vatRate));
+  }, [hydrated, vatRate]);
+
+  const handlePreset = (v: number) => {
+    setVatRate(v);
+    setInputValue(String(v));
+  };
+
+  const handleBlur = () => {
+    const parsed = parseFloat(inputValue.replace(",", "."));
+    if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
+      const rounded = Math.round(parsed * 100) / 100;
+      setVatRate(rounded);
+      setInputValue(String(rounded));
+    } else {
+      setInputValue(String(vatRate));
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-black/8 bg-white p-5 shadow-sm">
+      <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-black/40">
+        Mehrwertsteuer
+      </p>
+      <p className="mb-3 text-sm font-semibold text-ink">Mehrwertsteuer (%)</p>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        {([0, 7, 19] as const).map((v) => (
+          <button
+            key={v}
+            data-testid={`vat-preset-${v}`}
+            onClick={() => handlePreset(v)}
+            className={cn(
+              "rounded-xl px-4 py-2 text-sm font-bold transition-colors",
+              vatRate === v
+                ? "bg-primaq-500 text-white shadow"
+                : "border border-black/15 bg-white text-black/60 hover:bg-black/5"
+            )}
+          >
+            {v} %
+          </button>
+        ))}
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            inputMode="decimal"
+            data-testid="vat-rate-input"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onBlur={handleBlur}
+            className="w-20 rounded-xl border border-black/15 px-3 py-2 text-sm font-bold text-ink shadow-sm focus:outline-none focus:ring-2 focus:ring-primaq-500"
+            placeholder="5,5"
+          />
+          <span className="text-sm font-bold text-black/40">%</span>
+        </div>
+      </div>
+      <p className="text-xs text-black/40">
+        Standard für Softeis zum Mitnehmen: 7 %. Der tatsächlich anzuwendende Steuersatz richtet sich nach den steuerlichen Vorgaben des Betriebs.
+      </p>
+    </div>
+  );
+}
+
 // ── Tab layout ────────────────────────────────────────────────────────────────
 
-type Tab = "sorten" | "oberflaeche" | "sync";
+type Tab = "grundeinstellungen" | "sorten" | "oberflaeche" | "sync";
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: "grundeinstellungen", label: "Grundeinstellungen" },
   { id: "sorten", label: "Sorten" },
   { id: "oberflaeche", label: "Verkaufsoberfläche" },
   { id: "sync", label: "Sync" },
@@ -258,13 +330,13 @@ export function EinstellungenTabs({ legacySettings }: { legacySettings: React.Re
 
   return (
     <div>
-      <div className="mb-5 flex gap-1 rounded-2xl bg-black/5 p-1">
+      <div className="mb-5 flex gap-1 rounded-2xl bg-black/5 p-1 overflow-x-auto">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
             className={cn(
-              "flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition-colors",
+              "shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold transition-colors",
               tab === id ? "bg-white text-ink shadow-sm" : "text-black/50 hover:text-black/70"
             )}
           >
@@ -272,6 +344,16 @@ export function EinstellungenTabs({ legacySettings }: { legacySettings: React.Re
           </button>
         ))}
       </div>
+
+      {tab === "grundeinstellungen" && (
+        <>
+          <PageHeader
+            title="Grundeinstellungen"
+            description="Steuerliche und betriebliche Basiseinstellungen für den POS."
+          />
+          <GrundeinstellungenSection />
+        </>
+      )}
 
       {tab === "sorten" && (
         <>
