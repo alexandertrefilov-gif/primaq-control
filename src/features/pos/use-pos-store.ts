@@ -80,7 +80,9 @@ export function usePosStore() {
         return {
           ...current,
           cart: current.cart.map((i) =>
-            i.id === existing.id ? { ...i, quantity: i.quantity + 1 } : i
+            i.id === existing.id
+              ? { ...i, quantity: i.quantity + 1, sizeName: i.sizeName ?? sizeDisplayName }
+              : i
           ),
         };
       }

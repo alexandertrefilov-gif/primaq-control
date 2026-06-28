@@ -15,7 +15,6 @@ import {
   MACHINE_GROUP_LABELS,
   SIZES,
   getSizeName,
-  getItemSizeName,
 } from "./pos-config";
 import type { FlavorConfig, SizeConfig } from "./pos-config";
 import type { CartItem, PaymentMethod } from "./pos-types";
@@ -632,6 +631,7 @@ function CartColumn({
   widthPx,
   qtyBtnSize,
   cartFontSize,
+  effectiveSizes,
 }: {
   cart: ReturnType<typeof usePosStore>["cart"];
   cartTotal: number;
@@ -641,9 +641,13 @@ function CartColumn({
   widthPx: number;
   qtyBtnSize: number;
   cartFontSize: CartFontSize;
+  effectiveSizes: EffectiveSizeConfig[];
 }) {
   const allFlavors = useFlavorList();
   const getLocalFlavorName = (id: string) => allFlavors.find((f) => f.id === id)?.name ?? id;
+  // Resolve size label: stored sizeName → current effectiveSizes → static fallback
+  const getCartSizeName = (item: ReturnType<typeof usePosStore>["cart"][number]) =>
+    item.sizeName ?? effectiveSizes.find((s) => s.id === item.size)?.name ?? getSizeName(item.size);
   const fontCfg = CART_FONT_CFG[cartFontSize];
 
   const [ausgabeModus, setAusgabeModus] = useState(() => {
@@ -728,7 +732,7 @@ function CartColumn({
                       "flex-1 uppercase leading-tight line-clamp-2 text-ink",
                       ausgabeModus ? "text-2xl font-black" : fontCfg.name
                     )}>
-                      {getItemSizeName(item)} {getLocalFlavorName(item.flavor)}
+                      {getCartSizeName(item)} {getLocalFlavorName(item.flavor)}
                     </p>
                     <p className={cn(
                       "shrink-0 font-black text-ink tabular-nums pt-0.5",
@@ -1061,6 +1065,7 @@ export function SalesPage() {
           onChangeQty={changeQty}
           onRemove={removeFromCart}
           onClear={clearCart}
+          effectiveSizes={effectiveSizes}
         />
       </div>
 
