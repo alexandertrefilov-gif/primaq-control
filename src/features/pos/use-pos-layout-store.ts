@@ -55,11 +55,13 @@ export type SalesSizeOverride = {
 };
 
 export type PaymentConfig = {
-  barColor: string;       // active green by default
-  karteColor: string;     // active blue by default
-  qrColor: string;        // active purple by default
-  bookColor: string;      // "Bestellung buchen" button color
-  bills: number[];        // active bill amounts in cents [500, 1000, 2000, 5000]
+  barColor: string;        // active green by default
+  karteColor: string;      // active blue by default
+  qrColor: string;         // active purple by default
+  bookColor: string;       // "Bestellung buchen" button color
+  billColor: string;       // color for bill quick-amount buttons
+  customColor: string;     // color for custom quick-amount buttons
+  bills: number[];         // active bill amounts in cents [500, 1000, 2000, 5000]
   customAmounts: number[]; // admin-defined quick amounts in cents
 };
 
@@ -68,6 +70,8 @@ export const DEFAULT_PAYMENT: PaymentConfig = {
   karteColor: "#2563eb",
   qrColor: "#7c3aed",
   bookColor: "#16a34a",
+  billColor: "#0284c7",
+  customColor: "#7c3aed",
   bills: [500, 1000, 2000, 5000],
   customAmounts: [],
 };

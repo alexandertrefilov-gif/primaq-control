@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { AlertTriangle, GripVertical, Lock, Unlock, Plus, RotateCcw, Save, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, Banknote, CreditCard, GripVertical, Lock, Unlock, Plus, QrCode, RotateCcw, Save, ShoppingCart, Trash2, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SIZES } from "./pos-config";
 import {
@@ -661,6 +661,90 @@ function CustomAmountsEditor({
   );
 }
 
+// ── Payment preview ────────────────────────────────────────────────
+
+function PaymentPreview({
+  pm,
+  salesSizes,
+  sizeVisibility,
+}: {
+  pm: PaymentConfig;
+  salesSizes: Record<string, import("./use-pos-layout-store").SalesSizeOverride>;
+  sizeVisibility: Record<string, boolean>;
+}) {
+  const barColor   = pm.barColor   ?? "#16a34a";
+  const karteColor = pm.karteColor ?? "#2563eb";
+  const qrColor    = pm.qrColor    ?? "#7c3aed";
+  const bookColor  = pm.bookColor  ?? "#16a34a";
+  const billColor  = pm.billColor  ?? "#0284c7";
+
+  // Collect quick amounts: active size prices + active bills
+  const sizeItems = Object.entries(salesSizes)
+    .filter(([id, s]) => sizeVisibility[id] !== false && s.showAsQuickAmount !== false)
+    .sort(([, a], [, b]) => a.order - b.order)
+    .map(([, s]) => ({
+      cents: s.priceCents,
+      bgColor: s.backgroundColor,
+      textColor: computeTextColor(s.textColorMode, s.backgroundColor),
+    }));
+
+  const sizeSet = new Set(sizeItems.map((s) => s.cents));
+  const billItems = (pm.bills ?? []).filter((c) => !sizeSet.has(c)).map((cents) => ({
+    cents,
+    bgColor: billColor,
+    textColor: computeTextColor("auto", billColor),
+  }));
+
+  const preview = [...sizeItems, ...billItems]
+    .sort((a, b) => a.cents - b.cents)
+    .slice(0, 5);
+
+  return (
+    <div className="rounded-2xl border border-black/8 bg-black/[0.02] p-3 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-black/35 mb-1">Vorschau</p>
+      {/* Payment tabs */}
+      <div className="flex gap-1.5">
+        {[
+          { color: barColor,   label: "Bar",   icon: <Banknote className="h-4 w-4" /> },
+          { color: karteColor, label: "Karte",  icon: <CreditCard className="h-4 w-4" /> },
+          { color: qrColor,    label: "QR",    icon: <QrCode className="h-4 w-4" /> },
+        ].map(({ color, label, icon }, i) => (
+          <div
+            key={label}
+            className="flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-2.5 text-white text-[11px] font-black"
+            style={{ backgroundColor: i === 0 ? color : `${color}22`, color: i === 0 ? "#fff" : color }}
+          >
+            {icon}
+            {label}
+          </div>
+        ))}
+      </div>
+      {/* Quick amounts */}
+      {preview.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {preview.map(({ cents, bgColor, textColor }) => (
+            <div
+              key={cents}
+              className="flex-1 min-w-[3rem] rounded-lg py-2 text-center text-xs font-black"
+              style={{ backgroundColor: bgColor, color: textColor }}
+            >
+              {fmtEur(cents)}
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Book button */}
+      <div
+        className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-black text-white"
+        style={{ backgroundColor: bookColor }}
+      >
+        <ShoppingCart className="h-4 w-4" />
+        Bestellung buchen
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────
 
 export function PosLayoutSettings() {
@@ -1091,19 +1175,28 @@ export function PosLayoutSettings() {
         ];
 
         const COLOR_FIELDS: { key: keyof PaymentConfig; label: string }[] = [
-          { key: "barColor",   label: "Bar" },
-          { key: "karteColor", label: "Karte" },
-          { key: "qrColor",    label: "QR" },
-          { key: "bookColor",  label: "Buchen" },
+          { key: "barColor",    label: "Bar" },
+          { key: "karteColor",  label: "Karte" },
+          { key: "qrColor",     label: "QR" },
+          { key: "bookColor",   label: "Buchen" },
+          { key: "billColor",   label: "Geldscheine" },
+          { key: "customColor", label: "Eigene Beträge" },
         ];
 
         return (
           <div className="overflow-hidden rounded-2xl bg-white shadow">
             <div className="border-b border-black/5 px-4 py-3">
               <p className="text-xs font-bold uppercase tracking-widest text-black/40">Zahlungsbereich</p>
-              <p className="mt-0.5 text-xs text-black/40">Button-Farben, Geldscheine und eigene Schnellbeträge</p>
+              <p className="mt-0.5 text-xs text-black/40">Farben, Geldscheine, eigene Schnellbeträge und Live-Vorschau</p>
             </div>
             <div className="p-4 space-y-5">
+
+              {/* Live-Vorschau */}
+              <PaymentPreview
+                pm={pm}
+                salesSizes={active.salesSizes}
+                sizeVisibility={active.sizeVisibility}
+              />
 
               {/* Button-Farben */}
               <div>

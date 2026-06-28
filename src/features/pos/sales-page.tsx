@@ -540,14 +540,38 @@ function PaymentBlock({
   const bookColor  = paymentConfig.bookColor  ?? "#16a34a";
   const methodColor: Record<PaymentMethod, string> = { bar: barColor, karte: karteColor, qr: qrColor };
 
-  // Merge size prices (where showAsQuickAmount=true) + bills + custom; deduplicate; sort
-  const quickCents = useMemo(() => {
-    const sizePrices = effectiveSizes
-      .filter((s) => s.showAsQuickAmount !== false)
-      .map((s) => s.priceCents);
+  // Build colored quick-amount items: sizes get their own color, bills/custom use configured colors
+  const quickItems = useMemo(() => {
     const bills = paymentConfig.bills ?? DEFAULT_PAYMENT_BILLS;
     const custom = paymentConfig.customAmounts ?? [];
-    return Array.from(new Set([...sizePrices, ...bills, ...custom])).sort((a, b) => a - b);
+    const billColor   = paymentConfig.billColor   ?? "#0284c7";
+    const customColor = paymentConfig.customColor ?? "#7c3aed";
+
+    // Map size priceCents → size config for color lookup
+    const sizeMap = new Map(
+      effectiveSizes
+        .filter((s) => s.showAsQuickAmount !== false)
+        .map((s) => [s.priceCents, s])
+    );
+
+    const allCents = Array.from(
+      new Set([...Array.from(sizeMap.keys()), ...bills, ...custom])
+    ).sort((a, b) => a - b);
+
+    return allCents.map((cents) => {
+      const sz = sizeMap.get(cents);
+      if (sz) {
+        return {
+          cents,
+          bgColor: sz.backgroundColor,
+          textColor: computeTextColor(sz.textColorMode, sz.backgroundColor),
+        };
+      }
+      if (custom.includes(cents)) {
+        return { cents, bgColor: customColor, textColor: computeTextColor("auto", customColor) };
+      }
+      return { cents, bgColor: billColor, textColor: computeTextColor("auto", billColor) };
+    });
   }, [effectiveSizes, paymentConfig]);
 
   return (
@@ -622,14 +646,15 @@ function PaymentBlock({
                 >C</button>
               </div>
 
-              {/* Quick-amount buttons: merged from size prices + bills + custom */}
+              {/* Quick-amount buttons: sized from sizes + bills + custom, colored by source */}
               <div className="flex flex-wrap gap-1.5">
-                {quickCents.map((cents) => (
+                {quickItems.map(({ cents, bgColor, textColor }) => (
                   <button
                     key={cents}
                     data-testid={`quick-amount-${cents}`}
                     onClick={() => onCashInput(String(cents / 100))}
-                    className="flex-1 min-w-[3.5rem] rounded-xl bg-black/5 min-h-[56px] text-sm font-black text-black/70 hover:bg-black/10 active:scale-95 transition-all"
+                    className="flex-1 min-w-[4rem] rounded-xl min-h-[64px] text-lg font-black transition-all active:scale-95 select-none hover:brightness-90"
+                    style={{ backgroundColor: bgColor, color: textColor }}
                   >
                     {fmt(cents)}
                   </button>
