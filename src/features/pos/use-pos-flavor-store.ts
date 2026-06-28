@@ -97,6 +97,20 @@ export function usePosFlavorStore() {
       });
   }, []);
 
+  // Live-reload when sync writes new settings from another device
+  useEffect(() => {
+    const onSynced = (e: Event) => {
+      const { key, data } = (e as CustomEvent<{ key: string; data: unknown }>).detail;
+      if (key !== STORAGE_KEY) return;
+      try {
+        const parsed = data as MutableFlavor[];
+        setBase(parsed.map((f) => ({ ...f, imageScale: f.imageScale ?? 100 })));
+      } catch { /* keep current */ }
+    };
+    window.addEventListener("primaq-settings-synced", onSynced);
+    return () => window.removeEventListener("primaq-settings-synced", onSynced);
+  }, []);
+
   const update = useCallback((id: string, patch: Partial<MutableFlavor>) => {
     setBase((curr) => {
       const next = curr.map((f) => (f.id === id ? { ...f, ...patch } : f));

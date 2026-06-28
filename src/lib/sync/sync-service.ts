@@ -365,6 +365,16 @@ class SyncService {
 
     await dbSet(row.settings_key, JSON.stringify(row.data));
     await dbSet(metaKey, JSON.stringify({ updatedAt: cloudUpdatedAt }));
+
+    // Notify live stores so they reload without a full page refresh
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("primaq-settings-synced", {
+          detail: { key: row.settings_key, data: row.data },
+        }),
+      );
+    }
+
     return true;
   }
 

@@ -214,6 +214,19 @@ export function usePosLayoutStore() {
       .catch(() => setHydrated(true));
   }, []);
 
+  // Live-reload when sync writes new settings from another device
+  useEffect(() => {
+    const onSynced = (e: Event) => {
+      const { key, data } = (e as CustomEvent<{ key: string; data: unknown }>).detail;
+      if (key !== LS_KEY) return;
+      try {
+        setState(parseStoreState(JSON.stringify(data)));
+      } catch { /* keep current */ }
+    };
+    window.addEventListener("primaq-settings-synced", onSynced);
+    return () => window.removeEventListener("primaq-settings-synced", onSynced);
+  }, []);
+
   const update = useCallback((config: LayoutConfig) => {
     setState((prev) => {
       const next = { ...prev, active: config };
