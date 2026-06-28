@@ -85,7 +85,7 @@ test("Admin 2: Bottom-Bar zeigt letzte Buchung nach Bestellung", async ({ page }
   // Book Klein Vanille (Bar, 5 €)
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
   await page.getByRole("button", { name: /^Klein/ }).click();
-  await page.getByRole("button", { name: "5€" }).click();
+  await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   const bar = page.getByTestId("last-booking-bar");
@@ -160,7 +160,7 @@ test("Admin 7: Letzte Buchung stornieren – Daily auf 0 reduziert", async ({ pa
   // Book one order: Klein Vanille Bar (2,50 €)
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
   await page.getByRole("button", { name: /^Klein/ }).click();
-  await page.getByRole("button", { name: "5€" }).click();
+  await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   // Storno: click button, then confirm
@@ -190,7 +190,7 @@ test("Admin 8: Storno letzter von zwei Buchungen – erste bleibt erhalten", asy
   // Buchung 1: Klein Vanille Bar (2,50 €)
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
   await page.getByRole("button", { name: /^Klein/ }).click();
-  await page.getByRole("button", { name: "5€" }).click();
+  await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   // Buchung 2: Mittel Schokolade Karte (3,50 €)

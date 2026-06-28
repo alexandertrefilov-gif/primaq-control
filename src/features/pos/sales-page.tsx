@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef, createContext, useContext } from "react";
-import { Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
+import { Banknote, CreditCard, Minus, Plus, QrCode, ShoppingCart, Trash2, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
 import { usePosStore } from "./use-pos-store";
@@ -40,7 +40,8 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   qr: "QR",
 };
 
-const QUICK_AMOUNTS = [5, 10, 20, 50, 100];
+// Bill amounts in cents – 100 € removed intentionally
+const BILL_CENTS = [500, 1000, 2000, 5000];
 
 // ── Robust image with automatic fallback ─────────────────────────────────────
 
@@ -500,6 +501,12 @@ function FlavorColumn({
 
 // ── Payment + book block – sits below FlavorColumn in the left area ──────────
 
+const PAYMENT_ICONS: Record<PaymentMethod, React.ReactNode> = {
+  bar:   <Banknote className="h-6 w-6" aria-hidden />,
+  karte: <CreditCard className="h-6 w-6" aria-hidden />,
+  qr:    <QrCode className="h-6 w-6" aria-hidden />,
+};
+
 function PaymentBlock({
   showPayment,
   paymentMethod,
@@ -511,6 +518,7 @@ function PaymentBlock({
   onPaymentChange,
   onCashInput,
   onBook,
+  effectiveSizes,
 }: {
   showPayment: boolean;
   paymentMethod: PaymentMethod;
@@ -522,24 +530,34 @@ function PaymentBlock({
   onPaymentChange: (m: PaymentMethod) => void;
   onCashInput: (v: string) => void;
   onBook: () => void;
+  effectiveSizes: EffectiveSizeConfig[];
 }) {
+  // Merge size prices with bill amounts; deduplicate by cent value; sort ascending
+  const quickCents = useMemo(() => {
+    const sizePrices = effectiveSizes.map((s) => s.priceCents);
+    const merged = Array.from(new Set([...sizePrices, ...BILL_CENTS]));
+    return merged.sort((a, b) => a - b);
+  }, [effectiveSizes]);
+
   return (
     <div className="shrink-0 rounded-2xl bg-white p-3 shadow">
       {showPayment && (
         <>
-          {/* Payment tabs */}
-          <div className="mb-3 flex gap-1.5">
+          {/* Payment tabs – enlarged for night / iPad use */}
+          <div className="mb-3 flex gap-2">
             {(["bar", "karte", "qr"] as PaymentMethod[]).map((m) => (
               <button
                 key={m}
+                data-testid={`payment-tab-${m}`}
                 onClick={() => onPaymentChange(m)}
                 className={cn(
-                  "flex-1 rounded-xl py-2.5 text-sm font-bold transition-all",
+                  "flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl min-h-[64px] py-3 text-lg font-black transition-all",
                   paymentMethod === m
                     ? "bg-primaq-500 text-white shadow"
                     : "bg-black/5 text-black/50 hover:bg-black/10"
                 )}
               >
+                {PAYMENT_ICONS[m]}
                 {PAYMENT_LABELS[m]}
               </button>
             ))}
@@ -548,9 +566,7 @@ function PaymentBlock({
           {/* Karte indicator */}
           {paymentMethod === "karte" && (
             <div className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 py-3">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600" aria-hidden>
-                <rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>
-              </svg>
+              <CreditCard className="h-5 w-5 text-blue-600" aria-hidden />
               <span className="text-sm font-semibold text-blue-700">Kartenzahlung gewählt</span>
             </div>
           )}
@@ -572,14 +588,16 @@ function PaymentBlock({
                 />
                 <span className="shrink-0 text-sm font-semibold text-black/50">€</span>
               </div>
-              <div className="flex gap-1">
-                {QUICK_AMOUNTS.map((a) => (
+              {/* Quick-amount buttons: size prices + bills, deduplicated, sorted */}
+              <div className="flex flex-wrap gap-1.5">
+                {quickCents.map((cents) => (
                   <button
-                    key={a}
-                    onClick={() => onCashInput(String(a))}
-                    className="flex-1 rounded-lg bg-black/5 py-1.5 text-xs font-bold text-black/65 hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 transition-all"
+                    key={cents}
+                    data-testid={`quick-amount-${cents}`}
+                    onClick={() => onCashInput(String(cents / 100))}
+                    className="flex-1 min-w-[3.5rem] rounded-xl bg-black/5 min-h-[56px] text-sm font-black text-black/70 hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 transition-all"
                   >
-                    {a}€
+                    {fmt(cents)}
                   </button>
                 ))}
               </div>
@@ -1064,6 +1082,7 @@ export function SalesPage() {
             onPaymentChange={handlePaymentChange}
             onCashInput={setCashInput}
             onBook={handleBook}
+            effectiveSizes={effectiveSizes}
           />
         </div>
         {/* Right: cart – full height */}

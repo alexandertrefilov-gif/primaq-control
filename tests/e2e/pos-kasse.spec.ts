@@ -119,12 +119,12 @@ test("3: Barzahlung 20 € → Rückgeld 9,00 €", async ({ page }) => {
   // 5,00 €
 
   // Zahlungsart Bar ist Default – Schnellbutton 10 €
-  await page.getByRole("button", { name: "10€" }).click();
+  await page.getByTestId("quick-amount-1000").click();
   await expect(page.getByText("Rückgeld")).toBeVisible();
-  await expect(page.getByText("5,00 €").nth(1)).toBeVisible(); // Rückgeld 10-5=5
+  await expect(page.getByText("Rückgeld").locator("..").getByText("5,00 €")).toBeVisible(); // Rückgeld 10-5=5
 
   // Auf 20 € wechseln
-  await page.getByRole("button", { name: "20€" }).click();
+  await page.getByTestId("quick-amount-2000").click();
   // Rückgeld-Box zeigt 15,00 € (20 - 5)
   await expect(page.getByText("Rückgeld").locator("..").getByText("15,00 €")).toBeVisible();
 });
@@ -140,7 +140,7 @@ test("4: Bestellung buchen → Warenkorb leer, Tagesumsatz korrekt", async ({ pa
   await clickFlavor(page, "Erdbeere");
   await clickSize(page, "Klein");
 
-  await page.getByRole("button", { name: "5€" }).click();
+  await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   // Warenkorb ist leer
@@ -210,7 +210,7 @@ test("7: Drei Buchungen – Gesamtumsatz korrekt summiert", async ({ page }) => 
   // Bar: 2,50
   await clickFlavor(page, "Vanille");
   await clickSize(page, "Klein");
-  await page.getByRole("button", { name: "5€" }).click();
+  await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   // Karte: 3,50
