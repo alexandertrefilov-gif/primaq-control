@@ -645,9 +645,9 @@ function CartColumn({
 }) {
   const allFlavors = useFlavorList();
   const getLocalFlavorName = (id: string) => allFlavors.find((f) => f.id === id)?.name ?? id;
-  // Resolve size label: stored sizeName → current effectiveSizes → static fallback
+  // Resolve size label: current effectiveSizes wins → stored sizeName → static fallback
   const getCartSizeName = (item: ReturnType<typeof usePosStore>["cart"][number]) =>
-    item.sizeName ?? effectiveSizes.find((s) => s.id === item.size)?.name ?? getSizeName(item.size);
+    effectiveSizes.find((s) => s.id === item.size)?.name ?? item.sizeName ?? getSizeName(item.size);
   const fontCfg = CART_FONT_CFG[cartFontSize];
 
   const [ausgabeModus, setAusgabeModus] = useState(() => {
