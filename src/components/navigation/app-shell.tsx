@@ -3,8 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Lock, Shield } from "lucide-react";
-import { adminNavigationItems, navigationItems } from "@/config/navigation";
+import { Lock, Settings, Shield } from "lucide-react";
 import { AdminProvider, useAdmin } from "@/features/pos/admin-context";
 import { SyncStatusPill } from "@/components/sync/sync-status-pill";
 import { cn } from "@/lib/utils";
@@ -76,11 +75,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     }
   }, [login, pin, closeModal]);
 
-  const visibleNavItems = [
-    ...navigationItems,
-    ...(isAdmin ? adminNavigationItems : []),
-  ];
-
   return (
     <div
       className={cn(
@@ -90,37 +84,74 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     >
       <header className="shrink-0 border-b border-black/10 bg-[#f7f8f4]/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center px-4 py-2.5">
-          <Link href="/verkauf" className="flex items-center gap-3">
+          {/* Logo */}
+          <Link href="/verkauf" className="flex shrink-0 items-center gap-3 mr-3">
             <span className="grid h-9 w-9 place-items-center rounded-lg bg-primaq-500 text-base font-black text-white">
               P
             </span>
-            <span>
+            <span className="hidden sm:block">
               <span className="block text-sm font-bold leading-tight">PrimaQ Control</span>
               <span className="block text-xs text-black/50">Softeis-Kasse</span>
             </span>
           </Link>
 
-          <div className="flex flex-1 justify-center px-3">
-            <SyncStatusPill />
-          </div>
+          {/* Inline nav – Verkauf always + Tagesabschluss/Jahresabschluss when admin */}
+          <nav className="flex flex-1 items-center gap-1">
+            {[
+              { label: "Verkauf", href: "/verkauf" },
+              ...(isAdmin ? [
+                { label: "Tagesabschluss", href: "/tagesabschluss" },
+                { label: "Jahresabschluss", href: "/jahresabschluss" },
+              ] : []),
+            ].map(({ label, href }) => {
+              const active = pathname === href;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors",
+                    active
+                      ? "bg-white text-primaq-700 shadow-sm ring-1 ring-black/5"
+                      : "text-black/55 hover:bg-white/70 hover:text-black"
+                  )}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
 
-          {/* Admin toggle */}
+          {/* Sync status */}
+          <SyncStatusPill />
+
+          {/* Admin area */}
           {isAdmin ? (
-            <button
-              data-testid="admin-logout"
-              onClick={logout}
-              title="Admin verlassen"
-              className="flex items-center gap-1.5 rounded-lg bg-primaq-500/10 px-3 py-1.5 text-xs font-bold text-primaq-700 hover:bg-red-100 hover:text-red-700 transition-colors"
-            >
-              <Shield className="h-3.5 w-3.5" />
-              Admin
-            </button>
+            <div className="ml-2 flex items-center gap-1.5 shrink-0">
+              <Link
+                href="/einstellungen"
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-black/55 hover:bg-white/70 hover:text-black transition-colors"
+                title="Einstellungen"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline">Einstellungen</span>
+              </Link>
+              <button
+                data-testid="admin-logout"
+                onClick={logout}
+                title="Admin verlassen"
+                className="flex items-center gap-1.5 rounded-lg bg-primaq-500/10 px-3 py-1.5 text-xs font-bold text-primaq-700 hover:bg-red-100 hover:text-red-700 transition-colors"
+              >
+                <Shield className="h-3.5 w-3.5" />
+                Admin
+              </button>
+            </div>
           ) : (
             <button
               data-testid="admin-login"
               onClick={openModal}
               title="Admin-Login"
-              className="grid h-8 w-8 place-items-center rounded-lg text-black/30 hover:bg-black/8 hover:text-black/60 transition-colors"
+              className="ml-2 grid h-8 w-8 place-items-center rounded-lg text-black/30 hover:bg-black/8 hover:text-black/60 transition-colors shrink-0"
             >
               <Lock className="h-4 w-4" />
             </button>
@@ -128,45 +159,16 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div
+      <main
         className={cn(
-          "flex min-h-0 w-full flex-1 flex-col",
-          isSalePage ? "px-4 py-2 xl:px-5" : "mx-auto max-w-4xl px-4 py-2.5 lg:py-3"
+          "min-w-0 flex-1 min-h-0",
+          isSalePage
+            ? "flex flex-col min-h-0 px-4 py-2 xl:px-5"
+            : "mx-auto w-full max-w-4xl px-4 py-3"
         )}
       >
-        <nav className="shrink-0 border-b border-black/10 pb-2">
-          <div className="flex gap-2">
-            {visibleNavItems.map((item) => {
-              const Icon = item.icon;
-              const active = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
-                    active
-                      ? "bg-white text-primaq-700 shadow-sm ring-1 ring-black/5"
-                      : "text-black/55 hover:bg-white/70 hover:text-black"
-                  )}
-                >
-                  <Icon aria-hidden className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
-
-        <main
-          className={cn(
-            "min-w-0 pt-3",
-            isSalePage && "flex flex-1 flex-col min-h-0 pt-2"
-          )}
-        >
-          {children}
-        </main>
-      </div>
+        {children}
+      </main>
 
       {/* Admin PIN modal */}
       {showModal && (

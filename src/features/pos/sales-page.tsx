@@ -475,7 +475,7 @@ function FlavorColumn({
   const groups = Object.entries(MACHINE_GROUP_LABELS);
 
   return (
-    <div className="flex flex-1 flex-col rounded-2xl bg-white shadow min-h-0">
+    <div className="flex flex-col rounded-2xl bg-white shadow min-h-0 overflow-hidden">
       <div className="shrink-0 px-3 pt-3 pb-2">
         <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">
           Sorte wählen
@@ -646,14 +646,14 @@ function PaymentBlock({
                 >C</button>
               </div>
 
-              {/* Quick-amount buttons: sized from sizes + bills + custom, colored by source */}
-              <div className="flex flex-wrap gap-1.5">
+              {/* Quick-amount buttons: single scrollable row → stable PaymentBlock height */}
+              <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
                 {quickItems.map(({ cents, bgColor, textColor }) => (
                   <button
                     key={cents}
                     data-testid={`quick-amount-${cents}`}
                     onClick={() => onCashInput(String(cents / 100))}
-                    className="flex-1 min-w-[4.5rem] rounded-xl min-h-[72px] text-2xl font-black leading-none tracking-tight transition-all active:scale-95 select-none hover:brightness-90"
+                    className="shrink-0 w-[4.5rem] rounded-xl min-h-[72px] text-2xl font-black leading-none tracking-tight transition-all active:scale-95 select-none hover:brightness-90"
                     style={{ backgroundColor: bgColor, color: textColor }}
                   >
                     {fmt(cents)}
@@ -1048,6 +1048,10 @@ export function SalesPage() {
   const [payment, setPayment] = useState<PaymentMethod>("bar");
   const [cashInput, setCashInput] = useState("");
   const [showQr, setShowQr] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+  useEffect(() => {
+    setShowDebug(new URLSearchParams(window.location.search).get("debug") === "1");
+  }, []);
 
   type DebugEntry = {
     step1: { sizeId: string; displayName: string | undefined; sizes: { id: string; name: string }[] };
@@ -1127,8 +1131,11 @@ export function SalesPage() {
     <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
       {/* Main area: [SizeRow + FlavorColumn] | [CartColumn] */}
       <div className="flex flex-1 min-h-0 gap-3 overflow-hidden">
-        {/* Left: flavors + payment block */}
-        <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
+        {/* Left: flavors (stable 1fr grid row) + payment block (auto row) */}
+        <div
+          className="flex-1 min-h-0 overflow-hidden grid gap-2"
+          style={{ gridTemplateRows: "1fr auto" }}
+        >
           <FlavorColumn
             onFlavorClick={handleFlavorClick}
             cardSize={layout.flavorCardSize}
@@ -1221,7 +1228,7 @@ export function SalesPage() {
     </div>
 
     {/* ── Debug overlay – Admin only ───────────────────────────────────────── */}
-    {isAdmin && debugEntry && (() => {
+    {(process.env.NODE_ENV !== "production" || showDebug) && isAdmin && debugEntry && (() => {
       const { step1, flavorId } = debugEntry;
       const cartItem = cart.find((i) => i.size === step1.sizeId && i.flavor === flavorId)
         ?? cart.findLast?.((i) => i.flavor === flavorId)
