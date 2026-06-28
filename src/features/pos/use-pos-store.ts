@@ -73,7 +73,7 @@ export function usePosStore() {
     return () => window.removeEventListener("primaq-pos-state-synced", onSynced);
   }, []);
 
-  const addToCart = useCallback((sizeId: string, flavorId: string, unitPriceCents: number) => {
+  const addToCart = useCallback((sizeId: string, flavorId: string, unitPriceCents: number, sizeDisplayName?: string) => {
     setState((current) => {
       const existing = current.cart.find((i) => i.size === sizeId && i.flavor === flavorId);
       if (existing) {
@@ -87,6 +87,7 @@ export function usePosStore() {
       const newItem: CartItem = {
         id: createId(),
         size: sizeId,
+        sizeName: sizeDisplayName,
         flavor: flavorId,
         quantity: 1,
         unitPriceCents,

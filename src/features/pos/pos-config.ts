@@ -112,6 +112,10 @@ export function getSizeName(id: string): string {
   return SIZES.find((s) => s.id === id)?.name ?? id;
 }
 
+export function getItemSizeName(item: { size: string; sizeName?: string }): string {
+  return item.sizeName ?? getSizeName(item.size);
+}
+
 export function getFlavorName(id: string): string {
   return FLAVORS.find((f) => f.id === id)?.name ?? id;
 }

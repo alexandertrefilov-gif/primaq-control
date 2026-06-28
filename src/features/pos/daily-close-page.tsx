@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePosStore } from "./use-pos-store";
 import { usePosYearStore } from "./use-pos-year-store";
 import { useAdmin } from "./admin-context";
-import { getFlavorName, getSizeName } from "./pos-config";
+import { getFlavorName, getItemSizeName } from "./pos-config";
 import { usePosVatStore, calcNet } from "./use-pos-vat-store";
 import type { DailySummary } from "./pos-types";
 
@@ -54,7 +54,7 @@ function buildCsv(
       rows.push(
         [
           time,
-          `${getSizeName(item.size)} ${getFlavorName(item.flavor)}`,
+          `${getItemSizeName(item)} ${getFlavorName(item.flavor)}`,
           item.quantity,
           method,
           (item.unitPriceCents / 100).toFixed(2),
@@ -245,7 +245,7 @@ export function DailyClosePage() {
                   <div className="flex-1 min-w-0">
                     {order.items.map((item) => (
                       <p key={item.id} className="text-sm text-ink">
-                        {item.quantity}× {getSizeName(item.size)} {getFlavorName(item.flavor)}
+                        {item.quantity}× {getItemSizeName(item)} {getFlavorName(item.flavor)}
                       </p>
                     ))}
                   </div>

@@ -5,7 +5,8 @@ import { ChevronDown, Download, FileSpreadsheet, Lock, Trash2 } from "lucide-rea
 import { useAdmin } from "./admin-context";
 import { usePosYearStore } from "./use-pos-year-store";
 import { ResetTestDataDialog } from "./reset-test-data-dialog";
-import { getSizeName, getFlavorName } from "./pos-config";
+import { getFlavorName, getItemSizeName } from "./pos-config";
+import { usePosVatStore, calcNet } from "./use-pos-vat-store";
 import type { DailySummary } from "./pos-types";
 
 const MONTHS = [
@@ -47,13 +48,13 @@ type ArticleRow = {
   revenueCents: number;
 };
 
-function computeMonthly(days: DailySummary[], year: number): MonthRow[] {
+function computeMonthly(days: DailySummary[], year: number, vatRate: number): MonthRow[] {
   return Array.from({ length: 12 }, (_, i) => {
     const month = i + 1;
     const prefix = `${year}-${String(month).padStart(2, "0")}`;
     const monthDays = days.filter((d) => d.date.startsWith(prefix));
     const total = monthDays.reduce((s, d) => s + d.totalCents, 0);
-    const net = Math.round(total / 1.19);
+    const net = calcNet(total, vatRate);
     return {
       month,
       label: MONTHS[i],
@@ -81,7 +82,7 @@ function computeArticles(days: DailySummary[]): ArticleRow[] {
         } else {
           map.set(key, {
             key,
-            name: `${getSizeName(item.size)} ${getFlavorName(item.flavor)}`,
+            name: `${getItemSizeName(item)} ${getFlavorName(item.flavor)}`,
             qty: item.quantity,
             revenueCents: item.quantity * item.unitPriceCents,
           });
@@ -94,14 +95,15 @@ function computeArticles(days: DailySummary[]): ArticleRow[] {
 
 // ── Export functions ──────────────────────────────────────────────────────────
 
-function buildCsv(days: DailySummary[], year: number): string {
+function buildCsv(days: DailySummary[], year: number, vatRate: number): string {
+  const vatLabel = `${vatRate} %`;
   const rows: string[] = [
     `PrimaQ POS – Jahresübersicht ${year}`,
     "",
-    "Datum;Umsatz brutto (€);Bar (€);Karte (€);QR (€);Bestellungen;Netto 19% (€);MwSt 19% (€)",
+    `Datum;Umsatz brutto (€);Bar (€);Karte (€);QR (€);Bestellungen;Netto ${vatLabel} (€);MwSt ${vatLabel} (€)`,
   ];
   for (const d of days) {
-    const net = Math.round(d.totalCents / 1.19);
+    const net = calcNet(d.totalCents, vatRate);
     rows.push(
       [
         d.date,
@@ -118,7 +120,14 @@ function buildCsv(days: DailySummary[], year: number): string {
   return "﻿" + rows.join("\n");
 }
 
-function buildDatevCsv(days: DailySummary[], year: number): string {
+function datevRevenueAccount(vatRate: number): string {
+  if (vatRate === 0) return "8200";
+  if (vatRate === 7) return "8300";
+  if (vatRate === 19) return "8400";
+  return "8400";
+}
+
+function buildDatevCsv(days: DailySummary[], year: number, vatRate: number): string {
   const now = new Date();
   const ts = now.toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
   const dateFrom = `${year}0101`;
@@ -140,6 +149,7 @@ function buildDatevCsv(days: DailySummary[], year: number): string {
     "Belegfeld 1", "Buchungstext",
   ].join(";");
 
+  const revenueAccount = datevRevenueAccount(vatRate);
   const rows: string[] = [];
 
   for (const d of days) {
@@ -150,7 +160,7 @@ function buildDatevCsv(days: DailySummary[], year: number): string {
       if (cents <= 0) return;
       const amount = (cents / 100).toFixed(2).replace(".", ",");
       rows.push(
-        [amount, "S", "EUR", "", "", "", konto, "8400", "", belegdatum, ref, `"${text}"`].join(";")
+        [amount, "S", "EUR", "", "", "", konto, revenueAccount, "", belegdatum, ref, `"${text}"`].join(";")
       );
     };
 
@@ -166,15 +176,17 @@ async function downloadXlsx(
   days: DailySummary[],
   year: number,
   monthly: MonthRow[],
-  articles: ArticleRow[]
+  articles: ArticleRow[],
+  vatRate: number,
 ) {
   const XLSX = await import("xlsx");
+  const vatLabel = `${vatRate} %`;
 
   const wb = XLSX.utils.book_new();
 
   // Sheet 1: Monthly overview
   const monthData = [
-    ["Monat", "Umsatz brutto (€)", "Bar (€)", "Karte (€)", "QR (€)", "Bestellungen", "Netto 19% (€)", "MwSt 19% (€)"],
+    ["Monat", "Umsatz brutto (€)", "Bar (€)", "Karte (€)", "QR (€)", "Bestellungen", `Netto ${vatLabel} (€)`, `MwSt ${vatLabel} (€)`],
     ...monthly.map((m) => [
       m.label,
       m.totalCents / 100,
@@ -205,9 +217,9 @@ async function downloadXlsx(
 
   // Sheet 3: All days
   const dayData = [
-    ["Datum", "Umsatz brutto (€)", "Bar (€)", "Karte (€)", "QR (€)", "Bestellungen", "Netto 19% (€)", "MwSt 19% (€)"],
+    ["Datum", "Umsatz brutto (€)", "Bar (€)", "Karte (€)", "QR (€)", "Bestellungen", `Netto ${vatLabel} (€)`, `MwSt ${vatLabel} (€)`],
     ...days.map((d) => {
-      const net = Math.round(d.totalCents / 1.19);
+      const net = calcNet(d.totalCents, vatRate);
       return [
         d.date,
         d.totalCents / 100,
@@ -277,6 +289,7 @@ function PaymentBar({ label, cents, total }: { label: string; cents: number; tot
 export function JahresabschlussClient() {
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
   const { history, hydrated } = usePosYearStore();
+  const { vatRate, hydrated: vatHydrated } = usePosVatStore();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [showResetDialog, setShowResetDialog] = useState(false);
@@ -299,7 +312,7 @@ export function JahresabschlussClient() {
     [history, selectedYear]
   );
 
-  const monthly = useMemo(() => computeMonthly(days, selectedYear), [days, selectedYear]);
+  const monthly = useMemo(() => computeMonthly(days, selectedYear, vatRate), [days, selectedYear, vatRate]);
   const articles = useMemo(() => computeArticles(days), [days]);
 
   const totalCents = days.reduce((s, d) => s + d.totalCents, 0);
@@ -307,11 +320,11 @@ export function JahresabschlussClient() {
   const cashCents = days.reduce((s, d) => s + d.cashCents, 0);
   const cardCents = days.reduce((s, d) => s + d.cardCents, 0);
   const qrCents = days.reduce((s, d) => s + d.qrCents, 0);
-  const netCents = Math.round(totalCents / 1.19);
+  const netCents = calcNet(totalCents, vatRate);
   const vatCents = totalCents - netCents;
   const hasData = days.length > 0;
 
-  if (!hydrated || !adminHydrated) {
+  if (!hydrated || !adminHydrated || !vatHydrated) {
     return <div className="flex h-40 items-center justify-center text-black/40">Laden…</div>;
   }
 
@@ -369,8 +382,8 @@ export function JahresabschlussClient() {
           {/* ── KPIs ─────────────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <KpiCard label="Umsatz brutto" value={fmt(totalCents)} accent />
-            <KpiCard label="Netto (÷ 1,19)" value={fmt(netCents)} />
-            <KpiCard label="MwSt 19 %" value={fmt(vatCents)} />
+            <KpiCard label="Netto" value={fmt(netCents)} />
+            <KpiCard label={`MwSt ${vatRate} %`} value={fmt(vatCents)} />
             <KpiCard label="Bestellungen" value={String(totalOrders)} />
           </div>
 
@@ -404,7 +417,7 @@ export function JahresabschlussClient() {
                     <th className="px-4 py-3 text-right font-bold text-black/40">QR</th>
                     <th className="px-4 py-3 text-right font-bold text-black/40">Bestellungen</th>
                     <th className="px-4 py-3 text-right font-bold text-black/40">Netto</th>
-                    <th className="px-4 py-3 text-right font-bold text-black/40">MwSt</th>
+                    <th className="px-4 py-3 text-right font-bold text-black/40">{`MwSt ${vatRate} %`}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -492,7 +505,7 @@ export function JahresabschlussClient() {
       {/* ── Export buttons ───────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-3">
         <button
-          onClick={() => triggerDownload(buildCsv(days, selectedYear), `primaq-jahresabschluss-${selectedYear}.csv`, "text/csv")}
+          onClick={() => triggerDownload(buildCsv(days, selectedYear, vatRate), `primaq-jahresabschluss-${selectedYear}.csv`, "text/csv")}
           disabled={!hasData}
           className="flex items-center gap-2 rounded-xl bg-primaq-500 px-5 py-3 font-bold text-white shadow hover:bg-primaq-700 disabled:cursor-not-allowed disabled:bg-black/10 disabled:text-black/30 transition-colors"
         >
@@ -501,7 +514,7 @@ export function JahresabschlussClient() {
         </button>
 
         <button
-          onClick={() => triggerDownload(buildDatevCsv(days, selectedYear), `primaq-datev-${selectedYear}.csv`, "text/csv")}
+          onClick={() => triggerDownload(buildDatevCsv(days, selectedYear, vatRate), `primaq-datev-${selectedYear}.csv`, "text/csv")}
           disabled={!hasData}
           className="flex items-center gap-2 rounded-xl border border-black/15 bg-white px-5 py-3 font-bold text-black/70 shadow hover:bg-black/5 disabled:cursor-not-allowed disabled:text-black/30 transition-colors"
         >
@@ -510,7 +523,7 @@ export function JahresabschlussClient() {
         </button>
 
         <button
-          onClick={() => downloadXlsx(days, selectedYear, monthly, articles)}
+          onClick={() => downloadXlsx(days, selectedYear, monthly, articles, vatRate)}
           disabled={!hasData}
           className="flex items-center gap-2 rounded-xl border border-black/15 bg-white px-5 py-3 font-bold text-black/70 shadow hover:bg-black/5 disabled:cursor-not-allowed disabled:text-black/30 transition-colors"
         >
@@ -521,7 +534,7 @@ export function JahresabschlussClient() {
 
       {hasData && (
         <p className="text-xs text-black/30">
-          Konten im DATEV-Export (SKR03): Kasse 1000, Bank/Karte 1200, Erlöse 19 % MwSt 8400.
+          {`Konten im DATEV-Export (SKR03): Kasse 1000, Bank/Karte 1200, Erlöse ${vatRate} % MwSt ${datevRevenueAccount(vatRate)}.`}{" "}
           Bitte mit Ihrem Steuerberater abstimmen.
         </p>
       )}

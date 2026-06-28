@@ -3,6 +3,7 @@ export type PaymentMethod = "bar" | "karte" | "qr";
 export type CartItem = {
   id: string;
   size: string;
+  sizeName?: string; // display label at time of sale; falls back to getSizeName(size)
   flavor: string;
   quantity: number;
   unitPriceCents: number;

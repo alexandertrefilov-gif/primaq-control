@@ -15,6 +15,7 @@ import {
   MACHINE_GROUP_LABELS,
   SIZES,
   getSizeName,
+  getItemSizeName,
 } from "./pos-config";
 import type { FlavorConfig, SizeConfig } from "./pos-config";
 import type { CartItem, PaymentMethod } from "./pos-types";
@@ -727,7 +728,7 @@ function CartColumn({
                       "flex-1 uppercase leading-tight line-clamp-2 text-ink",
                       ausgabeModus ? "text-2xl font-black" : fontCfg.name
                     )}>
-                      {getSizeName(item.size)} {getLocalFlavorName(item.flavor)}
+                      {getItemSizeName(item)} {getLocalFlavorName(item.flavor)}
                     </p>
                     <p className={cn(
                       "shrink-0 font-black text-ink tabular-nums pt-0.5",
@@ -994,9 +995,10 @@ export function SalesPage() {
 
   const handleSizePick = useCallback((sizeId: string, priceCents: number) => {
     if (!pendingFlavor) return;
-    addToCart(sizeId, pendingFlavor.id, priceCents);
+    const displayName = effectiveSizes.find((s) => s.id === sizeId)?.name;
+    addToCart(sizeId, pendingFlavor.id, priceCents, displayName);
     setPendingFlavor(null);
-  }, [pendingFlavor, addToCart]);
+  }, [pendingFlavor, addToCart, effectiveSizes]);
 
   const handlePaymentChange = useCallback((method: PaymentMethod) => {
     setPayment(method);
