@@ -74,17 +74,14 @@ export function usePosStore() {
   }, []);
 
   const addToCart = useCallback((sizeId: string, flavorId: string, unitPriceCents: number, sizeDisplayName?: string) => {
-    console.log("[POS:addToCart] STEP2", { sizeId, flavorId, unitPriceCents, sizeDisplayName });
     setState((current) => {
       const existing = current.cart.find((i) => i.size === sizeId && i.flavor === flavorId);
       if (existing) {
-        const updatedSizeName = existing.sizeName ?? sizeDisplayName;
-        console.log("[POS:addToCart] STEP2 duplicate-path", { existingSizeName: existing.sizeName, sizeDisplayName, updatedSizeName });
         return {
           ...current,
           cart: current.cart.map((i) =>
             i.id === existing.id
-              ? { ...i, quantity: i.quantity + 1, sizeName: updatedSizeName }
+              ? { ...i, quantity: i.quantity + 1, sizeName: i.sizeName ?? sizeDisplayName }
               : i
           ),
         };
@@ -97,7 +94,6 @@ export function usePosStore() {
         quantity: 1,
         unitPriceCents,
       };
-      console.log("[POS:addToCart] STEP2 new-item", { newItem });
       return { ...current, cart: [...current.cart, newItem] };
     });
   }, []);

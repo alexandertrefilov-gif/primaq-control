@@ -646,11 +646,8 @@ function CartColumn({
   const allFlavors = useFlavorList();
   const getLocalFlavorName = (id: string) => allFlavors.find((f) => f.id === id)?.name ?? id;
   // Resolve size label: stored sizeName → current effectiveSizes → static fallback
-  const getCartSizeName = (item: ReturnType<typeof usePosStore>["cart"][number]) => {
-    const resolved = item.sizeName ?? effectiveSizes.find((s) => s.id === item.size)?.name ?? getSizeName(item.size);
-    console.log("[POS:getCartSizeName] STEP3", { itemSize: item.size, itemSizeName: item.sizeName, resolved, effectiveSizes: effectiveSizes.map(s => ({ id: s.id, name: s.name })) });
-    return resolved;
-  };
+  const getCartSizeName = (item: ReturnType<typeof usePosStore>["cart"][number]) =>
+    item.sizeName ?? effectiveSizes.find((s) => s.id === item.size)?.name ?? getSizeName(item.size);
   const fontCfg = CART_FONT_CFG[cartFontSize];
 
   const [ausgabeModus, setAusgabeModus] = useState(() => {
@@ -966,11 +963,18 @@ export function SalesPage() {
 
   const { allFlavors, hydrated: flavorsHydrated } = usePosFlavorStore();
   const { active: layout, hydrated: layoutHydrated } = usePosLayoutStore();
+  const { isAdmin } = useAdmin();
 
   const [pendingFlavor, setPendingFlavor] = useState<FlavorConfig | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("bar");
   const [cashInput, setCashInput] = useState("");
   const [showQr, setShowQr] = useState(false);
+
+  type DebugEntry = {
+    step1: { sizeId: string; displayName: string | undefined; sizes: { id: string; name: string }[] };
+    flavorId: string;
+  };
+  const [debugEntry, setDebugEntry] = useState<DebugEntry | null>(null);
 
   const cashCents = Math.round(parseFloat(cashInput.replace(",", ".")) * 100) || 0;
   const change = cashCents - cartTotal;
@@ -1003,7 +1007,10 @@ export function SalesPage() {
   const handleSizePick = useCallback((sizeId: string, priceCents: number) => {
     if (!pendingFlavor) return;
     const displayName = effectiveSizes.find((s) => s.id === sizeId)?.name;
-    console.log("[POS:handleSizePick] STEP1", { sizeId, priceCents, displayName, effectiveSizes: effectiveSizes.map(s => ({ id: s.id, name: s.name })) });
+    setDebugEntry({
+      step1: { sizeId, displayName, sizes: effectiveSizes.map((s) => ({ id: s.id, name: s.name })) },
+      flavorId: pendingFlavor.id,
+    });
     addToCart(sizeId, pendingFlavor.id, priceCents, displayName);
     setPendingFlavor(null);
   }, [pendingFlavor, addToCart, effectiveSizes]);
@@ -1130,6 +1137,53 @@ export function SalesPage() {
         </div>
       )}
     </div>
+
+    {/* ── Debug overlay – Admin only ───────────────────────────────────────── */}
+    {isAdmin && debugEntry && (() => {
+      const { step1, flavorId } = debugEntry;
+      const cartItem = cart.find((i) => i.size === step1.sizeId && i.flavor === flavorId)
+        ?? cart.findLast?.((i) => i.flavor === flavorId)
+        ?? cart[cart.length - 1];
+      const step3 = cartItem
+        ? (cartItem.sizeName ?? effectiveSizes.find((s) => s.id === cartItem.size)?.name ?? getSizeName(cartItem.size))
+        : "—";
+      return (
+        <div className="fixed bottom-4 right-4 z-[200] w-72 rounded-2xl bg-black/90 p-4 text-xs font-mono text-white shadow-2xl">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-bold text-yellow-300">POS Debug</span>
+            <button onClick={() => setDebugEntry(null)} className="text-white/50 hover:text-white">✕</button>
+          </div>
+
+          <div className="mb-2 border-t border-white/10 pt-2">
+            <p className="font-bold text-green-400">STEP 1 – handleSizePick</p>
+            <p>sizeId: <span className="text-yellow-200">{step1.sizeId}</span></p>
+            <p>displayName: <span className="text-yellow-200">{step1.displayName ?? "undefined"}</span></p>
+            <p className="mt-1 text-white/40">effectiveSizes:</p>
+            {step1.sizes.map((s) => (
+              <p key={s.id} className="pl-2 text-white/60">{s.id} → &quot;{s.name}&quot;</p>
+            ))}
+          </div>
+
+          <div className="mb-2 border-t border-white/10 pt-2">
+            <p className="font-bold text-blue-400">STEP 2 – CartItem</p>
+            {cartItem ? (
+              <>
+                <p>item.size: <span className="text-yellow-200">{cartItem.size}</span></p>
+                <p>item.sizeName: <span className="text-yellow-200">{cartItem.sizeName ?? "undefined"}</span></p>
+              </>
+            ) : (
+              <p className="text-white/40">kein CartItem gefunden</p>
+            )}
+          </div>
+
+          <div className="border-t border-white/10 pt-2">
+            <p className="font-bold text-orange-400">STEP 3 – Render</p>
+            <p>getCartSizeName: <span className="text-yellow-200">{step3}</span></p>
+          </div>
+        </div>
+      );
+    })()}
+
     </FlavorsCtx.Provider>
   );
 }
