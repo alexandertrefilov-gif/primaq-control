@@ -51,6 +51,25 @@ export type SalesSizeOverride = {
   textColorMode: TextColorMode;
   imageDataUrl: string | null;
   imageScale: number; // zoom 50–200, default 100
+  showAsQuickAmount: boolean; // price appears in payment quick amounts
+};
+
+export type PaymentConfig = {
+  barColor: string;       // active green by default
+  karteColor: string;     // active blue by default
+  qrColor: string;        // active purple by default
+  bookColor: string;      // "Bestellung buchen" button color
+  bills: number[];        // active bill amounts in cents [500, 1000, 2000, 5000]
+  customAmounts: number[]; // admin-defined quick amounts in cents
+};
+
+export const DEFAULT_PAYMENT: PaymentConfig = {
+  barColor: "#16a34a",
+  karteColor: "#2563eb",
+  qrColor: "#7c3aed",
+  bookColor: "#16a34a",
+  bills: [500, 1000, 2000, 5000],
+  customAmounts: [],
 };
 
 export function computeTextColor(mode: TextColorMode, bgHex: string): string {
@@ -75,6 +94,7 @@ export type LayoutConfig = {
   qtyButtonSize: number;     // 40–80 px,  default 44
   cartFontSize: CartFontSize;
   cartWidth: number;         // 320–520 px, default 400
+  payment: PaymentConfig;    // payment area colors + quick amounts
 };
 
 export type LayoutProfile = {
@@ -99,15 +119,16 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
   },
   sizeVisibility: { klein: true, mittel: true, gross: true },
   salesSizes: {
-    klein: { label: "Klein", priceCents: 250, order: 1, backgroundColor: "#F6F2E8", textColorMode: "auto", imageDataUrl: null, imageScale: 100 },
-    mittel: { label: "Mittel", priceCents: 350, order: 2, backgroundColor: "#F8E3A0", textColorMode: "auto", imageDataUrl: null, imageScale: 100 },
-    gross:  { label: "Groß",  priceCents: 500, order: 3, backgroundColor: "#F4C96D", textColorMode: "auto", imageDataUrl: null, imageScale: 100 },
+    klein: { label: "Klein", priceCents: 250, order: 1, backgroundColor: "#F6F2E8", textColorMode: "auto", imageDataUrl: null, imageScale: 100, showAsQuickAmount: true },
+    mittel: { label: "Mittel", priceCents: 350, order: 2, backgroundColor: "#F8E3A0", textColorMode: "auto", imageDataUrl: null, imageScale: 100, showAsQuickAmount: true },
+    gross:  { label: "Groß",  priceCents: 500, order: 3, backgroundColor: "#F4C96D", textColorMode: "auto", imageDataUrl: null, imageScale: 100, showAsQuickAmount: true },
   },
   flavorCardSize: 140,
   sizeColumnWidth: 176,
   qtyButtonSize: 44,
   cartFontSize: "normal",
   cartWidth: 400,
+  payment: DEFAULT_PAYMENT,
 };
 
 export const PRESETS: Record<PresetId, { label: string; description: string; config: LayoutConfig }> = {
@@ -193,6 +214,7 @@ function parseStoreState(raw: string): StoreState {
         { ...def, ...(parsed.active?.salesSizes?.[id] ?? {}) },
       ])
     ) as Record<string, SalesSizeOverride>,
+    payment: { ...DEFAULT_PAYMENT, ...(parsed.active?.payment ?? {}) },
   };
   return { active, profiles: parsed.profiles ?? [] };
 }

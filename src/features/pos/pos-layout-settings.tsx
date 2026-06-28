@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { AlertTriangle, GripVertical, Lock, Unlock, RotateCcw, Save, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, GripVertical, Lock, Unlock, Plus, RotateCcw, Save, Trash2, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SIZES } from "./pos-config";
 import {
@@ -12,6 +12,7 @@ import {
   CART_FONT_LABELS,
   PRESETS,
   DEFAULT_LAYOUT,
+  DEFAULT_PAYMENT,
   panelSizeToPixels,
 } from "./use-pos-layout-store";
 import type {
@@ -20,6 +21,7 @@ import type {
   PanelConfig,
   PanelId,
   PanelSize,
+  PaymentConfig,
   PresetId,
   SalesSizeOverride,
   TextColorMode,
@@ -482,6 +484,19 @@ function SizeConfigCard({
             </div>
           </div>
 
+          {/* Als Schnellbetrag anzeigen */}
+          <div className="flex items-center justify-between rounded-xl border border-black/8 bg-black/[0.02] px-3 py-2.5">
+            <div>
+              <p className="text-xs font-semibold text-ink">Als Schnellbetrag im Kassenbereich</p>
+              <p className="text-[10px] text-black/40">Preis erscheint automatisch als Kassenschnellbutton</p>
+            </div>
+            <Toggle
+              checked={ov.showAsQuickAmount ?? true}
+              onChange={(v) => onUpdate({ showAsQuickAmount: v })}
+              disabled={!editMode}
+            />
+          </div>
+
           {/* Image upload */}
           <div>
             <p className="mb-1 text-[11px] font-semibold text-black/40">Bild / Icon</p>
@@ -566,6 +581,82 @@ function SizeConfigCard({
         </div>
 
       </div>
+    </div>
+  );
+}
+
+// ── Custom amounts editor ──────────────────────────────────────────
+
+function fmtEur(cents: number): string {
+  return (cents / 100).toFixed(2).replace(".", ",") + " €";
+}
+
+function CustomAmountsEditor({
+  amounts,
+  editMode,
+  onChange,
+}: {
+  amounts: number[];
+  editMode: boolean;
+  onChange: (next: number[]) => void;
+}) {
+  const [input, setInput] = useState("");
+  const [error, setError] = useState(false);
+
+  function handleAdd() {
+    const euros = parseFloat(input.replace(",", "."));
+    if (isNaN(euros) || euros <= 0 || euros > 999.99) { setError(true); return; }
+    const cents = Math.round(euros * 100);
+    if (amounts.includes(cents)) { setInput(""); return; }
+    onChange([...amounts, cents].sort((a, b) => a - b));
+    setInput(""); setError(false);
+  }
+
+  return (
+    <div className="space-y-2">
+      {amounts.map((cents) => (
+        <div key={cents} className="flex items-center justify-between rounded-xl bg-black/[0.03] px-3 py-2">
+          <span className="text-sm font-bold text-ink">{fmtEur(cents)}</span>
+          {editMode && (
+            <button
+              onClick={() => onChange(amounts.filter((c) => c !== cents))}
+              className="grid h-6 w-6 place-items-center rounded-lg text-black/35 hover:bg-red-50 hover:text-red-500 transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      ))}
+      {editMode && (
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <input
+              type="text"
+              inputMode="decimal"
+              value={input}
+              onChange={(e) => { setInput(e.target.value); setError(false); }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+              placeholder="z.B. 15,00"
+              className={cn(
+                "w-full rounded-xl border px-3 py-1.5 text-sm font-bold outline-none focus:ring-2",
+                error
+                  ? "border-red-400 bg-red-50 text-red-600 focus:ring-red-400/20"
+                  : "border-black/10 bg-black/[0.03] text-ink focus:border-primaq-500 focus:ring-primaq-500/20"
+              )}
+            />
+          </div>
+          <button
+            onClick={handleAdd}
+            className="flex items-center gap-1.5 rounded-xl bg-primaq-50 px-3 py-1.5 text-xs font-bold text-primaq-700 hover:bg-primaq-100 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Hinzufügen
+          </button>
+        </div>
+      )}
+      {amounts.length === 0 && !editMode && (
+        <p className="text-xs text-black/35">Keine eigenen Schnellbeträge.</p>
+      )}
     </div>
   );
 }
@@ -985,6 +1076,113 @@ export function PosLayoutSettings() {
           <p className="mt-3 text-center text-xs text-black/35">Noch keine eigenen Profile</p>
         )}
       </div>
+
+      {/* ── Zahlungsbereich ──────────────────────────────────────── */}
+      {(() => {
+        const pm: PaymentConfig = { ...DEFAULT_PAYMENT, ...active.payment };
+        const updatePm = (patch: Partial<PaymentConfig>) =>
+          update({ ...active, payment: { ...pm, ...patch } });
+
+        const BILL_OPTIONS: { cents: number; label: string }[] = [
+          { cents: 500, label: "5 €" },
+          { cents: 1000, label: "10 €" },
+          { cents: 2000, label: "20 €" },
+          { cents: 5000, label: "50 €" },
+        ];
+
+        const COLOR_FIELDS: { key: keyof PaymentConfig; label: string }[] = [
+          { key: "barColor",   label: "Bar" },
+          { key: "karteColor", label: "Karte" },
+          { key: "qrColor",    label: "QR" },
+          { key: "bookColor",  label: "Buchen" },
+        ];
+
+        return (
+          <div className="overflow-hidden rounded-2xl bg-white shadow">
+            <div className="border-b border-black/5 px-4 py-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-black/40">Zahlungsbereich</p>
+              <p className="mt-0.5 text-xs text-black/40">Button-Farben, Geldscheine und eigene Schnellbeträge</p>
+            </div>
+            <div className="p-4 space-y-5">
+
+              {/* Button-Farben */}
+              <div>
+                <p className="mb-2 text-[11px] font-semibold text-black/40">Button-Farben</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {COLOR_FIELDS.map(({ key, label }) => {
+                    const color = pm[key] as string;
+                    return (
+                      <div key={key} className="flex items-center gap-2.5 rounded-xl border border-black/8 bg-black/[0.02] px-3 py-2">
+                        <div
+                          className={cn(
+                            "relative h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-black/20",
+                            !editMode && "pointer-events-none opacity-60"
+                          )}
+                          style={{ backgroundColor: color }}
+                        >
+                          <input
+                            type="color"
+                            value={color}
+                            onChange={(e) => updatePm({ [key]: e.target.value })}
+                            disabled={!editMode}
+                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                            title={label}
+                          />
+                        </div>
+                        <span className="flex-1 text-sm font-bold text-ink">{label}</span>
+                        {color !== DEFAULT_PAYMENT[key] && editMode && (
+                          <button
+                            onClick={() => updatePm({ [key]: DEFAULT_PAYMENT[key] as string })}
+                            className="text-[10px] font-semibold text-black/35 hover:text-black/60 transition-colors"
+                          >Reset</button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Geldscheine */}
+              <div>
+                <p className="mb-2 text-[11px] font-semibold text-black/40">Geldscheine</p>
+                <div className={cn("flex gap-1.5", !editMode && "pointer-events-none opacity-50")}>
+                  {BILL_OPTIONS.map(({ cents, label }) => {
+                    const isOn = pm.bills.includes(cents);
+                    return (
+                      <button
+                        key={cents}
+                        onClick={() => {
+                          const next = isOn
+                            ? pm.bills.filter((b) => b !== cents)
+                            : [...pm.bills, cents].sort((a, b) => a - b);
+                          updatePm({ bills: next });
+                        }}
+                        className={cn(
+                          "flex-1 rounded-xl py-2.5 text-sm font-black transition-colors",
+                          isOn ? "bg-primaq-500 text-white shadow-sm" : "bg-black/5 text-black/50 hover:bg-black/10"
+                        )}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Eigene Schnellbeträge */}
+              <div>
+                <p className="mb-2 text-[11px] font-semibold text-black/40">Eigene Schnellbeträge</p>
+                <CustomAmountsEditor
+                  amounts={pm.customAmounts}
+                  editMode={editMode}
+                  onChange={(next) => updatePm({ customAmounts: next })}
+                />
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Reset ────────────────────────────────────────────────── */}
       <div className="rounded-2xl bg-white p-4 shadow">

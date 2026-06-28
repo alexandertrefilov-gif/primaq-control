@@ -8,7 +8,7 @@ import { usePosStore } from "./use-pos-store";
 import { usePosFlavorStore } from "./use-pos-flavor-store";
 import { usePosLayoutStore } from "./use-pos-layout-store";
 import { useAdmin } from "./admin-context";
-import type { CartFontSize, TextColorMode } from "./use-pos-layout-store";
+import type { CartFontSize, PaymentConfig, TextColorMode } from "./use-pos-layout-store";
 import { computeTextColor } from "./use-pos-layout-store";
 import {
   FLAVORS,
@@ -24,6 +24,7 @@ type EffectiveSizeConfig = SizeConfig & {
   textColorMode: TextColorMode;
   imageDataUrl: string | null;
   imageScale: number;
+  showAsQuickAmount: boolean;
 };
 
 // Dynamic flavor context – populated by SalesPage from usePosFlavorStore
@@ -40,8 +41,7 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   qr: "QR",
 };
 
-// Bill amounts in cents – 100 € removed intentionally
-const BILL_CENTS = [500, 1000, 2000, 5000];
+const DEFAULT_PAYMENT_BILLS = [500, 1000, 2000, 5000];
 
 // ── Robust image with automatic fallback ─────────────────────────────────────
 
@@ -502,9 +502,9 @@ function FlavorColumn({
 // ── Payment + book block – sits below FlavorColumn in the left area ──────────
 
 const PAYMENT_ICONS: Record<PaymentMethod, React.ReactNode> = {
-  bar:   <Banknote className="h-6 w-6" aria-hidden />,
-  karte: <CreditCard className="h-6 w-6" aria-hidden />,
-  qr:    <QrCode className="h-6 w-6" aria-hidden />,
+  bar:   <Banknote className="h-7 w-7" aria-hidden />,
+  karte: <CreditCard className="h-7 w-7" aria-hidden />,
+  qr:    <QrCode className="h-7 w-7" aria-hidden />,
 };
 
 function PaymentBlock({
@@ -519,6 +519,7 @@ function PaymentBlock({
   onCashInput,
   onBook,
   effectiveSizes,
+  paymentConfig,
 }: {
   showPayment: boolean;
   paymentMethod: PaymentMethod;
@@ -531,82 +532,115 @@ function PaymentBlock({
   onCashInput: (v: string) => void;
   onBook: () => void;
   effectiveSizes: EffectiveSizeConfig[];
+  paymentConfig: PaymentConfig;
 }) {
-  // Merge size prices with bill amounts; deduplicate by cent value; sort ascending
+  const barColor   = paymentConfig.barColor   ?? "#16a34a";
+  const karteColor = paymentConfig.karteColor ?? "#2563eb";
+  const qrColor    = paymentConfig.qrColor    ?? "#7c3aed";
+  const bookColor  = paymentConfig.bookColor  ?? "#16a34a";
+  const methodColor: Record<PaymentMethod, string> = { bar: barColor, karte: karteColor, qr: qrColor };
+
+  // Merge size prices (where showAsQuickAmount=true) + bills + custom; deduplicate; sort
   const quickCents = useMemo(() => {
-    const sizePrices = effectiveSizes.map((s) => s.priceCents);
-    const merged = Array.from(new Set([...sizePrices, ...BILL_CENTS]));
-    return merged.sort((a, b) => a - b);
-  }, [effectiveSizes]);
+    const sizePrices = effectiveSizes
+      .filter((s) => s.showAsQuickAmount !== false)
+      .map((s) => s.priceCents);
+    const bills = paymentConfig.bills ?? DEFAULT_PAYMENT_BILLS;
+    const custom = paymentConfig.customAmounts ?? [];
+    return Array.from(new Set([...sizePrices, ...bills, ...custom])).sort((a, b) => a - b);
+  }, [effectiveSizes, paymentConfig]);
 
   return (
     <div className="shrink-0 rounded-2xl bg-white p-3 shadow">
       {showPayment && (
         <>
-          {/* Payment tabs – enlarged for night / iPad use */}
+          {/* Payment tabs – 72 px, color-coded, glow on active */}
           <div className="mb-3 flex gap-2">
-            {(["bar", "karte", "qr"] as PaymentMethod[]).map((m) => (
-              <button
-                key={m}
-                data-testid={`payment-tab-${m}`}
-                onClick={() => onPaymentChange(m)}
-                className={cn(
-                  "flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl min-h-[64px] py-3 text-lg font-black transition-all",
-                  paymentMethod === m
-                    ? "bg-primaq-500 text-white shadow"
-                    : "bg-black/5 text-black/50 hover:bg-black/10"
-                )}
-              >
-                {PAYMENT_ICONS[m]}
-                {PAYMENT_LABELS[m]}
-              </button>
-            ))}
+            {(["bar", "karte", "qr"] as PaymentMethod[]).map((m) => {
+              const color = methodColor[m];
+              const isActive = paymentMethod === m;
+              return (
+                <button
+                  key={m}
+                  data-testid={`payment-tab-${m}`}
+                  onClick={() => onPaymentChange(m)}
+                  className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl transition-all active:scale-[0.97] select-none"
+                  style={{
+                    minHeight: 72,
+                    backgroundColor: isActive ? color : `${color}18`,
+                    color: isActive ? "#ffffff" : color,
+                    boxShadow: isActive
+                      ? `0 0 0 3px ${color}40, 0 6px 18px ${color}28`
+                      : undefined,
+                  }}
+                >
+                  {PAYMENT_ICONS[m]}
+                  <span className="text-xl font-black leading-none">{PAYMENT_LABELS[m]}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Karte indicator */}
           {paymentMethod === "karte" && (
-            <div className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 py-3">
-              <CreditCard className="h-5 w-5 text-blue-600" aria-hidden />
-              <span className="text-sm font-semibold text-blue-700">Kartenzahlung gewählt</span>
+            <div className="mb-3 flex items-center justify-center gap-2 rounded-xl px-4 py-3"
+              style={{ backgroundColor: `${karteColor}12` }}>
+              <CreditCard className="h-5 w-5" style={{ color: karteColor }} aria-hidden />
+              <span className="text-sm font-semibold" style={{ color: karteColor }}>Kartenzahlung gewählt</span>
             </div>
           )}
 
-          {/* Cash input */}
+          {/* Cash input + +/-/C + quick amounts */}
           {paymentMethod === "bar" && (
             <div className="mb-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-sm font-semibold text-black/50">Gegeben</span>
+              {/* Large "Gegeben" input with ±C buttons */}
+              <div className="flex items-stretch gap-2">
+                <button
+                  data-testid="cash-minus"
+                  onClick={() => onCashInput(String(Math.max(0, cashCents - 100) / 100))}
+                  className="h-16 w-14 shrink-0 grid place-items-center rounded-2xl bg-red-100 text-red-600 text-3xl font-black transition-all hover:bg-red-200 active:scale-95 select-none"
+                >−</button>
                 <input
                   type="number"
                   inputMode="decimal"
-                  step="0.50"
+                  step="0.01"
                   min="0"
                   value={cashInput}
                   onChange={(e) => onCashInput(e.target.value)}
                   placeholder="0,00"
-                  className="flex-1 rounded-xl border border-black/15 bg-black/[0.03] px-2.5 py-1.5 text-right text-lg font-bold outline-none focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20"
+                  className="min-h-[64px] flex-1 rounded-2xl border-2 border-black/15 bg-black/[0.02] px-3 text-center text-4xl font-black tabular-nums outline-none focus:border-green-500 focus:ring-4 focus:ring-green-500/15 transition-all"
                 />
-                <span className="shrink-0 text-sm font-semibold text-black/50">€</span>
+                <button
+                  data-testid="cash-plus"
+                  onClick={() => onCashInput(String((cashCents + 100) / 100))}
+                  className="h-16 w-14 shrink-0 grid place-items-center rounded-2xl bg-green-100 text-green-600 text-3xl font-black transition-all hover:bg-green-200 active:scale-95 select-none"
+                >+</button>
+                <button
+                  data-testid="cash-clear"
+                  onClick={() => onCashInput("")}
+                  className="h-16 w-14 shrink-0 grid place-items-center rounded-2xl bg-orange-100 text-orange-600 text-2xl font-black transition-all hover:bg-orange-200 active:scale-95 select-none"
+                >C</button>
               </div>
-              {/* Quick-amount buttons: size prices + bills, deduplicated, sorted */}
+
+              {/* Quick-amount buttons: merged from size prices + bills + custom */}
               <div className="flex flex-wrap gap-1.5">
                 {quickCents.map((cents) => (
                   <button
                     key={cents}
                     data-testid={`quick-amount-${cents}`}
                     onClick={() => onCashInput(String(cents / 100))}
-                    className="flex-1 min-w-[3.5rem] rounded-xl bg-black/5 min-h-[56px] text-sm font-black text-black/70 hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 transition-all"
+                    className="flex-1 min-w-[3.5rem] rounded-xl bg-black/5 min-h-[56px] text-sm font-black text-black/70 hover:bg-black/10 active:scale-95 transition-all"
                   >
                     {fmt(cents)}
                   </button>
                 ))}
               </div>
+
+              {/* Rückgeld */}
               {cashCents >= cartTotal && cartTotal > 0 && (
-                <div className="flex items-center justify-between rounded-xl bg-green-50 px-3 py-2">
-                  <span className="text-sm font-semibold text-green-700">Rückgeld</span>
-                  <span className="text-xl font-black text-green-700 tabular-nums">
-                    {fmt(change)}
-                  </span>
+                <div className="flex items-center justify-between rounded-xl bg-green-50 px-3 py-2.5">
+                  <span className="text-base font-bold text-green-700">Rückgeld</span>
+                  <span className="text-2xl font-black text-green-700 tabular-nums">{fmt(change)}</span>
                 </div>
               )}
             </div>
@@ -614,18 +648,20 @@ function PaymentBlock({
         </>
       )}
 
-      {/* Book button */}
+      {/* "Bestellung buchen" – 80 px, ShoppingCart icon */}
       <button
         data-testid="book-button"
         onClick={onBook}
         disabled={!canBook}
         className={cn(
-          "w-full rounded-xl py-4 text-base font-black transition-all select-none",
+          "w-full flex items-center justify-center gap-3 rounded-2xl min-h-[80px] text-2xl font-black transition-all select-none",
           canBook
-            ? "bg-primaq-500 text-white shadow-md hover:bg-primaq-700 active:scale-[0.98]"
-            : "cursor-not-allowed bg-black/8 text-black/20"
+            ? "text-white shadow-lg hover:brightness-90 active:scale-[0.98]"
+            : "bg-black/8 text-black/30 cursor-not-allowed"
         )}
+        style={canBook ? { backgroundColor: bookColor } : undefined}
       >
+        <ShoppingCart className="h-8 w-8 shrink-0" aria-hidden />
         {showPayment && paymentMethod === "qr" ? "QR anzeigen" : "Bestellung buchen"}
       </button>
     </div>
@@ -1005,12 +1041,13 @@ export function SalesPage() {
         const ov = layout.salesSizes?.[s.id];
         return {
           ...s,
-          name:            ov?.label           ?? s.name,
-          priceCents:      ov?.priceCents       ?? s.priceCents,
-          backgroundColor: ov?.backgroundColor  ?? "#ffffff",
-          textColorMode:   ov?.textColorMode    ?? "auto",
-          imageDataUrl:    ov?.imageDataUrl     ?? null,
-          imageScale:      ov?.imageScale       ?? 100,
+          name:               ov?.label              ?? s.name,
+          priceCents:         ov?.priceCents          ?? s.priceCents,
+          backgroundColor:    ov?.backgroundColor     ?? "#ffffff",
+          textColorMode:      ov?.textColorMode       ?? "auto",
+          imageDataUrl:       ov?.imageDataUrl        ?? null,
+          imageScale:         ov?.imageScale          ?? 100,
+          showAsQuickAmount:  ov?.showAsQuickAmount   ?? true,
         };
       })
       .filter((s) => layout.sizeVisibility[s.id] !== false);
@@ -1083,6 +1120,7 @@ export function SalesPage() {
             onCashInput={setCashInput}
             onBook={handleBook}
             effectiveSizes={effectiveSizes}
+            paymentConfig={layout.payment}
           />
         </div>
         {/* Right: cart – full height */}
