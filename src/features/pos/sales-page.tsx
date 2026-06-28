@@ -696,9 +696,9 @@ function PaymentBlock({
 // ── Right column – cart only ──────────────────────────────────────────────────
 
 const CART_FONT_CFG: Record<CartFontSize, { name: string; price: string; qty: string; qtyW: string }> = {
-  normal: { name: "text-xl font-bold", price: "text-xl font-black", qty: "text-xl font-black", qtyW: "w-10" },
-  gross:  { name: "text-2xl font-bold", price: "text-2xl font-black", qty: "text-2xl font-black", qtyW: "w-11" },
-  xl:     { name: "text-2xl font-black", price: "text-2xl font-black", qty: "text-2xl font-black", qtyW: "w-12" },
+  normal: { name: "text-2xl font-bold",  price: "text-2xl font-black",  qty: "text-2xl font-black",  qtyW: "w-11" },
+  gross:  { name: "text-3xl font-bold",  price: "text-3xl font-black",  qty: "text-3xl font-black",  qtyW: "w-12" },
+  xl:     { name: "text-3xl font-black", price: "text-3xl font-black",  qty: "text-3xl font-black",  qtyW: "w-14" },
 };
 
 function CartColumn({
