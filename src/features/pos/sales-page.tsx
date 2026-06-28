@@ -653,7 +653,7 @@ function PaymentBlock({
                     key={cents}
                     data-testid={`quick-amount-${cents}`}
                     onClick={() => onCashInput(String(cents / 100))}
-                    className="flex-1 min-w-[4rem] rounded-xl min-h-[64px] text-lg font-black transition-all active:scale-95 select-none hover:brightness-90"
+                    className="flex-1 min-w-[4.5rem] rounded-xl min-h-[72px] text-2xl font-black leading-none tracking-tight transition-all active:scale-95 select-none hover:brightness-90"
                     style={{ backgroundColor: bgColor, color: textColor }}
                   >
                     {fmt(cents)}
