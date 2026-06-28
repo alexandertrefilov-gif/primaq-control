@@ -1,0 +1,260 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - link "P PrimaQ Control Softeis-Kasse" [ref=e5] [cursor=pointer]:
+          - /url: /verkauf
+          - generic [ref=e6] [cursor=pointer]: P
+          - generic [ref=e7] [cursor=pointer]:
+            - generic [ref=e8] [cursor=pointer]: PrimaQ Control
+            - generic [ref=e9] [cursor=pointer]: Softeis-Kasse
+        - navigation [ref=e10]:
+          - link "Verkauf" [ref=e11] [cursor=pointer]:
+            - /url: /verkauf
+          - link "Tagesabschluss" [ref=e12] [cursor=pointer]:
+            - /url: /tagesabschluss
+          - link "Jahresabschluss" [ref=e13] [cursor=pointer]:
+            - /url: /jahresabschluss
+        - generic [ref=e14]: Synchronisiert
+        - generic [ref=e16]:
+          - link "Einstellungen" [ref=e17] [cursor=pointer]:
+            - /url: /einstellungen
+            - img [ref=e18] [cursor=pointer]
+            - generic [ref=e21] [cursor=pointer]: Einstellungen
+          - button "Admin" [ref=e22] [cursor=pointer]:
+            - img [ref=e23] [cursor=pointer]
+            - text: Admin
+    - main [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e27]:
+          - button "Grundeinstellungen" [ref=e28] [cursor=pointer]
+          - button "Sorten" [ref=e29] [cursor=pointer]
+          - button "Verkaufsoberfläche" [ref=e30] [cursor=pointer]
+          - button "Sync" [ref=e31] [cursor=pointer]
+        - generic [ref=e32]:
+          - heading "Sorten" [level=1] [ref=e33]
+          - paragraph [ref=e34]: Verkaufssorten konfigurieren – Name, Farbe, Bild und Maschinen-Zuordnung.
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - generic [ref=e37]:
+              - generic [ref=e38]:
+                - paragraph [ref=e39]: Maschine 1
+                - button "Neue Sorte" [ref=e41] [cursor=pointer]:
+                  - img [ref=e42] [cursor=pointer]
+                  - text: Neue Sorte
+              - generic [ref=e43]:
+                - generic [ref=e45]:
+                  - img [ref=e46]
+                  - generic [ref=e55]:
+                    - paragraph [ref=e56]: Vanille
+                    - paragraph [ref=e57]: Maschine 1
+                  - generic [ref=e58] [cursor=pointer]:
+                    - generic [ref=e59] [cursor=pointer]: Aktiv
+                    - switch [checked] [ref=e60] [cursor=pointer]
+                  - button "Bearbeiten" [ref=e62] [cursor=pointer]:
+                    - img [ref=e63] [cursor=pointer]
+                - generic [ref=e66]:
+                  - img [ref=e67]
+                  - generic [ref=e76]:
+                    - paragraph [ref=e77]: Schokolade
+                    - paragraph [ref=e78]: Maschine 1
+                  - generic [ref=e79] [cursor=pointer]:
+                    - generic [ref=e80] [cursor=pointer]: Aktiv
+                    - switch [checked] [ref=e81] [cursor=pointer]
+                  - button "Bearbeiten" [ref=e83] [cursor=pointer]:
+                    - img [ref=e84] [cursor=pointer]
+              - generic [ref=e86]:
+                - paragraph [ref=e87]: Auto-Mix
+                - generic [ref=e92]:
+                  - paragraph [ref=e93]: Mix Vanille/Schokolade
+                  - paragraph [ref=e94]: Automatisch generiert
+            - generic [ref=e95]:
+              - generic [ref=e96]:
+                - paragraph [ref=e97]: Maschine 2
+                - button "Neue Sorte" [ref=e99] [cursor=pointer]:
+                  - img [ref=e100] [cursor=pointer]
+                  - text: Neue Sorte
+              - generic [ref=e101]:
+                - generic [ref=e103]:
+                  - img [ref=e104]
+                  - generic [ref=e113]:
+                    - paragraph [ref=e114]: Cheesecake
+                    - paragraph [ref=e115]: Maschine 2
+                  - generic [ref=e116] [cursor=pointer]:
+                    - generic [ref=e117] [cursor=pointer]: Aktiv
+                    - switch [checked] [ref=e118] [cursor=pointer]
+                  - button "Bearbeiten" [ref=e120] [cursor=pointer]:
+                    - img [ref=e121] [cursor=pointer]
+                - generic [ref=e124]:
+                  - img [ref=e125]
+                  - generic [ref=e134]:
+                    - paragraph [ref=e135]: Erdbeere
+                    - paragraph [ref=e136]: Maschine 2
+                  - generic [ref=e137] [cursor=pointer]:
+                    - generic [ref=e138] [cursor=pointer]: Aktiv
+                    - switch [checked] [ref=e139] [cursor=pointer]
+                  - button "Bearbeiten" [ref=e141] [cursor=pointer]:
+                    - img [ref=e142] [cursor=pointer]
+              - generic [ref=e144]:
+                - paragraph [ref=e145]: Auto-Mix
+                - generic [ref=e150]:
+                  - paragraph [ref=e151]: Mix Cheesecake/Erdbeere
+                  - paragraph [ref=e152]: Automatisch generiert
+          - generic [ref=e153]:
+            - button "Erweiterte Lagerdaten Rezepte, Einsatzmengen, Maschinen-Details" [ref=e154] [cursor=pointer]:
+              - generic [ref=e155] [cursor=pointer]:
+                - paragraph [ref=e156] [cursor=pointer]: Erweiterte Lagerdaten
+                - paragraph [ref=e157] [cursor=pointer]: Rezepte, Einsatzmengen, Maschinen-Details
+              - img [ref=e158] [cursor=pointer]
+            - generic [ref=e161]:
+              - button "Zu SumUp QR-Einstellungen" [ref=e163] [cursor=pointer]:
+                - img [ref=e164] [cursor=pointer]
+                - text: Zu SumUp QR-Einstellungen
+              - generic [ref=e166]:
+                - generic [ref=e168]:
+                  - generic [ref=e169]:
+                    - heading "Maschinen" [level=2] [ref=e170]
+                    - paragraph [ref=e171]: Maschinen anlegen und pro Maschine die verfügbaren Sorten definieren.
+                  - generic [ref=e172]:
+                    - button "Alle Maschinen sichtbar schalten" [ref=e173] [cursor=pointer]
+                    - button "Maschine anlegen" [ref=e174] [cursor=pointer]:
+                      - img [ref=e175] [cursor=pointer]
+                      - text: Maschine anlegen
+                - article [ref=e177]:
+                  - generic [ref=e178]:
+                    - generic [ref=e179]:
+                      - paragraph [ref=e180]: Maschine 1
+                      - heading "MASCHINE 1" [level=2] [ref=e181]
+                    - generic [ref=e182]:
+                      - text: Farbe
+                      - textbox "Farbe MASCHINE 1" [ref=e183] [cursor=pointer]: "#2563eb"
+                  - generic [ref=e184]:
+                    - generic [ref=e185]:
+                      - generic [ref=e186]:
+                        - text: Maschine
+                        - textbox "Maschine MASCHINE 1" [ref=e187]: "1"
+                        - generic [ref=e188]: MASCHINE 1
+                      - generic [ref=e189]:
+                        - paragraph [ref=e190]: Standort
+                        - generic [ref=e191]:
+                          - button "Wagen" [ref=e192] [cursor=pointer]
+                          - button "Zelt" [ref=e193] [cursor=pointer]
+                      - generic [ref=e194]:
+                        - generic [ref=e195]: Aktiv
+                        - button "Aktiv" [ref=e196] [cursor=pointer]:
+                          - img [ref=e197] [cursor=pointer]
+                          - text: Aktiv
+                      - generic [ref=e199]:
+                        - generic [ref=e200]: Im Verkauf
+                        - button "Sichtbar" [ref=e201] [cursor=pointer]:
+                          - img [ref=e202] [cursor=pointer]
+                          - text: Sichtbar
+                      - button "Maschine kopieren" [ref=e206] [cursor=pointer]:
+                        - img [ref=e207] [cursor=pointer]
+                        - text: Maschine kopieren
+                    - generic [ref=e210]:
+                      - generic [ref=e211]:
+                        - generic [ref=e212]:
+                          - heading "Sorten" [level=3] [ref=e213]
+                          - paragraph [ref=e214]: Lege pro Maschine die Sorten an, die diese Maschine ausgibt.
+                        - button "+ Softeis-Sorte anlegen" [active] [ref=e215] [cursor=pointer]:
+                          - img [ref=e216] [cursor=pointer]
+                          - text: + Softeis-Sorte anlegen
+                      - generic [ref=e219]:
+                        - generic [ref=e220]:
+                          - generic [ref=e223]:
+                            - generic [ref=e224]:
+                              - paragraph [ref=e225]: Sorte 1
+                              - generic [ref=e226]: Normale Sorte
+                            - paragraph [ref=e227]: Sorte 1 · Becher 120cc
+                          - button "Sorte löschen" [ref=e228] [cursor=pointer]:
+                            - img [ref=e229] [cursor=pointer]
+                            - text: Sorte löschen
+                        - generic [ref=e232]:
+                          - generic [ref=e233]:
+                            - text: Name
+                            - textbox "Name" [ref=e234]
+                          - generic [ref=e235]:
+                            - generic [ref=e236]:
+                              - img [ref=e237]
+                              - text: Preis brutto
+                            - textbox "Preis brutto" [ref=e239]: 0,00
+                        - 'button "Anzeigen im Verkauf: Ja" [pressed] [ref=e240] [cursor=pointer]':
+                          - img [ref=e241] [cursor=pointer]
+                          - text: "Anzeigen im Verkauf: Ja"
+                        - button "Erweiterte Einstellungen Mix-Sorte nein · MwSt 7% · Löffel ja · Topping nein" [ref=e245] [cursor=pointer]:
+                          - generic [ref=e246] [cursor=pointer]:
+                            - generic [ref=e247] [cursor=pointer]: Erweiterte Einstellungen
+                            - generic [ref=e248] [cursor=pointer]: Mix-Sorte nein · MwSt 7% · Löffel ja · Topping nein
+                          - img [ref=e249] [cursor=pointer]
+                        - button "Rezept pro Mischung 2 kg Pulver + 4 L Wasser = 6 L Mix" [ref=e252] [cursor=pointer]:
+                          - generic [ref=e253] [cursor=pointer]:
+                            - generic [ref=e254] [cursor=pointer]: Rezept pro Mischung
+                            - generic [ref=e255] [cursor=pointer]: 2 kg Pulver + 4 L Wasser = 6 L Mix
+                          - img [ref=e256] [cursor=pointer]
+                    - generic [ref=e258]:
+                      - paragraph [ref=e259]: Gefahrenzone
+                      - button "Maschine löschen" [ref=e260] [cursor=pointer]:
+                        - img [ref=e261] [cursor=pointer]
+                        - text: Maschine löschen
+              - generic [ref=e265]:
+                - heading "SumUp QR" [level=2] [ref=e266]
+                - paragraph [ref=e267]: QR-Zahlung für SumUp. Der Betrag wird automatisch an den Link angehängt.
+                - generic [ref=e268]:
+                  - generic [ref=e269]:
+                    - checkbox "QR-Zahlung aktivieren" [ref=e270]
+                    - generic [ref=e271]: QR-Zahlung aktivieren
+                  - generic [ref=e272]:
+                    - text: SumUp Payment Link
+                    - textbox "SumUp Payment Link Der Betrag (?amount=X.XX) wird automatisch angehängt." [ref=e273]
+                    - generic [ref=e274]: Der Betrag (?amount=X.XX) wird automatisch angehängt.
+                  - generic [ref=e275]:
+                    - text: Hinweistext (optional)
+                    - textbox "Hinweistext (optional)" [ref=e276]
+                  - button "Speichern" [ref=e277] [cursor=pointer]
+              - generic [ref=e280]:
+                - generic [ref=e281]:
+                  - paragraph [ref=e282]: Einstellungen vom Server neu laden
+                  - paragraph [ref=e283]: Überschreibt lokale Maschinen, Sorten und Konfiguration mit dem aktuellen Supabase-Stand. Offene Bestellungen bleiben erhalten.
+                - button "Jetzt synchronisieren" [ref=e284] [cursor=pointer]
+              - generic [ref=e287]:
+                - generic [ref=e288]:
+                  - paragraph [ref=e289]:
+                    - img [ref=e290]
+                    - text: Gefahrenbereich
+                  - heading "Reset nur mit dreifacher Bestätigung" [level=2] [ref=e292]
+                  - paragraph [ref=e293]: Diese Aktionen löschen lokale Daten dauerhaft. Abbrechen ist in jedem Schritt möglich.
+                - generic [ref=e294]:
+                  - button "Verkaufsdaten zurücksetzen" [ref=e295] [cursor=pointer]:
+                    - img [ref=e296] [cursor=pointer]
+                    - text: Verkaufsdaten zurücksetzen
+                  - button "Werksreset" [ref=e299] [cursor=pointer]:
+                    - img [ref=e300] [cursor=pointer]
+                    - text: Werksreset
+        - generic [ref=e302]:
+          - paragraph [ref=e303]: Einstellungen sichern
+          - paragraph [ref=e304]: Sorten, Bilder, Farben, Preise, Größen und Jahresdaten als JSON sichern oder auf einem anderen Gerät einspielen.
+          - generic [ref=e305]:
+            - button "Einstellungen exportieren" [ref=e306] [cursor=pointer]:
+              - img [ref=e307] [cursor=pointer]
+              - text: Einstellungen exportieren
+            - generic [ref=e310] [cursor=pointer]:
+              - img [ref=e311] [cursor=pointer]
+              - text: Einstellungen importieren
+              - button "Einstellungen importieren" [ref=e314]
+        - generic [ref=e315]:
+          - paragraph [ref=e316]: Komplettes Backup
+          - paragraph [ref=e317]: Alle Daten inkl. heutiger Buchungen und Jahreshistorie exportieren oder vollständig wiederherstellen.
+          - generic [ref=e318]:
+            - button "Komplettes Backup exportieren" [ref=e319] [cursor=pointer]:
+              - img [ref=e320] [cursor=pointer]
+              - text: Komplettes Backup exportieren
+            - generic [ref=e323] [cursor=pointer]:
+              - img [ref=e324] [cursor=pointer]
+              - text: Backup importieren
+              - button "Backup importieren" [ref=e327]
+  - alert [ref=e328]
+```
