@@ -136,20 +136,29 @@ test("LAY 6: Warenkorb ist rechts von Sorten-/Zahlungsbereich (1194×834)", asyn
   expect(cartR!.left).toBeGreaterThan(flavorR!.right - 4);
 });
 
-// ── LAY 7: Schnellbeträge sichtbar ───────────────────────────────────────────
+// ── LAY 7: Schnellbeträge sichtbar + in einer Zeile mit Bestellung buchen ────
 
-test("LAY 7: Schnellbeträge sichtbar nach Klick auf Bar-Tab (1024×768)", async ({ page }) => {
+test("LAY 7: Schnellbeträge und Bestellung buchen in gemeinsamer Zeile (1024×768)", async ({ page }) => {
   await freshDb(page, "lay7");
   await blockSupabase(page);
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  await page.getByTestId("payment-tab-bar").click();
-
-  // Klein (250ct) ist Standard-Quick-Amount
+  // Bar ist Standardmodus – Schnellbeträge direkt sichtbar
   await expect(page.getByTestId("quick-amount-250")).toBeVisible();
   await expect(page.getByTestId("quick-amounts-row")).toBeVisible();
+  await expect(page.getByTestId("book-button")).toBeVisible();
+
+  // Schnellbeträge und Bestellung buchen überlappen vertikal (gleiche Zeile)
+  const quickR  = await rect(page, "quick-amounts-row");
+  const bookR   = await rect(page, "book-button");
+  expect(quickR).not.toBeNull();
+  expect(bookR).not.toBeNull();
+  // Gleiche Zeile = vertikale Überlappung vorhanden (center-to-center ≤ 20px)
+  const quickCenter = (quickR!.top + quickR!.bottom) / 2;
+  const bookCenter  = (bookR!.top  + bookR!.bottom)  / 2;
+  expect(Math.abs(quickCenter - bookCenter)).toBeLessThan(20);
 });
 
 // ── LAY 8: Bestellung buchen sichtbar ────────────────────────────────────────
