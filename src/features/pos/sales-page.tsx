@@ -472,19 +472,15 @@ function SizePickerModal({
   );
 }
 
-// ── Middle column – flavors ───────────────────────────────────────────────────
+// ── Middle column – flavors only (sizes live in SizeRow below) ───────────────
 
 function FlavorColumn({
   onFlavorClick,
-  onSizePick,
   cardSize,
-  effectiveSizes,
   pendingFlavor,
 }: {
   onFlavorClick: (flavor: FlavorConfig) => void;
-  onSizePick: (sizeId: string, priceCents: number) => void;
   cardSize: number;
-  effectiveSizes: EffectiveSizeConfig[];
   pendingFlavor: FlavorConfig | null;
 }) {
   const allFlavors = useFlavorList();
@@ -512,57 +508,64 @@ function FlavorColumn({
           );
         })}
       </div>
+    </div>
+  );
+}
 
-      {/* ── Inline size picker – always visible below flavors ────── */}
-      <div className="shrink-0 border-t border-black/5 px-3 pb-3 pt-2">
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-black/40">
-          Größe wählen
+// ── Size row – standalone grid zone between flavors and payment ───────────────
+
+function SizeRow({
+  effectiveSizes,
+  pendingFlavor,
+  onSizePick,
+}: {
+  effectiveSizes: EffectiveSizeConfig[];
+  pendingFlavor: FlavorConfig | null;
+  onSizePick: (sizeId: string, priceCents: number) => void;
+}) {
+  const active = !!pendingFlavor;
+  return (
+    <div className="rounded-2xl bg-white shadow px-3 py-2.5">
+      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-black/40">
+        Größe wählen
+      </p>
+      {effectiveSizes.length === 0 ? (
+        <p className="py-2 text-center text-sm text-black/35">
+          Keine Größe aktiv – bitte in Einstellungen aktivieren.
         </p>
-        {effectiveSizes.length === 0 ? (
-          <p className="py-3 text-center text-sm text-black/35">
-            Keine Größe aktiv – bitte in Einstellungen aktivieren.
-          </p>
-        ) : (
-          <div
-            className="grid gap-2"
-            style={{ gridTemplateColumns: `repeat(${Math.min(effectiveSizes.length, 3)}, 1fr)` }}
-          >
-            {effectiveSizes.map((size) => {
-              const textColor = computeTextColor(size.textColorMode, size.backgroundColor);
-              const active = !!pendingFlavor;
-              return (
-                <button
-                  key={size.id}
-                  data-testid={`size-btn-${size.id}`}
-                  onClick={() => { if (active) onSizePick(size.id, size.priceCents); }}
-                  className={cn(
-                    "flex flex-col items-center justify-center gap-1 rounded-2xl transition-all select-none",
-                    "min-h-[90px] px-2 py-3",
-                    active
-                      ? "shadow-md hover:brightness-95 active:scale-[0.96]"
-                      : "opacity-50 cursor-not-allowed"
-                  )}
-                  style={{ backgroundColor: size.backgroundColor }}
-                  aria-disabled={!active}
-                >
-                  <span
-                    className="text-2xl font-black leading-tight text-center"
-                    style={{ color: textColor }}
-                  >
-                    {size.name}
-                  </span>
-                  <span
-                    className="text-lg font-black tabular-nums leading-none"
-                    style={{ color: textColor, opacity: 0.75 }}
-                  >
-                    {fmt(size.priceCents)}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      ) : (
+        <div
+          className="grid gap-2"
+          style={{ gridTemplateColumns: `repeat(${Math.min(effectiveSizes.length, 3)}, 1fr)` }}
+        >
+          {effectiveSizes.map((size) => {
+            const textColor = computeTextColor(size.textColorMode, size.backgroundColor);
+            return (
+              <button
+                key={size.id}
+                data-testid={`size-btn-${size.id}`}
+                onClick={() => { if (active) onSizePick(size.id, size.priceCents); }}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all select-none",
+                  "min-h-[72px] px-2 py-2",
+                  active
+                    ? "shadow-sm hover:brightness-95 active:scale-[0.97]"
+                    : "opacity-40 cursor-not-allowed"
+                )}
+                style={{ backgroundColor: size.backgroundColor }}
+                aria-disabled={!active}
+              >
+                <span className="text-xl font-black leading-tight text-center" style={{ color: textColor }}>
+                  {size.name}
+                </span>
+                <span className="text-base font-black tabular-nums leading-none" style={{ color: textColor, opacity: 0.75 }}>
+                  {fmt(size.priceCents)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -1199,17 +1202,20 @@ export function SalesPage() {
     <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
       {/* Main area: [SizeRow + FlavorColumn] | [CartColumn] */}
       <div className="flex flex-1 min-h-0 gap-3 overflow-hidden">
-        {/* Left: flavors (stable 1fr grid row) + payment block (auto row) */}
+        {/* Left: 3-zone stable grid – Sorten (flex) | Größen (auto) | Zahlung (auto) */}
         <div
           className="flex-1 min-h-0 overflow-hidden grid gap-2"
-          style={{ gridTemplateRows: "1fr auto" }}
+          style={{ gridTemplateRows: "minmax(0, 1fr) auto auto" }}
         >
           <FlavorColumn
             onFlavorClick={handleFlavorClick}
-            onSizePick={handleSizePick}
             cardSize={layout.flavorCardSize}
+            pendingFlavor={pendingFlavor}
+          />
+          <SizeRow
             effectiveSizes={effectiveSizes}
             pendingFlavor={pendingFlavor}
+            onSizePick={handleSizePick}
           />
           <PaymentBlock
             showPayment={showPayment}
