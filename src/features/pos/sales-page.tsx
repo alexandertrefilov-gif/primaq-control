@@ -646,8 +646,11 @@ function CartColumn({
   const allFlavors = useFlavorList();
   const getLocalFlavorName = (id: string) => allFlavors.find((f) => f.id === id)?.name ?? id;
   // Resolve size label: stored sizeName → current effectiveSizes → static fallback
-  const getCartSizeName = (item: ReturnType<typeof usePosStore>["cart"][number]) =>
-    item.sizeName ?? effectiveSizes.find((s) => s.id === item.size)?.name ?? getSizeName(item.size);
+  const getCartSizeName = (item: ReturnType<typeof usePosStore>["cart"][number]) => {
+    const resolved = item.sizeName ?? effectiveSizes.find((s) => s.id === item.size)?.name ?? getSizeName(item.size);
+    console.log("[POS:getCartSizeName] STEP3", { itemSize: item.size, itemSizeName: item.sizeName, resolved, effectiveSizes: effectiveSizes.map(s => ({ id: s.id, name: s.name })) });
+    return resolved;
+  };
   const fontCfg = CART_FONT_CFG[cartFontSize];
 
   const [ausgabeModus, setAusgabeModus] = useState(() => {
@@ -1000,6 +1003,7 @@ export function SalesPage() {
   const handleSizePick = useCallback((sizeId: string, priceCents: number) => {
     if (!pendingFlavor) return;
     const displayName = effectiveSizes.find((s) => s.id === sizeId)?.name;
+    console.log("[POS:handleSizePick] STEP1", { sizeId, priceCents, displayName, effectiveSizes: effectiveSizes.map(s => ({ id: s.id, name: s.name })) });
     addToCart(sizeId, pendingFlavor.id, priceCents, displayName);
     setPendingFlavor(null);
   }, [pendingFlavor, addToCart, effectiveSizes]);
