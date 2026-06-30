@@ -306,6 +306,9 @@ class SyncService {
           );
           await dbSet(YEAR_HISTORY_KEY, JSON.stringify(merged));
           log(`Pull: ${toAdd.length} Tage ergänzt`);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("primaq-year-history-synced"));
+          }
         }
       }
     } catch (err) {

@@ -44,6 +44,21 @@ export function usePosYearStore() {
       .catch(() => setHydrated(true));
   }, []);
 
+  // Reload when sync service pulls new entries from Supabase into IDB
+  useEffect(() => {
+    const onSynced = () => {
+      dbGet(LS_KEY)
+        .then((raw) => {
+          try {
+            if (raw) setHistory(JSON.parse(raw) as DailySummary[]);
+          } catch { /* keep current */ }
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("primaq-year-history-synced", onSynced);
+    return () => window.removeEventListener("primaq-year-history-synced", onSynced);
+  }, []);
+
   const saveDay = useCallback((day: DailySummary) => {
     setHistory((prev) => {
       const next = [...prev.filter((d) => d.date !== day.date), day]
