@@ -101,6 +101,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               { label: "Verkauf", href: "/verkauf" },
               ...(isAdmin ? [
                 { label: "Tagesabschluss", href: "/tagesabschluss" },
+                { label: "Wochenbericht", href: "/wochenbericht" },
+                { label: "Monatsbericht", href: "/monatsbericht" },
                 { label: "Jahresabschluss", href: "/jahresabschluss" },
               ] : []),
             ].map(({ label, href }) => {
