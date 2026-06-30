@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef, createContext, useContext } from "react";
-import { Banknote, CreditCard, Minus, Plus, QrCode, ShoppingCart, Trash2, X } from "lucide-react";
+import { Banknote, CreditCard, Eye, Minus, Plus, QrCode, ShoppingCart, Trash2, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
 import { usePosStore } from "./use-pos-store";
@@ -17,7 +17,7 @@ import {
   getSizeName,
 } from "./pos-config";
 import type { FlavorConfig, SizeConfig } from "./pos-config";
-import type { CartItem, PaymentMethod } from "./pos-types";
+import type { CartItem, Order, PaymentMethod } from "./pos-types";
 
 type EffectiveSizeConfig = SizeConfig & {
   backgroundColor: string;
@@ -955,6 +955,144 @@ function CartColumn({
   );
 }
 
+// ── Last order read-only modal ────────────────────────────────────────────────
+
+function LastOrderModal({
+  order,
+  orderNum,
+  onClose,
+  onVoid,
+}: {
+  order: Order;
+  orderNum: number;
+  onClose: () => void;
+  onVoid: () => void;
+}) {
+  const { isAdmin } = useAdmin();
+  const allFlavors = useFlavorList();
+  const getLocalFlavorName = (id: string) => allFlavors.find((f) => f.id === id)?.name ?? id;
+  const getLocalSizeName = (item: CartItem) => item.sizeName ?? getSizeName(item.size);
+
+  const [voidConfirming, setVoidConfirming] = useState(false);
+
+  const handleVoid = useCallback(() => {
+    if (!voidConfirming) { setVoidConfirming(true); return; }
+    onVoid();
+    onClose();
+  }, [voidConfirming, onVoid, onClose]);
+
+  const time = new Date(order.createdAt).toLocaleString("de-DE", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const totalItems = order.items.reduce((s, i) => s + i.quantity, 0);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        data-testid="last-order-modal"
+        className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* ── Header ── */}
+        <div className="flex items-start justify-between border-b border-black/5 px-6 pt-5 pb-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">
+              Letzte Buchung
+            </p>
+            <p className="mt-0.5 text-2xl font-black text-ink">
+              #{String(orderNum).padStart(4, "0")}
+            </p>
+          </div>
+          <button
+            data-testid="modal-close-x"
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-full text-black/30 hover:bg-black/5 hover:text-black/60 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* ── Meta info ── */}
+        <div className="px-6 py-4 space-y-2.5 border-b border-black/5">
+          <Row label="Datum / Uhrzeit" value={time} />
+          <Row label="Zahlungsart" value={BOOKING_PAYMENT_LABEL[order.paymentMethod] ?? order.paymentMethod} />
+          <Row label="Artikel gesamt" value={String(totalItems)} />
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-sm font-bold text-black/50">Gesamtbetrag</span>
+            <span className="text-xl font-black text-ink tabular-nums">{fmt(order.totalCents)}</span>
+          </div>
+        </div>
+
+        {/* ── Article list ── */}
+        <div className="px-6 py-4 max-h-64 overflow-y-auto space-y-3">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">Artikel</p>
+          {order.items.map((item) => (
+            <div key={item.id} className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <CartItemBadge item={item} />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-ink leading-snug">
+                    {item.quantity}× {getLocalSizeName(item)} {getLocalFlavorName(item.flavor)}
+                  </p>
+                  <p className="text-xs text-black/40 tabular-nums">{fmt(item.unitPriceCents)} je</p>
+                </div>
+              </div>
+              <span className="shrink-0 text-sm font-black text-ink tabular-nums">
+                {fmt(item.quantity * item.unitPriceCents)}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Actions ── */}
+        <div className="border-t border-black/5 px-6 py-4 flex gap-3">
+          {isAdmin && (
+            <button
+              data-testid="modal-void-btn"
+              onClick={handleVoid}
+              className={cn(
+                "rounded-xl px-4 py-2.5 text-sm font-bold transition-colors",
+                voidConfirming
+                  ? "bg-red-600 text-white hover:bg-red-700"
+                  : "border border-black/15 bg-white text-red-600 hover:bg-red-50 hover:border-red-200"
+              )}
+            >
+              {voidConfirming ? "Wirklich stornieren?" : "Stornieren"}
+            </button>
+          )}
+          <button
+            data-testid="modal-close-btn"
+            onClick={onClose}
+            className="flex-1 rounded-xl bg-black/5 py-2.5 text-sm font-semibold text-black/60 hover:bg-black/10 transition-colors"
+          >
+            Schließen
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm text-black/50">{label}</span>
+      <span className="text-sm font-semibold text-ink">{value}</span>
+    </div>
+  );
+}
+
 // ── Bottom status bar – last booking + live daily stats ──────────────────────
 
 const BOOKING_PAYMENT_LABEL: Record<string, string> = {
@@ -976,13 +1114,7 @@ function SalesStatusBar({
 }) {
   const { isAdmin } = useAdmin();
   const last = daily.orders.length > 0 ? daily.orders[daily.orders.length - 1] : null;
-  const [confirming, setConfirming] = useState(false);
-
-  const handleVoidClick = useCallback(() => {
-    if (!confirming) { setConfirming(true); return; }
-    onVoid();
-    setConfirming(false);
-  }, [confirming, onVoid]);
+  const [showModal, setShowModal] = useState(false);
 
   const portionen = daily.orders.reduce(
     (sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0),
@@ -995,10 +1127,11 @@ function SalesStatusBar({
     : null;
 
   return (
-    <div
-      data-testid="last-booking-bar"
-      className="shrink-0 flex items-center gap-3 rounded-2xl bg-white/90 px-5 py-2.5 shadow backdrop-blur-sm"
-    >
+    <>
+      <div
+        data-testid="last-booking-bar"
+        className="shrink-0 flex items-center gap-3 rounded-2xl bg-white/90 px-5 py-2.5 shadow backdrop-blur-sm"
+      >
       {/* Left: last booking */}
       {showLastBooking && (
         <>
@@ -1014,15 +1147,11 @@ function SalesStatusBar({
               </span>
               <div className="h-4 w-px shrink-0 bg-black/15" />
 
-              {/* Betrag – admin only */}
-              {isAdmin && (
-                <>
-                  <span className="text-base font-black text-ink tabular-nums">
-                    {fmt(last.totalCents)}
-                  </span>
-                  <div className="h-4 w-px shrink-0 bg-black/15" />
-                </>
-              )}
+              {/* Betrag – always visible (Verkäufer zeigt dem Kunden den Betrag) */}
+              <span className="text-base font-black text-ink tabular-nums">
+                {fmt(last.totalCents)}
+              </span>
+              <div className="h-4 w-px shrink-0 bg-black/15" />
 
               {/* Zahlungsart – always visible */}
               <span className="text-sm font-semibold text-black/55">
@@ -1044,36 +1173,15 @@ function SalesStatusBar({
                 {last.items.reduce((s, i) => s + i.quantity, 0)} Artikel
               </span>
 
-              {/* Stornieren – admin only, 2-tap confirm */}
-              {isAdmin && (
-                <div className="flex items-center gap-2 shrink-0">
-                  {confirming ? (
-                    <>
-                      <button
-                        data-testid="void-confirm"
-                        onClick={handleVoidClick}
-                        className="rounded-lg bg-red-600 px-3 py-1 text-xs font-bold text-white hover:bg-red-700 transition-colors"
-                      >
-                        Wirklich stornieren?
-                      </button>
-                      <button
-                        onClick={() => setConfirming(false)}
-                        className="rounded-lg bg-black/5 px-2 py-1 text-xs font-semibold text-black/50 hover:bg-black/10 transition-colors"
-                      >
-                        Abbrechen
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      data-testid="void-last-order"
-                      onClick={handleVoidClick}
-                      className="rounded-lg border border-black/15 bg-white px-3 py-1 text-xs font-semibold text-black/50 hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors"
-                    >
-                      Stornieren
-                    </button>
-                  )}
-                </div>
-              )}
+              {/* Anzeigen – always visible, opens modal */}
+              <button
+                data-testid="show-last-order"
+                onClick={() => setShowModal(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-black/12 bg-white px-3 py-1 text-xs font-semibold text-black/55 hover:bg-primaq-50 hover:text-primaq-700 hover:border-primaq-300 transition-colors shrink-0"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Anzeigen
+              </button>
             </>
           ) : (
             <span className="text-sm text-black/35">noch keine</span>
@@ -1104,6 +1212,17 @@ function SalesStatusBar({
         </div>
       )}
     </div>
+
+    {/* Modal – rendered outside status bar div to avoid stacking-context issues */}
+    {showModal && last && orderNum !== null && (
+      <LastOrderModal
+        order={last}
+        orderNum={orderNum}
+        onClose={() => setShowModal(false)}
+        onVoid={onVoid}
+      />
+    )}
+    </>
   );
 }
 
