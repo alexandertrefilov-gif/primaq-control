@@ -250,9 +250,10 @@ function triggerDownload(content: string, filename: string, mimeType: string) {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function KpiCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function KpiCard({ label, value, accent, testId }: { label: string; value: string; accent?: boolean; testId?: string }) {
   return (
     <div
+      data-testid={testId}
       className={
         accent
           ? "rounded-2xl bg-primaq-500 p-5 text-white shadow"
@@ -381,7 +382,7 @@ export function JahresabschlussClient() {
         <>
           {/* ── KPIs ─────────────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <KpiCard label="Umsatz brutto" value={fmt(totalCents)} accent />
+            <KpiCard label="Umsatz brutto" value={fmt(totalCents)} accent testId="kpi-total" />
             <KpiCard label="Netto" value={fmt(netCents)} />
             <KpiCard label={`MwSt ${vatRate} %`} value={fmt(vatCents)} />
             <KpiCard label="Bestellungen" value={String(totalOrders)} />
