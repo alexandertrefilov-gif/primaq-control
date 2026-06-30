@@ -4,9 +4,10 @@ import { useCallback, useState, useMemo } from "react";
 import { ChevronDown, Download, FileSpreadsheet, Lock, Trash2 } from "lucide-react";
 import { useAdmin } from "./admin-context";
 import { usePosYearStore } from "./use-pos-year-store";
-import { ResetTestDataDialog } from "./reset-test-data-dialog";
+import { ReportResetDialog } from "./report-reset-dialog";
 import { getFlavorName, getItemSizeName } from "./pos-config";
 import { usePosVatStore, calcNet } from "./use-pos-vat-store";
+import { getSyncService } from "@/lib/sync/sync-service";
 import type { DailySummary } from "./pos-types";
 
 const MONTHS = [
@@ -287,19 +288,16 @@ function PaymentBar({ label, cents, total }: { label: string; cents: number; tot
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function JahresabschlussClient() {
+export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }) {
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
   const { history, hydrated } = usePosYearStore();
   const { vatRate, hydrated: vatHydrated } = usePosVatStore();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [showResetDialog, setShowResetDialog] = useState(false);
-  const [resetDone, setResetDone] = useState(false);
 
   const handleResetSuccess = useCallback(() => {
     setShowResetDialog(false);
-    setResetDone(true);
-    setTimeout(() => window.location.reload(), 2500);
   }, []);
 
   const years = useMemo(() => {
@@ -329,7 +327,7 @@ export function JahresabschlussClient() {
     return <div className="flex h-40 items-center justify-center text-black/40">Laden…</div>;
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !guestAccess) {
     return (
       <div className="flex flex-col items-center gap-6 py-20 text-center">
         <div className="grid h-16 w-16 place-items-center rounded-full bg-black/5">
@@ -540,42 +538,37 @@ export function JahresabschlussClient() {
         </p>
       )}
 
-      {/* ── Reset test data ──────────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
-        <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-red-700/60">
-          Testbetrieb
-        </p>
-        <p className="mb-4 text-sm text-red-800/70">
-          Alle Testverkäufe und Statistiken löschen. Sorten, Bilder und Einstellungen bleiben vollständig erhalten.
-        </p>
-        <button
-          data-testid="reset-test-data-btn"
-          onClick={() => setShowResetDialog(true)}
-          className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-700 active:scale-[0.97]"
-        >
-          <Trash2 className="h-4 w-4" />
-          Testdaten zurücksetzen
-        </button>
-      </div>
-
-      <ResetTestDataDialog
-        open={showResetDialog}
-        onClose={() => setShowResetDialog(false)}
-        onSuccess={handleResetSuccess}
-      />
-
-      {resetDone && (
-        <div
-          data-testid="reset-success-snackbar"
-          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-2xl bg-green-600 px-5 py-3 text-sm font-bold text-white shadow-xl"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-          Alle Testdaten wurden erfolgreich gelöscht.
+      {/* ── Jahresdaten zurücksetzen ─────────────────────────────────────────── */}
+      {isAdmin && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-red-700/60">
+            Jahresdaten zurücksetzen
+          </p>
+          <p className="mb-4 text-sm text-red-800/70">
+            Alle Abschlüsse für <strong>{selectedYear}</strong> löschen. Andere Jahre und Einstellungen bleiben erhalten.
+          </p>
+          <button
+            data-testid="reset-year-btn"
+            onClick={() => setShowResetDialog(true)}
+            disabled={!hasData}
+            className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-700 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Trash2 className="h-4 w-4" />
+            {selectedYear} zurücksetzen
+          </button>
         </div>
       )}
+
+      <ReportResetDialog
+        open={showResetDialog}
+        title={`Jahr ${selectedYear} zurücksetzen`}
+        scopeLabel={`${selectedYear} (${days.length} ${days.length === 1 ? "Tag" : "Tage"})`}
+        onClose={() => setShowResetDialog(false)}
+        onConfirm={async () => {
+          await getSyncService().resetHistoryDates(days.map((d) => d.date));
+          handleResetSuccess();
+        }}
+      />
     </div>
   );
 }

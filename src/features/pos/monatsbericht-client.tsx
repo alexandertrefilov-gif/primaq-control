@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ChevronLeft, ChevronRight, Download, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Lock, Trash2 } from "lucide-react";
 import { useAdmin } from "./admin-context";
 import { usePosYearStore } from "./use-pos-year-store";
 import { usePosVatStore, calcNet } from "./use-pos-vat-store";
+import { ReportResetDialog } from "./report-reset-dialog";
+import { getSyncService } from "@/lib/sync/sync-service";
 import type { DailySummary } from "./pos-types";
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
@@ -74,7 +76,7 @@ function triggerDownload(content: string, filename: string) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function MonatsberichtClient() {
+export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) {
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
   const { history, hydrated } = usePosYearStore();
   const { vatRate, hydrated: vatHydrated } = usePosVatStore();
@@ -82,6 +84,7 @@ export function MonatsberichtClient() {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
+  const [resetOpen, setResetOpen] = useState(false);
 
   const days = useMemo(() => daysOfMonth(history, year, month), [history, year, month]);
 
@@ -111,7 +114,7 @@ export function MonatsberichtClient() {
     return <div className="flex h-40 items-center justify-center text-black/40">Laden…</div>;
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !guestAccess) {
     return (
       <div className="flex flex-col items-center gap-6 py-20 text-center">
         <div className="grid h-16 w-16 place-items-center rounded-full bg-black/5">
@@ -241,7 +244,7 @@ export function MonatsberichtClient() {
         </div>
       )}
 
-      {/* ── CSV export ────────────────────────────────────────────────────── */}
+      {/* ── CSV export + Reset ────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-3">
         <button
           data-testid="csv-export-month"
@@ -257,7 +260,28 @@ export function MonatsberichtClient() {
           <Download className="h-4 w-4" />
           CSV exportieren
         </button>
+
+        {isAdmin && hasData && (
+          <button
+            data-testid="reset-month-btn"
+            onClick={() => setResetOpen(true)}
+            className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-3 font-bold text-red-600 shadow-sm hover:bg-red-50 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+            Monatsdaten zurücksetzen
+          </button>
+        )}
       </div>
+
+      <ReportResetDialog
+        open={resetOpen}
+        title={`${monthLabel} ${year} zurücksetzen`}
+        scopeLabel={`${monthLabel} ${year} (${days.length} ${days.length === 1 ? "Tag" : "Tage"})`}
+        onClose={() => setResetOpen(false)}
+        onConfirm={async () => {
+          await getSyncService().resetHistoryDates(days.map((d) => d.date));
+        }}
+      />
     </div>
   );
 }

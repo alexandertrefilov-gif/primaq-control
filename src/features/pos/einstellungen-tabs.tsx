@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { dbGet, dbSet } from "@/lib/db";
 import { usePosVatStore } from "./use-pos-vat-store";
+import { useReportPermissionsStore } from "./use-report-permissions-store";
+import type { ReportPermissions } from "./use-report-permissions-store";
 import { PageHeader } from "@/components/ui/page-header";
 import { PosFlavorSettings } from "./pos-flavor-settings";
 import { PosLayoutSettings } from "./pos-layout-settings";
@@ -314,14 +316,79 @@ function GrundeinstellungenSection() {
   );
 }
 
+// ── Freigaben (Bericht-Berechtigungen) ────────────────────────────────────────
+
+const REPORT_LABELS: { key: keyof ReportPermissions; label: string; desc: string }[] = [
+  { key: "tagesabschluss", label: "Tagesabschluss", desc: "Tagesumsatz, Bestellliste, CSV-Export" },
+  { key: "wochenbericht",  label: "Wochenbericht",  desc: "Wöchentliche Umsatzübersicht und CSV-Export" },
+  { key: "monatsbericht",  label: "Monatsbericht",  desc: "Monatliche Tagesauflistung und CSV-Export" },
+  { key: "jahresabschluss", label: "Jahresabschluss", desc: "Jahresauswertung und Reset (nur Admin)" },
+];
+
+function FreigabenSection() {
+  const { permissions, setPermission, hydrated } = useReportPermissionsStore();
+
+  if (!hydrated) {
+    return <div className="flex h-24 items-center justify-center text-black/30">Laden…</div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-black/8 bg-white p-5 shadow-sm">
+        <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-black/40">
+          Berichte-Freigaben für Nicht-Admins
+        </p>
+        <p className="mb-4 text-sm text-black/50">
+          Welche Berichte können Mitarbeiter ohne Admin-Anmeldung einsehen?
+        </p>
+        <div className="space-y-3">
+          {REPORT_LABELS.map(({ key, label, desc }) => (
+            <label
+              key={key}
+              data-testid={`perm-toggle-${key}`}
+              className="flex cursor-pointer items-start gap-4 rounded-xl border border-black/8 bg-black/[0.02] px-4 py-3 hover:bg-black/[0.04] transition-colors"
+            >
+              <div className="flex-1">
+                <p className="text-sm font-bold text-ink">{label}</p>
+                <p className="text-xs text-black/40">{desc}</p>
+              </div>
+              <div className="relative mt-0.5 shrink-0">
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={permissions[key]}
+                  onChange={(e) => setPermission(key, e.target.checked)}
+                />
+                <div
+                  className={cn(
+                    "h-6 w-11 rounded-full transition-colors",
+                    permissions[key] ? "bg-primaq-500" : "bg-black/15"
+                  )}
+                />
+                <div
+                  className={cn(
+                    "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+                    permissions[key] ? "translate-x-5" : "translate-x-0.5"
+                  )}
+                />
+              </div>
+            </label>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Tab layout ────────────────────────────────────────────────────────────────
 
-type Tab = "grundeinstellungen" | "sorten" | "oberflaeche" | "sync";
+type Tab = "grundeinstellungen" | "sorten" | "oberflaeche" | "freigaben" | "sync";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "grundeinstellungen", label: "Grundeinstellungen" },
   { id: "sorten", label: "Sorten" },
   { id: "oberflaeche", label: "Verkaufsoberfläche" },
+  { id: "freigaben", label: "Freigaben" },
   { id: "sync", label: "Sync" },
 ];
 
@@ -375,6 +442,16 @@ export function EinstellungenTabs({ legacySettings }: { legacySettings: React.Re
         </>
       )}
 
+      {tab === "freigaben" && (
+        <>
+          <PageHeader
+            title="Freigaben"
+            description="Steuern, welche Berichte Mitarbeiter ohne Admin-PIN einsehen dürfen."
+          />
+          <FreigabenSection />
+        </>
+      )}
+
       {tab === "sync" && (
         <>
           <PageHeader
@@ -385,7 +462,7 @@ export function EinstellungenTabs({ legacySettings }: { legacySettings: React.Re
         </>
       )}
 
-      {tab !== "sync" && (
+      {tab !== "sync" && tab !== "freigaben" && (
         <>
           <SettingsTransfer />
           <BackupSection />

@@ -1,14 +1,5 @@
-import { PageHeader } from "@/components/ui/page-header";
-import { WochenberichtClient } from "@/features/pos/wochenbericht-client";
+import { redirect } from "next/navigation";
 
 export default function WochenberichtPage() {
-  return (
-    <>
-      <PageHeader
-        title="Wochenbericht"
-        description="Wöchentliche Umsatzübersicht mit Tagesauflösung – navigiere zwischen Kalenderwochen und exportiere als CSV."
-      />
-      <WochenberichtClient />
-    </>
-  );
+  redirect("/berichte?tab=wochenbericht");
 }

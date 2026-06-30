@@ -222,6 +222,21 @@ export async function upsertSalesState(payload: SalesStatePayload): Promise<void
 }
 
 /**
+ * Deletes specific dates from pos_year_history for a given businessId.
+ * Used for scoped resets (week, month, year). No-op when dates is empty.
+ * Throws on Supabase error so the caller can catch and handle.
+ */
+export async function deleteYearHistoryDates(businessId: string, dates: string[]): Promise<void> {
+  if (dates.length === 0) return;
+  const { error } = await supabase
+    .from("pos_year_history")
+    .delete()
+    .eq("business_id", businessId)
+    .in("date", dates);
+  if (error) throw error;
+}
+
+/**
  * Deletes all pos_sales_state and pos_year_history rows for a given businessId.
  * Used by the "Testdaten zurücksetzen" admin function to wipe cloud sales data.
  * Throws on any Supabase error so the caller can abort the local reset.

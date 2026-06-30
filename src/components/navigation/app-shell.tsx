@@ -95,18 +95,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
 
-          {/* Inline nav – Verkauf always + Tagesabschluss/Jahresabschluss when admin */}
+          {/* Inline nav */}
           <nav className="flex flex-1 items-center gap-1">
             {[
               { label: "Verkauf", href: "/verkauf" },
-              ...(isAdmin ? [
-                { label: "Tagesabschluss", href: "/tagesabschluss" },
-                { label: "Wochenbericht", href: "/wochenbericht" },
-                { label: "Monatsbericht", href: "/monatsbericht" },
-                { label: "Jahresabschluss", href: "/jahresabschluss" },
-              ] : []),
+              { label: "Berichte", href: "/berichte" },
             ].map(({ label, href }) => {
-              const active = pathname === href;
+              const active = pathname === href || pathname.startsWith(href + "?");
               return (
                 <Link
                   key={href}

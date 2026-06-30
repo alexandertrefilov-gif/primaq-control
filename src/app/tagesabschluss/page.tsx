@@ -1,14 +1,5 @@
-import { PageHeader } from "@/components/ui/page-header";
-import { DailyClosePage } from "@/features/pos/daily-close-page";
+import { redirect } from "next/navigation";
 
 export default function TagesabschlussPage() {
-  return (
-    <>
-      <PageHeader
-        title="Tagesabschluss"
-        description="Tagesumsatz, Zahlungsarten und CSV-Export."
-      />
-      <DailyClosePage />
-    </>
-  );
+  redirect("/berichte?tab=tagesabschluss");
 }

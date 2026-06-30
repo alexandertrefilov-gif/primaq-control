@@ -82,7 +82,7 @@ function downloadCsv(
   URL.revokeObjectURL(url);
 }
 
-export function DailyClosePage() {
+export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
   const { daily, resetDaily, hydrated } = usePosStore();
   const { saveDay } = usePosYearStore();
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
@@ -108,7 +108,7 @@ export function DailyClosePage() {
   }
 
   // Guard: operator access blocked
-  if (!isAdmin) {
+  if (!isAdmin && !guestAccess) {
     return (
       <div className="flex flex-col items-center gap-6 py-20 text-center">
         <div className="grid h-16 w-16 place-items-center rounded-full bg-black/5">

@@ -14,6 +14,7 @@ import {
   upsertSalesState,
   pullSalesState,
   clearSalesDataCloud,
+  deleteYearHistoryDates,
   type YearHistoryPayload,
   type SettingsPayload,
   type SettingsRow,
@@ -451,6 +452,32 @@ class SyncService {
     await dbRemove(SALES_STATE_META_KEY);
     await dbRemove(YEAR_HISTORY_KEY);
     await removeByEntities(["pos_sales_state", "pos_year_history"]);
+    await this._refreshStats();
+  }
+
+  /**
+   * Delete specific dates from year history (local IDB + Supabase).
+   * Cloud delete is best-effort — local reset always happens.
+   * Dispatches "primaq-year-history-synced" so React stores reload.
+   */
+  async resetHistoryDates(dates: string[]): Promise<void> {
+    if (dates.length === 0) return;
+    try {
+      const status = await checkConnection();
+      if (status === "CONNECTED") {
+        await deleteYearHistoryDates("default", dates);
+      }
+    } catch (err) {
+      console.warn("[Sync] resetHistoryDates: cloud delete failed (local reset continues)", err);
+    }
+    const raw = await dbGet(YEAR_HISTORY_KEY);
+    const local: Array<{ date: string }> = raw ? (JSON.parse(raw) as Array<{ date: string }>) : [];
+    const datesSet = new Set(dates);
+    const filtered = local.filter((d) => !datesSet.has(d.date));
+    await dbSet(YEAR_HISTORY_KEY, JSON.stringify(filtered));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("primaq-year-history-synced"));
+    }
     await this._refreshStats();
   }
 
