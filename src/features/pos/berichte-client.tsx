@@ -6,6 +6,7 @@ import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdmin } from "./admin-context";
 import { useReportPermissionsStore } from "./use-report-permissions-store";
+import { usePosVatStore } from "./use-pos-vat-store";
 import { DailyClosePage } from "./daily-close-page";
 import { WochenberichtClient } from "./wochenbericht-client";
 import { MonatsberichtClient } from "./monatsbericht-client";
@@ -41,6 +42,7 @@ function BerichteInner() {
   const router = useRouter();
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
   const { permissions, hydrated: permHydrated } = useReportPermissionsStore();
+  const { vatRate, setVatRate } = usePosVatStore();
 
   const initialTab = (searchParams.get("tab") as Tab) ?? "tagesabschluss";
   const [activeTab, setActiveTab] = useState<Tab>(
@@ -104,6 +106,28 @@ function BerichteInner() {
             {tab.label}
           </button>
         ))}
+      </div>
+
+      {/* ── MwSt-Schalter ────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-bold uppercase tracking-widest text-black/40">MwSt</span>
+        <div className="flex gap-1">
+          {([0, 7, 19] as const).map((v) => (
+            <button
+              key={v}
+              data-testid={`vat-btn-${v}`}
+              onClick={() => setVatRate(v)}
+              className={cn(
+                "rounded-lg px-3 py-1 text-sm font-bold transition-colors",
+                vatRate === v
+                  ? "bg-primaq-500 text-white shadow-sm"
+                  : "border border-black/12 bg-white text-black/50 hover:bg-black/5"
+              )}
+            >
+              {v} %
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Tab content (all rendered, inactive ones hidden to preserve state) */}

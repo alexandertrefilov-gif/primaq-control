@@ -86,7 +86,7 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
   const { daily, resetDaily, hydrated } = usePosStore();
   const { saveDay } = usePosYearStore();
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
-  const { vatRate, hydrated: vatHydrated } = usePosVatStore();
+  const { vatRate, setVatRate, hydrated: vatHydrated } = usePosVatStore();
   const [confirming, setConfirming] = useState(false);
   const [startCashInput, setStartCashInput] = useState("");
   const [bankDepositInput, setBankDepositInput] = useState("");
@@ -148,7 +148,26 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
         <SummaryCard label="QR" value={fmt(daily.qrCents)} />
       </div>
 
-      {/* VAT breakdown */}
+      {/* VAT rate picker + breakdown */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-bold uppercase tracking-widest text-black/40">MwSt</span>
+        <div className="flex gap-1">
+          {([0, 7, 19] as const).map((v) => (
+            <button
+              key={v}
+              data-testid={`vat-btn-${v}`}
+              onClick={() => setVatRate(v)}
+              className={`rounded-lg px-3 py-1 text-sm font-bold transition-colors ${
+                vatRate === v
+                  ? "bg-primaq-500 text-white shadow-sm"
+                  : "border border-black/12 bg-white text-black/50 hover:bg-black/5"
+              }`}
+            >
+              {v} %
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-4">
         <SummaryCard label="Netto" value={fmt(netCents)} />
         <SummaryCard label={`MwSt ${vatRate} %`} value={fmt(vatCents)} />
