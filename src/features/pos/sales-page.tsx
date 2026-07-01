@@ -131,26 +131,20 @@ function FlavorCard({
     <button
       aria-label={flavor.name}
       onClick={onClick}
-      className="group relative flex w-full flex-col items-center gap-1.5 select-none focus-visible:outline-none"
-    >
-      {/* Guided checkmark overlay */}
-      {guidedMode && isSelected && (
-        <div className="absolute right-0 top-0 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-[10px] font-black text-white shadow ring-2 ring-white">
-          ✓
-        </div>
+      className={cn(
+        "group relative flex w-full flex-col select-none focus-visible:outline-none overflow-hidden",
+        "rounded-2xl transition-all duration-200",
+        "group-hover:brightness-110 group-active:scale-[0.96]",
+        isSelected
+          ? "ring-[3px] ring-[#22c55e] scale-[1.04]"
+          : "ring-0",
+        guidedMode && !isSelected && hasAnySelection && "opacity-50",
       )}
-      {/* Circle icon */}
-      <div
-        className={cn(
-          "relative w-full aspect-square overflow-hidden rounded-full shadow-lg transition-all",
-          "group-hover:shadow-2xl group-hover:ring-4 group-hover:ring-primaq-400/50 group-hover:ring-offset-2 group-hover:ring-offset-white",
-          "group-active:scale-[0.92]",
-          guidedMode && isSelected && "ring-[4px] ring-green-500 ring-offset-[3px] ring-offset-white scale-[1.08]",
-          guidedMode && !isSelected && hasAnySelection && "opacity-65",
-          !guidedMode && isSelected && "ring-[4px] ring-primaq-500 ring-offset-[3px] ring-offset-white"
-        )}
-      >
-        {/* Background: linear-gradient diagonal for mix, solid for regular */}
+      style={isSelected ? { boxShadow: "0 0 22px rgba(34,197,94,0.45)" } : undefined}
+    >
+      {/* Square card – aspect-square fills the column width */}
+      <div className="relative w-full aspect-square overflow-hidden rounded-2xl shadow-lg">
+        {/* Background */}
         {isMix ? (
           <>
             <div
@@ -163,36 +157,45 @@ function FlavorCard({
           <div className="absolute inset-0" style={{ background: flavor.backgroundColor }} />
         )}
 
-        {/* Mix icons: circular clipped containers at diagonal centroids */}
+        {/* Mix images at diagonal quadrants */}
         {isMix && part1?.imageSrc && (
-          <div className="pointer-events-none absolute left-[32%] top-[32%] h-[42%] w-[42%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full">
+          <div className="pointer-events-none absolute left-[30%] top-[30%] h-[44%] w-[44%] -translate-x-1/2 -translate-y-1/2 overflow-hidden">
             <FlavorImage src={part1.imageSrc} alt="" scale={part1.imageScale ?? 100} className="drop-shadow-md" />
           </div>
         )}
         {isMix && part2?.imageSrc && (
-          <div className="pointer-events-none absolute left-[68%] top-[68%] h-[42%] w-[42%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full">
+          <div className="pointer-events-none absolute left-[70%] top-[70%] h-[44%] w-[44%] -translate-x-1/2 -translate-y-1/2 overflow-hidden">
             <FlavorImage src={part2.imageSrc} alt="" scale={part2.imageScale ?? 100} className="drop-shadow-md" />
           </div>
         )}
 
-        {/* Regular image: circular inner container so transparent areas blend into card color */}
+        {/* Single flavor image – fills 80% of card, centered */}
         {!isMix && flavor.imageSrc && (
-          <div className="pointer-events-none absolute inset-[8%] flex items-center justify-center overflow-hidden rounded-full">
+          <div className="pointer-events-none absolute inset-[10%] flex items-center justify-center">
             <FlavorImage src={flavor.imageSrc} alt="" scale={flavor.imageScale ?? 100} className="drop-shadow-xl" />
           </div>
         )}
 
-        {/* Depth vignette */}
+        {/* Depth vignette overlay */}
         <div
-          className="pointer-events-none absolute inset-0 rounded-full"
-          style={{ boxShadow: "inset 0 -6px 18px rgba(0,0,0,0.20), inset 0 2px 8px rgba(255,255,255,0.16)" }}
+          className="pointer-events-none absolute inset-0"
+          style={{ boxShadow: "inset 0 -8px 20px rgba(0,0,0,0.25), inset 0 2px 8px rgba(255,255,255,0.10)" }}
         />
-      </div>
 
-      {/* Name below circle */}
-      <span className="w-full text-center text-sm font-black leading-tight text-ink line-clamp-2 px-0.5">
-        {flavor.name}
-      </span>
+        {/* Name overlay – gradient strip at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent pt-5 pb-2 px-2">
+          <span className="block text-center text-sm font-black text-white leading-tight line-clamp-2 drop-shadow-md">
+            {flavor.name}
+          </span>
+        </div>
+
+        {/* Selected checkmark */}
+        {isSelected && (
+          <div className="absolute right-2 top-2 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-[#22c55e] text-[10px] font-black text-white shadow">
+            ✓
+          </div>
+        )}
+      </div>
     </button>
   );
 }
@@ -271,7 +274,7 @@ function DeleteButton({ itemId, onRemove }: { itemId: string; onRemove: (id: str
   ) : (
     <button
       onClick={handleClick}
-      className="grid h-11 w-11 place-items-center rounded-full text-black/25 hover:bg-red-50 hover:text-red-500 active:scale-90 transition-all"
+      className="grid h-11 w-11 place-items-center rounded-full pos-text-dim hover:bg-red-500/15 hover:text-red-400 active:scale-90 transition-all"
     >
       <X className="h-4 w-4" />
     </button>
@@ -301,11 +304,11 @@ function FlavorGroup({
     <div className="flex flex-col gap-2">
       {/* Centered divider header */}
       <div className="flex items-center gap-3">
-        <div className="flex-1 h-px bg-primaq-200/70" />
-        <span className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-primaq-500 px-1">
+        <div className="flex-1 h-px pos-divider" />
+        <span className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-primaq-400 px-1">
           {label}
         </span>
-        <div className="flex-1 h-px bg-primaq-200/70" />
+        <div className="flex-1 h-px pos-divider" />
       </div>
       {/* auto-fit + justify-center → cards always centered, exact cardSize columns */}
       <div
@@ -356,11 +359,11 @@ function SizePickerModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[820px] max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-[36px] bg-white shadow-2xl"
+        className="w-full max-w-[820px] max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-[36px] pos-surface shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header: large flavor circle + name ── */}
-        <div className="flex items-center gap-6 border-b border-black/8 px-8 py-7">
+        <div className="flex items-center gap-6 border-b pos-border-c px-8 py-7">
           {/* Flavor circle 96 px – identical render logic as FlavorCard */}
           <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full shadow-lg">
             {isMix && flavor.mixColors ? (
@@ -391,10 +394,10 @@ function SizePickerModal({
 
           {/* Name */}
           <div className="min-w-0">
-            <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-black/40">
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-widest pos-text-label">
               Gewählte Sorte
             </p>
-            <p className="truncate text-4xl font-black leading-tight text-black/85">
+            <p className="truncate text-4xl font-black leading-tight pos-text">
               {flavor.name}
             </p>
           </div>
@@ -402,13 +405,13 @@ function SizePickerModal({
 
         {/* ── Section label ── */}
         <div className="px-8 pb-4 pt-7">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">Größe wählen</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest pos-text-label">Größe wählen</p>
         </div>
 
         {/* ── Size cards ── */}
         <div className="px-6 pb-5">
           {sizes.length === 0 ? (
-            <p className="py-10 text-center text-base font-semibold text-black/40">
+            <p className="py-10 text-center text-base font-semibold pos-text-muted">
               Keine Größe aktiv. Bitte in Einstellungen aktivieren.
             </p>
           ) : (
@@ -479,7 +482,7 @@ function SizePickerModal({
         <div className="px-6 pb-7">
           <button
             onClick={onClose}
-            className="h-[60px] w-full rounded-2xl bg-black/5 text-lg font-semibold text-black/50 transition-colors hover:bg-black/10 active:bg-black/[0.15]"
+            className="h-[60px] w-full rounded-2xl bg-white/8 text-lg font-semibold pos-text-muted transition-colors hover:bg-white/12 active:bg-white/[0.15]"
           >
             Abbrechen
           </button>
@@ -512,14 +515,14 @@ function FlavorColumn({
       data-testid="flavor-zone"
       data-guided-active={guidedMode && guidedActive ? "true" : undefined}
       className={cn(
-        "flex flex-col rounded-2xl bg-white shadow min-h-0 overflow-hidden transition-all",
+        "flex flex-col rounded-2xl pos-surface shadow min-h-0 overflow-hidden transition-all",
         guidedMode && guidedActive && "ring-2 ring-[#00D6A3]/50"
       )}
     >
       <div className="shrink-0 px-3 pt-2 pb-1.5">
         <p className={cn(
           "text-[11px] font-bold uppercase tracking-widest transition-colors",
-          guidedMode && guidedActive ? "text-[#00D6A3]" : "text-black/40"
+          guidedMode && guidedActive ? "text-[#00D6A3]" : "pos-text-label"
         )}>
           Sorte wählen
         </p>
@@ -565,7 +568,7 @@ function SizeRow({
       data-testid="size-zone"
       data-guided-active={guidedMode && guidedActive ? "true" : undefined}
       className={cn(
-        "rounded-2xl bg-white shadow px-3 py-2.5 transition-all",
+        "rounded-2xl pos-section shadow px-3 py-2.5 transition-all",
         guidedMode && guidedActive && "guided-ring-pulse"
       )}
     >
@@ -577,11 +580,11 @@ function SizeRow({
           <span className="text-xs font-semibold text-[#00D6A3]">Größe auswählen</span>
         </div>
       )}
-      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-black/40">
+      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest pos-text-label">
         Größe wählen
       </p>
       {effectiveSizes.length === 0 ? (
-        <p className="py-2 text-center text-sm text-black/35">
+        <p className="py-2 text-center text-sm pos-text-dim">
           Keine Größe aktiv – bitte in Einstellungen aktivieren.
         </p>
       ) : (
@@ -590,26 +593,28 @@ function SizeRow({
           style={{ gridTemplateColumns: `repeat(${Math.min(effectiveSizes.length, 3)}, 1fr)` }}
         >
           {effectiveSizes.map((size) => {
-            const textColor = computeTextColor(size.textColorMode, size.backgroundColor);
+            const isActive = active;
+            const bgColor = isActive ? (size.backgroundColor === "#ffffff" ? "#D9B15D" : size.backgroundColor) : size.backgroundColor;
+            const textColor = isActive ? computeTextColor(size.textColorMode, bgColor) : "rgba(228,230,237,0.35)";
             return (
               <button
                 key={size.id}
                 data-testid={`size-btn-${size.id}`}
-                onClick={() => { if (active) onSizePick(size.id, size.priceCents); }}
+                onClick={() => { if (isActive) onSizePick(size.id, size.priceCents); }}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all select-none",
+                  "flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all duration-200 select-none",
                   "min-h-[72px] px-2 py-2",
-                  active
-                    ? "shadow-sm hover:brightness-95 active:scale-[0.97]"
-                    : "opacity-40 cursor-not-allowed"
+                  isActive
+                    ? "shadow-md hover:brightness-110 active:scale-[0.97]"
+                    : "opacity-35 cursor-not-allowed"
                 )}
-                style={{ backgroundColor: size.backgroundColor }}
-                aria-disabled={!active}
+                style={{ backgroundColor: bgColor }}
+                aria-disabled={!isActive}
               >
                 <span className="text-xl font-black leading-tight text-center" style={{ color: textColor }}>
                   {size.name}
                 </span>
-                <span className="text-base font-black tabular-nums leading-none" style={{ color: textColor, opacity: 0.75 }}>
+                <span className="text-base font-black tabular-nums leading-none" style={{ color: textColor, opacity: isActive ? 0.82 : 1 }}>
                   {fmt(size.priceCents)}
                 </span>
               </button>
@@ -635,7 +640,7 @@ function GuidedStepsBar({ step }: { step: 1 | 2 | 3 | 4 }) {
     <div
       data-testid="guided-steps-bar"
       data-active-step={step}
-      className="flex shrink-0 items-center gap-1 rounded-2xl bg-white/90 px-4 py-2.5 shadow backdrop-blur-sm"
+      className="flex shrink-0 items-center gap-1 rounded-2xl pos-section px-4 py-2.5 shadow backdrop-blur-sm"
     >
       {GUIDED_STEPS.map(({ n, label }, i) => {
         const done = n < step;
@@ -650,7 +655,7 @@ function GuidedStepsBar({ step }: { step: 1 | 2 | 3 | 4 }) {
                 "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-black transition-all",
                 done  && "bg-[#22C55E] text-white",
                 active && "bg-[#00D6A3] text-white",
-                !done && !active && "bg-black/10 text-black/35"
+                !done && !active && "bg-white/10 pos-text-dim"
               )}
             >
               {done ? "✓" : n}
@@ -659,14 +664,14 @@ function GuidedStepsBar({ step }: { step: 1 | 2 | 3 | 4 }) {
               "whitespace-nowrap text-sm font-bold transition-colors",
               done  && "text-[#22C55E]",
               active && "text-[#00D6A3]",
-              !done && !active && "text-black/30"
+              !done && !active && "pos-text-dim"
             )}>
               {label}
             </span>
             {!isLast && (
               <div className={cn(
                 "ml-1 h-0.5 flex-1 rounded-full transition-colors",
-                done ? "bg-[#22C55E]/50" : "bg-black/8"
+                done ? "bg-[#22C55E]/50" : "bg-white/10"
               )} />
             )}
           </div>
@@ -762,7 +767,7 @@ function PaymentBlock({
     <div
       data-testid="payment-zone"
       className={cn(
-        "shrink-0 rounded-2xl bg-white p-2.5 shadow transition-all",
+        "shrink-0 rounded-2xl pos-section p-2.5 shadow transition-all",
         guidedMode && guidedStep === 3 && "ring-2 ring-[#00D6A3]/50",
         guidedMode && guidedStep === 4 && "ring-2 ring-green-400/40"
       )}
@@ -802,13 +807,13 @@ function PaymentBlock({
                   key={m}
                   data-testid={`payment-tab-${m}`}
                   onClick={() => onPaymentChange(m)}
-                  className="flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl transition-all active:scale-[0.97] select-none"
+                  className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl transition-all duration-200 active:scale-[0.97] select-none"
                   style={{
-                    minHeight: 64,
-                    backgroundColor: isActive ? color : `${color}18`,
+                    minHeight: 72,
+                    backgroundColor: isActive ? color : `${color}22`,
                     color: isActive ? "#ffffff" : color,
                     boxShadow: isActive
-                      ? `0 0 0 3px ${color}40, 0 6px 18px ${color}28`
+                      ? `0 0 0 3px ${color}50, 0 6px 20px ${color}35`
                       : undefined,
                   }}
                 >
@@ -822,7 +827,7 @@ function PaymentBlock({
           {/* Karte indicator */}
           {paymentMethod === "karte" && (
             <div className="mb-1.5 flex items-center justify-center gap-2 rounded-xl px-4 py-2"
-              style={{ backgroundColor: `${karteColor}12` }}>
+              style={{ backgroundColor: `${karteColor}20` }}>
               <CreditCard className="h-5 w-5" style={{ color: karteColor }} aria-hidden />
               <span className="text-sm font-semibold" style={{ color: karteColor }}>Kartenzahlung gewählt</span>
             </div>
@@ -840,7 +845,7 @@ function PaymentBlock({
               <button
                 data-testid="cash-minus"
                 onClick={() => onCashInput((Math.max(0, cashCents - 50) / 100).toFixed(2))}
-                className="h-14 w-12 shrink-0 grid place-items-center rounded-xl bg-red-100 text-red-600 text-2xl font-black transition-all hover:bg-red-200 active:scale-95 select-none"
+                className="h-14 w-14 shrink-0 grid place-items-center rounded-xl bg-red-500/20 text-red-400 text-2xl font-black transition-all hover:bg-red-500/30 active:scale-95 select-none"
               >−</button>
               <input
                 type="number"
@@ -850,17 +855,17 @@ function PaymentBlock({
                 value={cashInput}
                 onChange={(e) => onCashInput(e.target.value)}
                 placeholder="0,00"
-                className="min-h-[56px] flex-1 rounded-xl border-2 border-black/15 bg-black/[0.02] px-3 text-center text-3xl font-black tabular-nums outline-none focus:border-green-500 focus:ring-4 focus:ring-green-500/15 transition-all"
+                className="min-h-[56px] flex-1 rounded-xl border-2 px-3 text-center text-4xl font-black tabular-nums outline-none transition-all pos-input focus:ring-4 focus:ring-green-500/20"
               />
               <button
                 data-testid="cash-plus"
                 onClick={() => onCashInput(((cashCents + 50) / 100).toFixed(2))}
-                className="h-14 w-12 shrink-0 grid place-items-center rounded-xl bg-green-100 text-green-600 text-2xl font-black transition-all hover:bg-green-200 active:scale-95 select-none"
+                className="h-14 w-14 shrink-0 grid place-items-center rounded-xl bg-green-500/20 text-green-400 text-2xl font-black transition-all hover:bg-green-500/30 active:scale-95 select-none"
               >+</button>
               <button
                 data-testid="cash-clear"
                 onClick={() => onCashInput("")}
-                className="h-14 w-12 shrink-0 grid place-items-center rounded-xl bg-orange-100 text-orange-600 text-xl font-black transition-all hover:bg-orange-200 active:scale-95 select-none"
+                className="h-14 w-14 shrink-0 grid place-items-center rounded-xl bg-orange-500/20 text-orange-400 text-xl font-black transition-all hover:bg-orange-500/30 active:scale-95 select-none"
               >C</button>
             </div>
           )}
@@ -881,7 +886,7 @@ function PaymentBlock({
                 key={cents}
                 data-testid={`quick-amount-${cents}`}
                 onClick={() => onCashInput(((cashCents + cents) / 100).toFixed(2))}
-                className="shrink-0 w-[110px] rounded-xl min-h-[60px] flex flex-col items-center justify-center px-1 text-xl font-black leading-tight tracking-tight transition-all active:scale-95 select-none hover:brightness-90"
+                className="shrink-0 w-[110px] rounded-xl min-h-[62px] flex flex-col items-center justify-center px-1 text-xl font-black leading-tight tracking-tight transition-all active:scale-95 select-none hover:brightness-110"
                 style={{ backgroundColor: bgColor, color: textColor }}
               >
                 {fmt(cents)}
@@ -900,8 +905,8 @@ function PaymentBlock({
             "shrink-0 flex items-center justify-center gap-2 rounded-2xl min-h-[60px] font-black transition-all select-none",
             inlineBook ? "w-[230px] text-base px-3" : "flex-1 text-xl px-4",
             canBook
-              ? "text-white shadow-lg hover:brightness-90 active:scale-[0.98]"
-              : "bg-black/8 text-black/30 cursor-not-allowed",
+              ? "text-white shadow-lg hover:brightness-110 active:scale-[0.98]"
+              : "bg-white/8 pos-text-dim cursor-not-allowed",
             guidedMode && guidedStep === 4 && canBook && "guided-book-pulse"
           )}
           style={canBook ? { backgroundColor: bookColor } : undefined}
@@ -915,9 +920,9 @@ function PaymentBlock({
 
       {/* Rückgeld – unterhalb der kombinierten Zeile */}
       {showPayment && paymentMethod === "bar" && cashCents >= cartTotal && cartTotal > 0 && (
-        <div className="mt-1.5 flex items-center justify-between rounded-xl bg-green-50 px-3 py-2">
-          <span className="text-sm font-bold text-green-700">Rückgeld</span>
-          <span className="text-xl font-black text-green-700 tabular-nums">{fmt(change)}</span>
+        <div className="mt-1.5 flex items-center justify-between rounded-xl bg-green-500/15 px-3 py-2">
+          <span className="text-sm font-bold text-green-400">Rückgeld</span>
+          <span className="text-xl font-black text-green-400 tabular-nums">{fmt(change)}</span>
         </div>
       )}
     </div>
@@ -992,9 +997,9 @@ function CartColumn({
   return (
     <div data-testid="cart-zone" className="flex shrink-0 flex-col min-h-0" style={{ width: widthPx }}>
       {/* Cart – full height */}
-      <div className="flex flex-1 flex-col rounded-2xl bg-white shadow min-h-0">
-        <div className="flex shrink-0 items-center gap-2 border-b border-black/5 px-4 py-2.5">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-black/40 mr-auto">
+      <div className="flex flex-1 flex-col rounded-2xl pos-surface shadow min-h-0">
+        <div className="flex shrink-0 items-center gap-2 border-b pos-border-c px-4 py-2.5">
+          <span className="text-[11px] font-bold uppercase tracking-widest pos-text-label mr-auto">
             Warenkorb
           </span>
           <button
@@ -1003,8 +1008,8 @@ function CartColumn({
             className={cn(
               "rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors select-none",
               ausgabeModus
-                ? "bg-primaq-100 text-primaq-700"
-                : "text-black/30 hover:bg-black/5 hover:text-black/50"
+                ? "bg-primaq-500/20 text-primaq-400"
+                : "pos-text-dim pos-hover"
             )}
           >
             Ausgabe
@@ -1016,7 +1021,7 @@ function CartColumn({
                 "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors",
                 clearing
                   ? "bg-red-500 text-white"
-                  : "text-black/35 hover:bg-red-50 hover:text-red-600"
+                  : "pos-text-dim hover:bg-red-500/15 hover:text-red-400"
               )}
             >
               <Trash2 className="h-3 w-3" />
@@ -1027,25 +1032,25 @@ function CartColumn({
 
         <div className="flex-1 overflow-y-auto min-h-0">
           {cart.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-black/20 py-6">
+            <div className="flex h-full flex-col items-center justify-center gap-2 pos-text-dim py-6">
               <ShoppingCart className="h-8 w-8" />
               <span className="text-xs">Noch leer</span>
             </div>
           ) : (
-            <ul className="divide-y divide-black/5">
+            <ul className="divide-y pos-border-c">
               {cart.map((item) => (
                 <li key={item.id} className={cn("px-4", ausgabeModus ? "py-5" : "py-4")}>
                   {/* Row 1: badge + name + total */}
                   <div className={cn("flex items-start", ausgabeModus ? "gap-3" : "gap-2.5")}>
                     <CartItemBadge item={item} large={ausgabeModus} />
                     <p className={cn(
-                      "flex-1 uppercase leading-tight line-clamp-2 text-ink",
+                      "flex-1 uppercase leading-tight line-clamp-2 pos-text",
                       ausgabeModus ? "text-2xl font-black" : fontCfg.name
                     )}>
                       {getCartSizeName(item)} {getLocalFlavorName(item.flavor)}
                     </p>
                     <p className={cn(
-                      "shrink-0 font-black text-ink tabular-nums pt-0.5",
+                      "shrink-0 font-black pos-text tabular-nums pt-0.5",
                       ausgabeModus ? "text-2xl" : fontCfg.price
                     )}>
                       {fmt(item.quantity * item.unitPriceCents)}
@@ -1057,7 +1062,7 @@ function CartColumn({
                     ausgabeModus ? "pl-[68px]" : "pl-[44px]"
                   )}>
                     {!ausgabeModus && (
-                      <span className="text-xs text-black/40 tabular-nums mr-auto">
+                      <span className="text-xs pos-text-muted tabular-nums mr-auto">
                         {fmt(item.unitPriceCents)} je
                       </span>
                     )}
@@ -1065,12 +1070,12 @@ function CartColumn({
                       <button
                         onClick={() => onChangeQty(item.id, -1)}
                         style={{ height: qtyBtnSize, width: qtyBtnSize }}
-                        className="grid place-items-center rounded-full bg-black/5 hover:bg-red-100 hover:text-red-600 active:scale-90 transition-all"
+                        className="grid place-items-center rounded-full bg-white/8 hover:bg-red-500/20 hover:text-red-400 pos-text-muted active:scale-90 transition-all"
                       >
                         <Minus className="h-4 w-4" />
                       </button>
                       <span className={cn(
-                        "text-center font-black text-ink tabular-nums",
+                        "text-center font-black pos-text tabular-nums",
                         ausgabeModus ? `w-12 text-2xl` : `${fontCfg.qtyW} ${fontCfg.qty}`
                       )}>
                         {item.quantity}
@@ -1078,7 +1083,7 @@ function CartColumn({
                       <button
                         onClick={() => onChangeQty(item.id, 1)}
                         style={{ height: qtyBtnSize, width: qtyBtnSize }}
-                        className="grid place-items-center rounded-full bg-black/5 hover:bg-primaq-100 hover:text-primaq-700 active:scale-90 transition-all"
+                        className="grid place-items-center rounded-full bg-white/8 hover:bg-primaq-500/20 hover:text-primaq-400 pos-text-muted active:scale-90 transition-all"
                       >
                         <Plus className="h-4 w-4" />
                       </button>
@@ -1091,10 +1096,10 @@ function CartColumn({
           )}
         </div>
 
-        <div className="shrink-0 border-t border-black/10 px-4 py-3">
+        <div className="shrink-0 border-t pos-border-c px-4 py-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-black/50">Gesamt</span>
-            <span className="text-2xl font-black text-ink tabular-nums">{fmt(cartTotal)}</span>
+            <span className="text-sm font-semibold pos-text-muted">Gesamt</span>
+            <span className="text-2xl font-black pos-text tabular-nums">{fmt(cartTotal)}</span>
           </div>
         </div>
       </div>
@@ -1149,54 +1154,54 @@ function LastOrderModal({
         role="dialog"
         aria-modal="true"
         data-testid="last-order-modal"
-        className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden"
+        className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl pos-surface shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ── */}
-        <div className="flex items-start justify-between border-b border-black/5 px-6 pt-5 pb-4">
+        <div className="flex items-start justify-between border-b pos-border-c px-6 pt-5 pb-4">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">
+            <p className="text-[11px] font-bold uppercase tracking-widest pos-text-label">
               Letzte Buchung
             </p>
-            <p className="mt-0.5 text-2xl font-black text-ink">
+            <p className="mt-0.5 text-2xl font-black pos-text">
               #{String(orderNum).padStart(4, "0")}
             </p>
           </div>
           <button
             data-testid="modal-close-x"
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-full text-black/30 hover:bg-black/5 hover:text-black/60 transition-colors"
+            className="grid h-8 w-8 place-items-center rounded-full pos-text-dim pos-hover hover:pos-text-muted transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* ── Meta info ── */}
-        <div className="px-6 py-4 space-y-2.5 border-b border-black/5">
+        <div className="px-6 py-4 space-y-2.5 border-b pos-border-c">
           <Row label="Datum / Uhrzeit" value={time} />
           <Row label="Zahlungsart" value={BOOKING_PAYMENT_LABEL[order.paymentMethod] ?? order.paymentMethod} />
           <Row label="Artikel gesamt" value={String(totalItems)} />
           <div className="flex items-center justify-between pt-1">
-            <span className="text-sm font-bold text-black/50">Gesamtbetrag</span>
-            <span className="text-xl font-black text-ink tabular-nums">{fmt(order.totalCents)}</span>
+            <span className="text-sm font-bold pos-text-muted">Gesamtbetrag</span>
+            <span className="text-xl font-black pos-text tabular-nums">{fmt(order.totalCents)}</span>
           </div>
         </div>
 
         {/* ── Article list ── */}
         <div className="px-6 py-4 max-h-64 overflow-y-auto space-y-3">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">Artikel</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest pos-text-label">Artikel</p>
           {order.items.map((item) => (
             <div key={item.id} className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <CartItemBadge item={item} />
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-ink leading-snug">
+                  <p className="text-sm font-bold pos-text leading-snug">
                     {item.quantity}× {getLocalSizeName(item)} {getLocalFlavorName(item.flavor)}
                   </p>
-                  <p className="text-xs text-black/40 tabular-nums">{fmt(item.unitPriceCents)} je</p>
+                  <p className="text-xs pos-text-muted tabular-nums">{fmt(item.unitPriceCents)} je</p>
                 </div>
               </div>
-              <span className="shrink-0 text-sm font-black text-ink tabular-nums">
+              <span className="shrink-0 text-sm font-black pos-text tabular-nums">
                 {fmt(item.quantity * item.unitPriceCents)}
               </span>
             </div>
@@ -1204,7 +1209,7 @@ function LastOrderModal({
         </div>
 
         {/* ── Actions ── */}
-        <div className="border-t border-black/5 px-6 py-4 flex gap-3">
+        <div className="border-t pos-border-c px-6 py-4 flex gap-3">
           {isAdmin && (
             <button
               data-testid="modal-void-btn"
@@ -1213,7 +1218,7 @@ function LastOrderModal({
                 "rounded-xl px-4 py-2.5 text-sm font-bold transition-colors",
                 voidConfirming
                   ? "bg-red-600 text-white hover:bg-red-700"
-                  : "border border-black/15 bg-white text-red-600 hover:bg-red-50 hover:border-red-200"
+                  : "border pos-border-c pos-section text-red-400 hover:bg-red-500/15 hover:border-red-500/30"
               )}
             >
               {voidConfirming ? "Wirklich stornieren?" : "Stornieren"}
@@ -1222,7 +1227,7 @@ function LastOrderModal({
           <button
             data-testid="modal-close-btn"
             onClick={onClose}
-            className="flex-1 rounded-xl bg-black/5 py-2.5 text-sm font-semibold text-black/60 hover:bg-black/10 transition-colors"
+            className="flex-1 rounded-xl bg-white/8 py-2.5 text-sm font-semibold pos-text-muted hover:bg-white/12 transition-colors"
           >
             Schließen
           </button>
@@ -1235,8 +1240,8 @@ function LastOrderModal({
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-black/50">{label}</span>
-      <span className="text-sm font-semibold text-ink">{value}</span>
+      <span className="text-sm pos-text-muted">{label}</span>
+      <span className="text-sm font-semibold pos-text">{value}</span>
     </div>
   );
 }
@@ -1278,61 +1283,50 @@ function SalesStatusBar({
     <>
       <div
         data-testid="last-booking-bar"
-        className="shrink-0 flex items-center gap-3 rounded-2xl bg-white/90 px-5 py-2.5 shadow backdrop-blur-sm"
+        className="shrink-0 flex items-center gap-3 rounded-2xl pos-section px-5 py-2.5 shadow backdrop-blur-sm"
       >
       {/* Left: last booking */}
       {showLastBooking && (
         <>
-          <span className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-black/40">
+          <span className="shrink-0 text-[11px] font-bold uppercase tracking-wider pos-text-label">
             Letzte Buchung
           </span>
-          <div className="h-4 w-px shrink-0 bg-black/15" />
+          <div className="h-4 w-px shrink-0 pos-divider" />
           {last && orderNum !== null ? (
             <>
-              {/* Order number – always visible */}
-              <span className="text-sm font-bold text-black/70 tabular-nums">
+              <span className="text-sm font-bold pos-text-muted tabular-nums">
                 #{String(orderNum).padStart(4, "0")}
               </span>
-              <div className="h-4 w-px shrink-0 bg-black/15" />
-
-              {/* Betrag – always visible (Verkäufer zeigt dem Kunden den Betrag) */}
-              <span className="text-base font-black text-ink tabular-nums">
+              <div className="h-4 w-px shrink-0 pos-divider" />
+              <span className="text-base font-black pos-text tabular-nums">
                 {fmt(last.totalCents)}
               </span>
-              <div className="h-4 w-px shrink-0 bg-black/15" />
-
-              {/* Zahlungsart – always visible */}
-              <span className="text-sm font-semibold text-black/55">
+              <div className="h-4 w-px shrink-0 pos-divider" />
+              <span className="text-sm font-semibold pos-text-muted">
                 {BOOKING_PAYMENT_LABEL[last.paymentMethod] ?? last.paymentMethod}
               </span>
-              <div className="h-4 w-px shrink-0 bg-black/15" />
-
-              {/* Uhrzeit – always visible */}
-              <span className="text-sm font-semibold text-black/55 tabular-nums">
+              <div className="h-4 w-px shrink-0 pos-divider" />
+              <span className="text-sm font-semibold pos-text-muted tabular-nums">
                 {new Date(last.createdAt).toLocaleTimeString("de-DE", {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
               </span>
-              <div className="h-4 w-px shrink-0 bg-black/15" />
-
-              {/* Artikel – always visible */}
-              <span className="text-xs text-black/35">
+              <div className="h-4 w-px shrink-0 pos-divider" />
+              <span className="text-xs pos-text-dim">
                 {last.items.reduce((s, i) => s + i.quantity, 0)} Artikel
               </span>
-
-              {/* Anzeigen – always visible, opens modal */}
               <button
                 data-testid="show-last-order"
                 onClick={() => setShowModal(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-black/12 bg-white px-3 py-1 text-xs font-semibold text-black/55 hover:bg-primaq-50 hover:text-primaq-700 hover:border-primaq-300 transition-colors shrink-0"
+                className="flex items-center gap-1.5 rounded-lg border pos-border-c pos-section px-3 py-1 text-xs font-semibold pos-text-muted hover:bg-primaq-500/15 hover:text-primaq-400 transition-colors shrink-0"
               >
                 <Eye className="h-3.5 w-3.5" />
                 Anzeigen
               </button>
             </>
           ) : (
-            <span className="text-sm text-black/35">noch keine</span>
+            <span className="text-sm pos-text-dim">noch keine</span>
           )}
         </>
       )}
@@ -1340,22 +1334,22 @@ function SalesStatusBar({
       {/* Right: daily totals – admin only, respects verkaufszaehler toggle */}
       {isAdmin && showStats && (
         <div className={cn(
-          "flex items-center gap-4 shrink-0 pl-3 border-l border-black/10",
+          "flex items-center gap-4 shrink-0 pl-3 border-l pos-border-c",
           showLastBooking ? "ml-auto" : "ml-0"
         )}>
           <div className="text-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-black/35">Portionen</p>
-            <p className="text-base font-black text-ink tabular-nums">{portionen}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest pos-text-dim">Portionen</p>
+            <p className="text-base font-black pos-text tabular-nums">{portionen}</p>
           </div>
-          <div className="h-6 w-px bg-black/10" />
+          <div className="h-6 w-px pos-divider" />
           <div className="text-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-black/35">Verkäufe</p>
-            <p className="text-base font-black text-ink tabular-nums">{daily.orderCount}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest pos-text-dim">Verkäufe</p>
+            <p className="text-base font-black pos-text tabular-nums">{daily.orderCount}</p>
           </div>
-          <div className="h-6 w-px bg-black/10" />
+          <div className="h-6 w-px pos-divider" />
           <div className="text-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-black/35">Umsatz</p>
-            <p className="text-base font-black text-primaq-600 tabular-nums">{fmt(daily.totalCents)}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest pos-text-dim">Umsatz</p>
+            <p className="text-base font-black text-primaq-400 tabular-nums">{fmt(daily.totalCents)}</p>
           </div>
         </div>
       )}
@@ -1489,7 +1483,7 @@ export function SalesPage() {
 
   if (!hydrated || !flavorsHydrated || !layoutHydrated) {
     return (
-      <div className="flex h-full items-center justify-center text-black/40">Laden…</div>
+      <div className="flex h-full items-center justify-center pos-text-muted">Laden…</div>
     );
   }
 
@@ -1572,13 +1566,13 @@ export function SalesPage() {
           onClick={() => setShowQr(false)}
         >
           <div
-            className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl text-center mx-4"
+            className="w-full max-w-sm rounded-3xl pos-surface p-8 shadow-2xl text-center mx-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-black/40">
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-widest pos-text-label">
               QR-Zahlung
             </p>
-            <p className="mb-6 text-5xl font-black text-ink tabular-nums">{fmt(cartTotal)}</p>
+            <p className="mb-6 text-5xl font-black pos-text tabular-nums">{fmt(cartTotal)}</p>
             <div className="mb-6 flex justify-center">
               <QRCodeSVG
                 value={`https://primaq.de/pay?total=${cartTotal}`}
@@ -1594,7 +1588,7 @@ export function SalesPage() {
             </button>
             <button
               onClick={() => setShowQr(false)}
-              className="w-full rounded-2xl bg-black/5 py-3 text-base font-semibold text-black/50 hover:bg-black/10 transition-colors"
+              className="w-full rounded-2xl bg-white/8 py-3 text-base font-semibold pos-text-muted hover:bg-white/12 transition-colors"
             >
               Abbrechen
             </button>

@@ -3,9 +3,10 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
-  background: #f7f8f4;
-  color: #18211f;
+  /* Default: Graphit */
+  color-scheme: dark;
+  background: #1E1F22;
+  color: #E4E6ED;
 }
 
 * {
@@ -15,7 +16,6 @@
 html {
   min-height: 100%;
   -webkit-text-size-adjust: 100%;
-  /* iOS PWA: viewport fills the full screen including notch/home-indicator area */
   height: -webkit-fill-available;
 }
 
@@ -26,20 +26,30 @@ body,
 }
 
 body {
-  /* dvh as primary unit – accounts for dynamic browser toolbar on iOS Safari */
   min-height: 100vh;
   min-height: 100dvh;
   min-height: -webkit-fill-available;
   margin: 0;
   overflow-x: hidden;
-  /* iOS safe-area: padding for notch (top) and home indicator (bottom) */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
+  background: #1E1F22;
+  color: #E4E6ED;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ── Hell (Light) mode ───────────────────────────────────────────────────────── */
+[data-pos-theme="hell"] {
+  color-scheme: light;
+  background: #f7f8f4;
+  color: #18211f;
+}
+
+[data-pos-theme="hell"] body {
   background:
     radial-gradient(circle at top left, rgba(25, 169, 131, 0.12), transparent 28rem),
     #f7f8f4;
   color: #18211f;
-  font-family: Arial, Helvetica, sans-serif;
 }
 
 button,
@@ -54,12 +64,69 @@ a {
   text-decoration: none;
 }
 
-/* iOS safe-area helper: applied to bottom-sheet modal panels (rounded-t-2xl) */
 .pb-safe-area {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* ── Guided selling UX – step highlight animations ───────────────────────── */
+/* ── POS Theme utility classes – Graphit (default) ──────────────────────────── */
+
+/* Backgrounds */
+.pos-surface    { background-color: #27292E; }
+.pos-section    { background-color: #2F3137; }
+
+/* Text */
+.pos-text       { color: #E4E6ED; }
+.pos-text-muted { color: rgba(228, 230, 237, 0.52); }
+.pos-text-dim   { color: rgba(228, 230, 237, 0.28); }
+.pos-text-label { color: rgba(228, 230, 237, 0.38); }
+
+/* Borders / Dividers */
+.pos-border-c   { border-color: #3A3D43; }
+.pos-divider    { background-color: rgba(255, 255, 255, 0.07); }
+
+/* Header */
+.pos-header     { background-color: rgba(30, 31, 34, 0.97); border-color: #3A3D43; }
+
+/* Hover states */
+.pos-hover:hover  { background-color: rgba(255, 255, 255, 0.06); }
+.pos-active:hover { background-color: rgba(255, 255, 255, 0.10); }
+
+/* Input */
+.pos-input {
+  background-color: #1E1F22;
+  border-color: #3A3D43;
+  color: #E4E6ED;
+}
+.pos-input::placeholder { color: rgba(228, 230, 237, 0.30); }
+.pos-input:focus { border-color: #00D6A3; }
+
+/* ── Hell (Light) mode overrides ─────────────────────────────────────────────── */
+
+[data-pos-theme="hell"] .pos-surface    { background-color: #ffffff; }
+[data-pos-theme="hell"] .pos-section    { background-color: #ffffff; }
+
+[data-pos-theme="hell"] .pos-text       { color: #18211f; }
+[data-pos-theme="hell"] .pos-text-muted { color: rgba(24, 33, 31, 0.50); }
+[data-pos-theme="hell"] .pos-text-dim   { color: rgba(24, 33, 31, 0.25); }
+[data-pos-theme="hell"] .pos-text-label { color: rgba(24, 33, 31, 0.40); }
+
+[data-pos-theme="hell"] .pos-border-c   { border-color: rgba(0, 0, 0, 0.10); }
+[data-pos-theme="hell"] .pos-divider    { background-color: rgba(0, 0, 0, 0.05); }
+
+[data-pos-theme="hell"] .pos-header     { background-color: rgba(247, 248, 244, 0.95); border-color: rgba(0, 0, 0, 0.10); }
+
+[data-pos-theme="hell"] .pos-hover:hover  { background-color: rgba(0, 0, 0, 0.05); }
+[data-pos-theme="hell"] .pos-active:hover { background-color: rgba(0, 0, 0, 0.08); }
+
+[data-pos-theme="hell"] .pos-input {
+  background-color: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.20);
+  color: #18211f;
+}
+[data-pos-theme="hell"] .pos-input::placeholder { color: rgba(24, 33, 31, 0.30); }
+[data-pos-theme="hell"] .pos-input:focus { border-color: #19a983; }
+
+/* ── Guided selling UX – step highlight animations ───────────────────────────── */
 
 @keyframes guided-ring-pulse {
   0%, 100% { box-shadow: 0 0 0 2px rgba(0, 214, 163, 0.45); }
@@ -71,10 +138,5 @@ a {
   50%       { box-shadow: 0 4px 22px rgba(34, 197, 94, 0.55), 0 0 0 5px rgba(34, 197, 94, 0.18); }
 }
 
-.guided-ring-pulse {
-  animation: guided-ring-pulse 2s ease-in-out infinite;
-}
-
-.guided-book-pulse {
-  animation: guided-book-pulse 2s ease-in-out infinite;
-}
+.guided-ring-pulse { animation: guided-ring-pulse 2s ease-in-out infinite; }
+.guided-book-pulse { animation: guided-book-pulse 2s ease-in-out infinite; }

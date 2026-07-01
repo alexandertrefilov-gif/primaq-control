@@ -127,7 +127,7 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
     mittel: { label: "Mittel", priceCents: 350, order: 2, backgroundColor: "#F8E3A0", textColorMode: "auto", imageDataUrl: null, imageScale: 100, showAsQuickAmount: true },
     gross:  { label: "Groß",  priceCents: 500, order: 3, backgroundColor: "#F4C96D", textColorMode: "auto", imageDataUrl: null, imageScale: 100, showAsQuickAmount: true },
   },
-  flavorCardSize: 140,
+  flavorCardSize: 180,
   sizeColumnWidth: 176,
   qtyButtonSize: 44,
   cartFontSize: "normal",

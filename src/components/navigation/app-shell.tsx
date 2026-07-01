@@ -6,18 +6,17 @@ import { usePathname } from "next/navigation";
 import { Lock, Settings, Shield } from "lucide-react";
 import { AdminProvider, useAdmin } from "@/features/pos/admin-context";
 import { SyncStatusPill } from "@/components/sync/sync-status-pill";
+import { usePosThemeStore } from "@/features/pos/use-pos-theme-store";
 import { cn } from "@/lib/utils";
-
-// ── Inner shell – uses context provided by AdminProvider above ────────────────
 
 function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isSalePage = pathname === "/verkauf";
   const { isAdmin, login, logout } = useAdmin();
 
-  // Prevent any body/html scroll when the POS sale page is active.
-  // This blocks iOS rubber-band bounce and ensures nothing scrolls outside
-  // the explicitly scrollable cart list.
+  // Apply POS theme to document element (side effect only)
+  usePosThemeStore();
+
   useEffect(() => {
     if (!isSalePage) return;
     const html = document.documentElement;
@@ -45,7 +44,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [pinError, setPinError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus PIN input when modal opens
   useEffect(() => {
     if (showModal) {
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -82,20 +80,21 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         isSalePage ? "h-dvh overflow-hidden" : "min-h-screen"
       )}
     >
-      <header className="shrink-0 border-b border-black/10 bg-[#f7f8f4]/95 backdrop-blur">
+      {/* ── Dark header ──────────────────────────────────────────────────── */}
+      <header className="pos-header shrink-0 border-b backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center px-4 py-2.5">
           {/* Logo */}
           <Link href="/verkauf" className="flex shrink-0 items-center gap-3 mr-3">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-primaq-500 text-base font-black text-white">
+            <span className="grid h-9 w-9 place-items-center rounded-lg bg-primaq-500 text-base font-black text-white shadow-lg">
               P
             </span>
             <span className="hidden sm:block">
-              <span className="block text-sm font-bold leading-tight">PrimaQ Control</span>
-              <span className="block text-xs text-black/50">Softeis-Kasse</span>
+              <span className="block text-sm font-black leading-tight pos-text">PrimaQ Control</span>
+              <span className="block text-xs pos-text-muted">Softeis-Kasse</span>
             </span>
           </Link>
 
-          {/* Inline nav */}
+          {/* Nav */}
           <nav className="flex flex-1 items-center gap-1">
             {[
               { label: "Verkauf", href: "/verkauf" },
@@ -107,10 +106,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                   key={href}
                   href={href}
                   className={cn(
-                    "shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors",
+                    "shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold transition-all",
                     active
-                      ? "bg-white text-primaq-700 shadow-sm ring-1 ring-black/5"
-                      : "text-black/55 hover:bg-white/70 hover:text-black"
+                      ? "bg-primaq-500/20 text-primaq-400 shadow-[0_0_12px_rgba(0,214,163,0.15)] ring-1 ring-primaq-500/30"
+                      : "pos-text-muted pos-hover"
                   )}
                 >
                   {label}
@@ -127,7 +126,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             <div className="ml-2 flex items-center gap-1.5 shrink-0">
               <Link
                 href="/einstellungen"
-                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-black/55 hover:bg-white/70 hover:text-black transition-colors"
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold pos-text-muted pos-hover transition-colors"
                 title="Einstellungen"
               >
                 <Settings className="h-4 w-4" />
@@ -137,7 +136,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                 data-testid="admin-logout"
                 onClick={logout}
                 title="Admin verlassen"
-                className="flex items-center gap-1.5 rounded-lg bg-primaq-500/10 px-3 py-1.5 text-xs font-bold text-primaq-700 hover:bg-red-100 hover:text-red-700 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg bg-primaq-500/15 px-3 py-1.5 text-xs font-bold text-primaq-400 hover:bg-red-500/15 hover:text-red-400 transition-colors"
               >
                 <Shield className="h-3.5 w-3.5" />
                 Admin
@@ -148,7 +147,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               data-testid="admin-login"
               onClick={openModal}
               title="Admin-Login"
-              className="ml-2 grid h-8 w-8 place-items-center rounded-lg text-black/30 hover:bg-black/8 hover:text-black/60 transition-colors shrink-0"
+              className="ml-2 grid h-8 w-8 place-items-center rounded-lg pos-text-dim pos-hover transition-colors shrink-0"
             >
               <Lock className="h-4 w-4" />
             </button>
@@ -170,19 +169,19 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       {/* Admin PIN modal */}
       {showModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
           onClick={closeModal}
         >
           <div
-            className="w-80 rounded-3xl bg-white p-8 shadow-2xl"
+            className="w-80 rounded-3xl pos-surface p-8 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-6 flex flex-col items-center gap-2 text-center">
-              <div className="grid h-12 w-12 place-items-center rounded-full bg-primaq-100">
-                <Lock className="h-6 w-6 text-primaq-600" />
+              <div className="grid h-12 w-12 place-items-center rounded-full bg-primaq-500/20">
+                <Lock className="h-6 w-6 text-primaq-400" />
               </div>
-              <h2 className="text-xl font-black text-ink">Admin-Zugang</h2>
-              <p className="text-sm text-black/50">PIN eingeben</p>
+              <h2 className="text-xl font-black pos-text">Admin-Zugang</h2>
+              <p className="text-sm pos-text-muted">PIN eingeben</p>
             </div>
 
             <input
@@ -203,15 +202,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               }}
               placeholder="· · · ·"
               className={cn(
-                "mb-1 w-full rounded-xl border px-4 py-3 text-center text-2xl font-black tracking-[0.5em] outline-none transition-colors",
-                pinError
-                  ? "border-red-400 bg-red-50 focus:ring-2 focus:ring-red-400/30"
-                  : "border-black/20 bg-black/[0.02] focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20"
+                "mb-1 w-full rounded-xl border-2 px-4 py-3 text-center text-2xl font-black tracking-[0.5em] outline-none transition-colors pos-input",
+                pinError && "border-red-500 bg-red-500/10"
               )}
             />
 
             {pinError && (
-              <p className="mb-3 text-center text-sm font-semibold text-red-600">
+              <p className="mb-3 text-center text-sm font-semibold text-red-400">
                 Falscher PIN
               </p>
             )}
@@ -226,7 +223,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             </button>
             <button
               onClick={closeModal}
-              className="w-full rounded-xl py-2.5 text-sm font-semibold text-black/45 hover:bg-black/5 transition-colors"
+              className="w-full rounded-xl py-2.5 text-sm font-semibold pos-text-muted pos-hover transition-colors"
             >
               Abbrechen
             </button>
@@ -236,8 +233,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
-// ── Public export – wraps children in AdminProvider ───────────────────────────
 
 type AppShellProps = {
   children: React.ReactNode;

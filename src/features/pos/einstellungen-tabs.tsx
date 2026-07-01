@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PosFlavorSettings } from "./pos-flavor-settings";
 import { PosLayoutSettings } from "./pos-layout-settings";
 import { useGuidedModeStore } from "./use-guided-mode-store";
+import { usePosThemeStore } from "./use-pos-theme-store";
 import { SyncPanel } from "@/components/sync/sync-panel";
 
 // Settings: Sorten, Bilder, Farben, Preise, Größen, Jahresdaten.
@@ -396,6 +397,7 @@ const TABS: { id: Tab; label: string }[] = [
 export function EinstellungenTabs({ legacySettings }: { legacySettings: React.ReactNode }) {
   const [tab, setTab] = useState<Tab>("sorten");
   const { guidedMode, setGuidedMode } = useGuidedModeStore();
+  const { theme, setTheme } = usePosThemeStore();
 
   return (
     <div>
@@ -440,8 +442,36 @@ export function EinstellungenTabs({ legacySettings }: { legacySettings: React.Re
             title="Verkaufsoberfläche"
             description="Reihenfolge und Größe der Kassenbereiche anpassen – ohne Programmierung."
           />
-          <div className="mb-4 rounded-2xl border border-black/8 bg-white/60 px-4 py-3">
-            <div className="flex items-center justify-between gap-4">
+          <div className="mb-4 rounded-2xl border border-black/8 bg-white/60 px-4 py-3 space-y-3">
+            {/* Design-Auswahl */}
+            <div>
+              <p className="text-sm font-semibold text-ink mb-2">Design</p>
+              <div className="flex gap-2">
+                {([["graphite", "Graphit"], ["hell", "Hell"]] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    data-testid={`design-toggle-${val}`}
+                    onClick={() => setTheme(val)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-all",
+                      theme === val
+                        ? "border-primaq-500 bg-primaq-500/10 text-primaq-700"
+                        : "border-black/10 bg-white text-black/50 hover:border-black/20"
+                    )}
+                  >
+                    <span className={cn(
+                      "h-3.5 w-3.5 rounded-full border-2 flex-shrink-0",
+                      theme === val
+                        ? "border-primaq-500 bg-primaq-500"
+                        : "border-black/25"
+                    )} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Geführter Verkaufsmodus */}
+            <div className="flex items-center justify-between gap-4 border-t border-black/8 pt-3">
               <div>
                 <p className="text-sm font-semibold text-ink">Geführter Verkaufsmodus</p>
                 <p className="text-xs text-black/50">Schritt-für-Schritt-Hervorhebung beim Kassieren</p>
