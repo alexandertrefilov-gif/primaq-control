@@ -482,7 +482,7 @@ function SizePickerModal({
         <div className="px-6 pb-7">
           <button
             onClick={onClose}
-            className="h-[60px] w-full rounded-2xl bg-white/8 text-lg font-semibold pos-text-muted transition-colors hover:bg-white/12 active:bg-white/[0.15]"
+            className="h-[60px] w-full rounded-2xl pos-overlay pos-overlay-hover pos-overlay-active text-lg font-semibold pos-text-muted transition-colors"
           >
             Abbrechen
           </button>
@@ -595,7 +595,7 @@ function SizeRow({
           {effectiveSizes.map((size) => {
             const isActive = active;
             const bgColor = isActive ? (size.backgroundColor === "#ffffff" ? "#D9B15D" : size.backgroundColor) : size.backgroundColor;
-            const textColor = isActive ? computeTextColor(size.textColorMode, bgColor) : "rgba(228,230,237,0.35)";
+            const textColor = isActive ? computeTextColor(size.textColorMode, bgColor) : "color-mix(in srgb, var(--pos-text) 35%, transparent)";
             return (
               <button
                 key={size.id}
@@ -655,7 +655,7 @@ function GuidedStepsBar({ step }: { step: 1 | 2 | 3 | 4 }) {
                 "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-black transition-all",
                 done  && "bg-[#22C55E] text-white",
                 active && "bg-[#00D6A3] text-white",
-                !done && !active && "bg-white/10 pos-text-dim"
+                !done && !active && "pos-overlay pos-text-dim"
               )}
             >
               {done ? "✓" : n}
@@ -906,7 +906,7 @@ function PaymentBlock({
             inlineBook ? "w-[230px] text-base px-3" : "flex-1 text-xl px-4",
             canBook
               ? "text-white shadow-lg hover:brightness-110 active:scale-[0.98]"
-              : "bg-white/8 pos-text-dim cursor-not-allowed",
+              : "pos-overlay pos-text-dim cursor-not-allowed",
             guidedMode && guidedStep === 4 && canBook && "guided-book-pulse"
           )}
           style={canBook ? { backgroundColor: bookColor } : undefined}
@@ -1070,7 +1070,7 @@ function CartColumn({
                       <button
                         onClick={() => onChangeQty(item.id, -1)}
                         style={{ height: qtyBtnSize, width: qtyBtnSize }}
-                        className="grid place-items-center rounded-full bg-white/8 hover:bg-red-500/20 hover:text-red-400 pos-text-muted active:scale-90 transition-all"
+                        className="grid place-items-center rounded-full pos-overlay hover:bg-red-500/20 hover:text-red-400 pos-text-muted active:scale-90 transition-all"
                       >
                         <Minus className="h-4 w-4" />
                       </button>
@@ -1083,7 +1083,7 @@ function CartColumn({
                       <button
                         onClick={() => onChangeQty(item.id, 1)}
                         style={{ height: qtyBtnSize, width: qtyBtnSize }}
-                        className="grid place-items-center rounded-full bg-white/8 hover:bg-primaq-500/20 hover:text-primaq-400 pos-text-muted active:scale-90 transition-all"
+                        className="grid place-items-center rounded-full pos-overlay hover:bg-primaq-500/20 hover:text-primaq-400 pos-text-muted active:scale-90 transition-all"
                       >
                         <Plus className="h-4 w-4" />
                       </button>
@@ -1227,7 +1227,7 @@ function LastOrderModal({
           <button
             data-testid="modal-close-btn"
             onClick={onClose}
-            className="flex-1 rounded-xl bg-white/8 py-2.5 text-sm font-semibold pos-text-muted hover:bg-white/12 transition-colors"
+            className="flex-1 rounded-xl pos-overlay pos-overlay-hover py-2.5 text-sm font-semibold pos-text-muted transition-colors"
           >
             Schließen
           </button>
@@ -1588,7 +1588,7 @@ export function SalesPage() {
             </button>
             <button
               onClick={() => setShowQr(false)}
-              className="w-full rounded-2xl bg-white/8 py-3 text-base font-semibold pos-text-muted hover:bg-white/12 transition-colors"
+              className="w-full rounded-2xl pos-overlay pos-overlay-hover py-3 text-base font-semibold pos-text-muted transition-colors"
             >
               Abbrechen
             </button>

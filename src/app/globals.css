@@ -101,6 +101,11 @@ a {
 .pos-hover:hover  { background-color: color-mix(in srgb, var(--pos-text) 6%, transparent); }
 .pos-active:hover { background-color: color-mix(in srgb, var(--pos-text) 10%, transparent); }
 
+/* Overlay buttons – adapt to ANY text color (replaces hardcoded bg-white/8 etc.) */
+.pos-overlay               { background-color: color-mix(in srgb, var(--pos-text)  8%, transparent); }
+.pos-overlay-hover:hover   { background-color: color-mix(in srgb, var(--pos-text) 12%, transparent); }
+.pos-overlay-active:active { background-color: color-mix(in srgb, var(--pos-text) 16%, transparent); }
+
 /* Input field */
 .pos-input {
   background-color: var(--pos-bg);
