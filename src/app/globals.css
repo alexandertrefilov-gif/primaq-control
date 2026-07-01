@@ -2,16 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── POS Theme CSS Custom Properties ─────────────────────────────────────────── */
+
 :root {
-  /* Default: Graphit */
+  /* Default: Nacht (Graphit) */
   color-scheme: dark;
-  background: #1E1F22;
-  color: #E4E6ED;
+  --pos-bg:        #1E1F22;
+  --pos-surface:   #27292E;
+  --pos-section:   #2F3137;
+  --pos-border:    #3A3D43;
+  --pos-text:      #E4E6ED;
+  --header-bg:     rgba(30, 31, 34, 0.97);
+  --header-border: #3A3D43;
 }
 
-* {
-  box-sizing: border-box;
+[data-pos-theme="hell"] {
+  color-scheme: light;
+  --pos-bg:        #f7f8f4;
+  --pos-surface:   #ffffff;
+  --pos-section:   #ffffff;
+  --pos-border:    rgba(0, 0, 0, 0.10);
+  --pos-text:      #18211f;
+  --header-bg:     rgba(247, 248, 244, 0.95);
+  --header-border: rgba(0, 0, 0, 0.10);
 }
+
+/* ── Base layout ──────────────────────────────────────────────────────────────── */
+
+* { box-sizing: border-box; }
 
 html {
   min-height: 100%;
@@ -33,23 +51,15 @@ body {
   overflow-x: hidden;
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
-  background: #1E1F22;
-  color: #E4E6ED;
+  background: var(--pos-bg);
+  color: var(--pos-text);
   font-family: Arial, Helvetica, sans-serif;
-}
-
-/* ── Hell (Light) mode ───────────────────────────────────────────────────────── */
-[data-pos-theme="hell"] {
-  color-scheme: light;
-  background: #f7f8f4;
-  color: #18211f;
 }
 
 [data-pos-theme="hell"] body {
   background:
     radial-gradient(circle at top left, rgba(25, 169, 131, 0.12), transparent 28rem),
-    #f7f8f4;
-  color: #18211f;
+    var(--pos-bg);
 }
 
 button,
@@ -68,63 +78,37 @@ a {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* ── POS Theme utility classes – Graphit (default) ──────────────────────────── */
+/* ── POS Theme utility classes – alle nutzen CSS-Variablen ───────────────────── */
 
 /* Backgrounds */
-.pos-surface    { background-color: #27292E; }
-.pos-section    { background-color: #2F3137; }
+.pos-surface  { background-color: var(--pos-surface); }
+.pos-section  { background-color: var(--pos-section); }
 
-/* Text */
-.pos-text       { color: #E4E6ED; }
-.pos-text-muted { color: rgba(228, 230, 237, 0.52); }
-.pos-text-dim   { color: rgba(228, 230, 237, 0.28); }
-.pos-text-label { color: rgba(228, 230, 237, 0.38); }
+/* Text – abgeleitete Deckkräfte via color-mix() */
+.pos-text       { color: var(--pos-text); }
+.pos-text-muted { color: color-mix(in srgb, var(--pos-text) 52%, transparent); }
+.pos-text-dim   { color: color-mix(in srgb, var(--pos-text) 28%, transparent); }
+.pos-text-label { color: color-mix(in srgb, var(--pos-text) 38%, transparent); }
 
-/* Borders / Dividers */
-.pos-border-c   { border-color: #3A3D43; }
-.pos-divider    { background-color: rgba(255, 255, 255, 0.07); }
+/* Borders & Dividers */
+.pos-border-c { border-color: var(--pos-border); }
+.pos-divider  { background-color: color-mix(in srgb, var(--pos-text) 7%, transparent); }
 
 /* Header */
-.pos-header     { background-color: rgba(30, 31, 34, 0.97); border-color: #3A3D43; }
+.pos-header { background-color: var(--header-bg); border-color: var(--header-border); }
 
 /* Hover states */
-.pos-hover:hover  { background-color: rgba(255, 255, 255, 0.06); }
-.pos-active:hover { background-color: rgba(255, 255, 255, 0.10); }
+.pos-hover:hover  { background-color: color-mix(in srgb, var(--pos-text) 6%, transparent); }
+.pos-active:hover { background-color: color-mix(in srgb, var(--pos-text) 10%, transparent); }
 
-/* Input */
+/* Input field */
 .pos-input {
-  background-color: #1E1F22;
-  border-color: #3A3D43;
-  color: #E4E6ED;
+  background-color: var(--pos-bg);
+  border-color: var(--pos-border);
+  color: var(--pos-text);
 }
-.pos-input::placeholder { color: rgba(228, 230, 237, 0.30); }
+.pos-input::placeholder { color: color-mix(in srgb, var(--pos-text) 30%, transparent); }
 .pos-input:focus { border-color: #00D6A3; }
-
-/* ── Hell (Light) mode overrides ─────────────────────────────────────────────── */
-
-[data-pos-theme="hell"] .pos-surface    { background-color: #ffffff; }
-[data-pos-theme="hell"] .pos-section    { background-color: #ffffff; }
-
-[data-pos-theme="hell"] .pos-text       { color: #18211f; }
-[data-pos-theme="hell"] .pos-text-muted { color: rgba(24, 33, 31, 0.50); }
-[data-pos-theme="hell"] .pos-text-dim   { color: rgba(24, 33, 31, 0.25); }
-[data-pos-theme="hell"] .pos-text-label { color: rgba(24, 33, 31, 0.40); }
-
-[data-pos-theme="hell"] .pos-border-c   { border-color: rgba(0, 0, 0, 0.10); }
-[data-pos-theme="hell"] .pos-divider    { background-color: rgba(0, 0, 0, 0.05); }
-
-[data-pos-theme="hell"] .pos-header     { background-color: rgba(247, 248, 244, 0.95); border-color: rgba(0, 0, 0, 0.10); }
-
-[data-pos-theme="hell"] .pos-hover:hover  { background-color: rgba(0, 0, 0, 0.05); }
-[data-pos-theme="hell"] .pos-active:hover { background-color: rgba(0, 0, 0, 0.08); }
-
-[data-pos-theme="hell"] .pos-input {
-  background-color: rgba(0, 0, 0, 0.02);
-  border-color: rgba(0, 0, 0, 0.20);
-  color: #18211f;
-}
-[data-pos-theme="hell"] .pos-input::placeholder { color: rgba(24, 33, 31, 0.30); }
-[data-pos-theme="hell"] .pos-input:focus { border-color: #19a983; }
 
 /* ── Guided selling UX – step highlight animations ───────────────────────────── */
 

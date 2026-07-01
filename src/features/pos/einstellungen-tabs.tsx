@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PosFlavorSettings } from "./pos-flavor-settings";
 import { PosLayoutSettings } from "./pos-layout-settings";
 import { useGuidedModeStore } from "./use-guided-mode-store";
-import { usePosThemeStore } from "./use-pos-theme-store";
+import { usePosThemeStore, COLOR_VARS, COLOR_LABELS, type ColorVar } from "./use-pos-theme-store";
 import { SyncPanel } from "@/components/sync/sync-panel";
 
 // Settings: Sorten, Bilder, Farben, Preise, Größen, Jahresdaten.
@@ -382,6 +382,74 @@ function FreigabenSection() {
   );
 }
 
+// ── Color picker row ─────────────────────────────────────────────────────────
+
+function ColorPickerRow({
+  variable,
+  value,
+  isCustom,
+  onColor,
+  onReset,
+}: {
+  variable: ColorVar;
+  value: string;
+  isCustom: boolean;
+  onColor: (v: string) => void;
+  onReset: () => void;
+}) {
+  const [hex, setHex] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => setHex(value), [value]);
+
+  const tryApply = (raw: string) => {
+    const c = raw.startsWith("#") ? raw : `#${raw}`;
+    if (/^#[0-9a-fA-F]{6}$/.test(c)) onColor(c);
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-32 shrink-0 text-sm font-medium text-ink">{COLOR_LABELS[variable]}</span>
+      {/* Swatch opens native color picker */}
+      <div
+        className="relative h-8 w-11 shrink-0 cursor-pointer rounded-lg border border-black/15 shadow-sm overflow-hidden"
+        style={{ backgroundColor: value }}
+        onClick={() => inputRef.current?.click()}
+      >
+        <input
+          ref={inputRef}
+          type="color"
+          value={value}
+          onChange={(e) => { onColor(e.target.value); setHex(e.target.value); }}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          tabIndex={-1}
+        />
+      </div>
+      {/* Hex text input */}
+      <input
+        type="text"
+        value={hex}
+        onChange={(e) => setHex(e.target.value)}
+        onBlur={() => tryApply(hex)}
+        onKeyDown={(e) => { if (e.key === "Enter") tryApply(hex); }}
+        maxLength={7}
+        placeholder="#000000"
+        className="w-24 rounded-lg border border-black/12 bg-black/[0.03] px-2 py-1 text-xs font-mono text-ink outline-none focus:border-primaq-500 focus:ring-2 focus:ring-primaq-500/20"
+      />
+      {/* Reset to theme default */}
+      {isCustom && (
+        <button
+          onClick={onReset}
+          title="Zurücksetzen"
+          className="ml-auto text-xs text-black/35 hover:text-red-500 transition-colors"
+        >
+          ↺ Reset
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Tab layout ────────────────────────────────────────────────────────────────
 
 type Tab = "grundeinstellungen" | "sorten" | "oberflaeche" | "freigaben" | "sync";
@@ -397,7 +465,7 @@ const TABS: { id: Tab; label: string }[] = [
 export function EinstellungenTabs({ legacySettings }: { legacySettings: React.ReactNode }) {
   const [tab, setTab] = useState<Tab>("sorten");
   const { guidedMode, setGuidedMode } = useGuidedModeStore();
-  const { theme, setTheme } = usePosThemeStore();
+  const { theme, setTheme, custom, resolvedColors, setCustomColor, resetCustomColor, resetAllCustomColors } = usePosThemeStore();
 
   return (
     <div>
@@ -443,11 +511,11 @@ export function EinstellungenTabs({ legacySettings }: { legacySettings: React.Re
             description="Reihenfolge und Größe der Kassenbereiche anpassen – ohne Programmierung."
           />
           <div className="mb-4 rounded-2xl border border-black/8 bg-white/60 px-4 py-3 space-y-3">
-            {/* Design-Auswahl */}
+            {/* Nacht / Tag Auswahl */}
             <div>
-              <p className="text-sm font-semibold text-ink mb-2">Design</p>
+              <p className="text-sm font-semibold text-ink mb-2">Ansicht</p>
               <div className="flex gap-2">
-                {([["graphite", "Graphit"], ["hell", "Hell"]] as const).map(([val, label]) => (
+                {([["graphite", "Nacht ☾"], ["hell", "Tag ☀"]] as const).map(([val, label]) => (
                   <button
                     key={val}
                     data-testid={`design-toggle-${val}`}
@@ -469,6 +537,30 @@ export function EinstellungenTabs({ legacySettings }: { legacySettings: React.Re
                   </button>
                 ))}
               </div>
+            </div>
+            {/* Farbeinstellung je Bereich */}
+            <div className="border-t border-black/8 pt-3 space-y-2.5">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-sm font-semibold text-ink">Farben anpassen</p>
+                {Object.keys(custom).length > 0 && (
+                  <button
+                    onClick={resetAllCustomColors}
+                    className="text-xs text-black/35 hover:text-red-500 transition-colors"
+                  >
+                    Alle zurücksetzen
+                  </button>
+                )}
+              </div>
+              {COLOR_VARS.map((v) => (
+                <ColorPickerRow
+                  key={v}
+                  variable={v}
+                  value={resolvedColors[v]}
+                  isCustom={!!custom[v]}
+                  onColor={(c) => setCustomColor(v, c)}
+                  onReset={() => resetCustomColor(v)}
+                />
+              ))}
             </div>
             {/* Geführter Verkaufsmodus */}
             <div className="flex items-center justify-between gap-4 border-t border-black/8 pt-3">
