@@ -693,7 +693,7 @@ function PaymentBlock({
             <div className="mb-1.5 flex items-stretch gap-1.5">
               <button
                 data-testid="cash-minus"
-                onClick={() => onCashInput(String(Math.max(0, cashCents - 100) / 100))}
+                onClick={() => onCashInput((Math.max(0, cashCents - 50) / 100).toFixed(2))}
                 className="h-14 w-12 shrink-0 grid place-items-center rounded-xl bg-red-100 text-red-600 text-2xl font-black transition-all hover:bg-red-200 active:scale-95 select-none"
               >−</button>
               <input
@@ -708,7 +708,7 @@ function PaymentBlock({
               />
               <button
                 data-testid="cash-plus"
-                onClick={() => onCashInput(String((cashCents + 100) / 100))}
+                onClick={() => onCashInput(((cashCents + 50) / 100).toFixed(2))}
                 className="h-14 w-12 shrink-0 grid place-items-center rounded-xl bg-green-100 text-green-600 text-2xl font-black transition-all hover:bg-green-200 active:scale-95 select-none"
               >+</button>
               <button
@@ -734,7 +734,7 @@ function PaymentBlock({
               <button
                 key={cents}
                 data-testid={`quick-amount-${cents}`}
-                onClick={() => onCashInput(String(cents / 100))}
+                onClick={() => onCashInput(((cashCents + cents) / 100).toFixed(2))}
                 className="shrink-0 w-[110px] rounded-xl min-h-[60px] flex flex-col items-center justify-center px-1 text-xl font-black leading-tight tracking-tight transition-all active:scale-95 select-none hover:brightness-90"
                 style={{ backgroundColor: bgColor, color: textColor }}
               >

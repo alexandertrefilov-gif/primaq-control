@@ -98,9 +98,9 @@ test("PAY 4: Groß-Preis 5,00 € und Schein 5 € erscheinen nur als ein Button
   await expect(page.getByTestId("quick-amount-500")).toHaveCount(1);
 });
 
-// ── Test 5: Klick auf 3,50 € setzt Gegeben-Feld ─────────────────────────────
+// ── Test 5: Klick auf 3,50 € addiert – erster Klick von 0 ───────────────────
 
-test("PAY 5: Klick auf 3,50 € setzt Gegeben auf 3,5", async ({ page }) => {
+test("PAY 5: Klick auf 3,50 € addiert zu 3,50 (von 0)", async ({ page }) => {
   await freshDb(page, "pay5");
   await blockSupabase(page);
   await gotoVerkauf(page);
@@ -109,12 +109,12 @@ test("PAY 5: Klick auf 3,50 € setzt Gegeben auf 3,5", async ({ page }) => {
   await page.getByTestId("quick-amount-350").click();
 
   const input = page.locator('input[type="number"]');
-  await expect(input).toHaveValue("3.5");
+  await expect(input).toHaveValue("3.50");
 });
 
-// ── Test 6: Klick auf 5,00 € setzt Gegeben-Feld ─────────────────────────────
+// ── Test 6: Klick auf 5,00 € addiert – erster Klick von 0 ───────────────────
 
-test("PAY 6: Klick auf 5,00 € setzt Gegeben auf 5", async ({ page }) => {
+test("PAY 6: Klick auf 5,00 € addiert zu 5,00 (von 0)", async ({ page }) => {
   await freshDb(page, "pay6");
   await blockSupabase(page);
   await gotoVerkauf(page);
@@ -123,7 +123,7 @@ test("PAY 6: Klick auf 5,00 € setzt Gegeben auf 5", async ({ page }) => {
   await page.getByTestId("quick-amount-500").click();
 
   const input = page.locator('input[type="number"]');
-  await expect(input).toHaveValue("5");
+  await expect(input).toHaveValue("5.00");
 });
 
 // ── Test 7: Rückgeld-Berechnung nach Schnellgeld-Button ──────────────────────
@@ -157,4 +157,103 @@ test("PAY 8: Karte-Tab zeigt Kartenzahlung-Indikator", async ({ page }) => {
   await expect(page.getByText("Kartenzahlung gewählt")).toBeVisible();
   // Cash input should not be visible
   await expect(page.locator('input[type="number"]')).not.toBeVisible();
+});
+
+// ── Kalkulator-Tests: Addieren, +/−, Clear ───────────────────────────────────
+
+test("PAY 9: Zweiter Klick 3,50 € addiert → 7,00 €", async ({ page }) => {
+  await freshDb(page, "pay9");
+  await blockSupabase(page);
+  await gotoVerkauf(page);
+
+  await page.getByTestId("payment-tab-bar").click();
+  await page.getByTestId("quick-amount-350").click();
+  await page.getByTestId("quick-amount-350").click();
+
+  const input = page.locator('input[type="number"]');
+  await expect(input).toHaveValue("7.00");
+});
+
+test("PAY 10: Schnellbetrag 5,00 € addiert sich zu bestehendem Betrag", async ({ page }) => {
+  await freshDb(page, "pay10");
+  await blockSupabase(page);
+  await gotoVerkauf(page);
+
+  await page.getByTestId("payment-tab-bar").click();
+  await page.getByTestId("quick-amount-350").click(); // 3,50
+  await page.getByTestId("quick-amount-500").click(); // + 5,00 = 8,50
+
+  const input = page.locator('input[type="number"]');
+  await expect(input).toHaveValue("8.50");
+});
+
+test("PAY 11: Plus-Button erhöht um 0,50 €", async ({ page }) => {
+  await freshDb(page, "pay11");
+  await blockSupabase(page);
+  await gotoVerkauf(page);
+
+  await page.getByTestId("payment-tab-bar").click();
+  await page.getByTestId("quick-amount-350").click(); // 3,50
+
+  await page.getByTestId("cash-plus").click(); // 4,00
+  const input = page.locator('input[type="number"]');
+  await expect(input).toHaveValue("4.00");
+
+  await page.getByTestId("cash-plus").click(); // 4,50
+  await expect(input).toHaveValue("4.50");
+});
+
+test("PAY 12: Minus-Button reduziert um 0,50 €", async ({ page }) => {
+  await freshDb(page, "pay12");
+  await blockSupabase(page);
+  await gotoVerkauf(page);
+
+  await page.getByTestId("payment-tab-bar").click();
+  await page.getByTestId("quick-amount-500").click(); // 5,00
+
+  await page.getByTestId("cash-minus").click(); // 4,50
+  const input = page.locator('input[type="number"]');
+  await expect(input).toHaveValue("4.50");
+});
+
+test("PAY 13: Minus unter 0 € bleibt bei 0,00 €", async ({ page }) => {
+  await freshDb(page, "pay13");
+  await blockSupabase(page);
+  await gotoVerkauf(page);
+
+  await page.getByTestId("payment-tab-bar").click();
+  // Start at 0, press minus several times
+  await page.getByTestId("cash-minus").click();
+  await page.getByTestId("cash-minus").click();
+
+  const input = page.locator('input[type="number"]');
+  await expect(input).toHaveValue("0.00");
+});
+
+test("PAY 14: Clear setzt Gegeben auf 0,00 €", async ({ page }) => {
+  await freshDb(page, "pay14");
+  await blockSupabase(page);
+  await gotoVerkauf(page);
+
+  await page.getByTestId("payment-tab-bar").click();
+  await page.getByTestId("quick-amount-500").click(); // 5,00
+  await page.getByTestId("cash-clear").click();
+
+  const input = page.locator('input[type="number"]');
+  await expect(input).toHaveValue("");
+});
+
+test("PAY 15: Bestellung buchen funktioniert nach Kalkulator-Nutzung", async ({ page }) => {
+  await freshDb(page, "pay15");
+  await blockSupabase(page);
+  await gotoVerkauf(page);
+
+  await addKleinVanille(page); // 2,50 €
+
+  await page.getByTestId("payment-tab-bar").click();
+  await page.getByTestId("quick-amount-250").click(); // exakt 2,50 €
+  await page.getByTestId("book-button").click();
+
+  // Cart should be empty after booking
+  await expect(page.getByText("Noch leer")).toBeVisible();
 });

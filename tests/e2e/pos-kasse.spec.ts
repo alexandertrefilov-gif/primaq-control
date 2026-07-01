@@ -108,7 +108,7 @@ test("2: Klein + Mittel + Groß – Gesamtsumme 11,00 €", async ({ page }) => 
 
 // ── Test 3: Barzahlung + Rückgeld ────────────────────────────────────────────
 
-test("3: Barzahlung 20 € → Rückgeld 9,00 €", async ({ page }) => {
+test("3: Barzahlung addiert Schnellbeträge – Rückgeld korrekt", async ({ page }) => {
   await seedEmptyPos(page);
   await blockSupabase(page);
   await page.goto("/verkauf");
@@ -118,14 +118,13 @@ test("3: Barzahlung 20 € → Rückgeld 9,00 €", async ({ page }) => {
   await clickSize(page, "Groß");
   // 5,00 €
 
-  // Zahlungsart Bar ist Default – Schnellbutton 10 €
+  // Schnellbutton 10 € → Gegeben 10 €, Rückgeld 5 €
   await page.getByTestId("quick-amount-1000").click();
   await expect(page.getByText("Rückgeld")).toBeVisible();
-  await expect(page.getByText("Rückgeld").locator("..").getByText("5,00 €")).toBeVisible(); // Rückgeld 10-5=5
+  await expect(page.getByText("Rückgeld").locator("..").getByText("5,00 €")).toBeVisible();
 
-  // Auf 20 € wechseln
-  await page.getByTestId("quick-amount-2000").click();
-  // Rückgeld-Box zeigt 15,00 € (20 - 5)
+  // Nochmal 10 € addieren → Gegeben 20 €, Rückgeld 15 €
+  await page.getByTestId("quick-amount-1000").click();
   await expect(page.getByText("Rückgeld").locator("..").getByText("15,00 €")).toBeVisible();
 });
 
