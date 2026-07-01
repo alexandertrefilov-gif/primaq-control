@@ -58,3 +58,23 @@ a {
 .pb-safe-area {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* ── Guided selling UX – step highlight animations ───────────────────────── */
+
+@keyframes guided-ring-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(0, 214, 163, 0.45); }
+  50%       { box-shadow: 0 0 0 4px rgba(0, 214, 163, 0.22), 0 0 14px rgba(0, 214, 163, 0.14); }
+}
+
+@keyframes guided-book-pulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(34, 197, 94, 0.35); }
+  50%       { box-shadow: 0 4px 22px rgba(34, 197, 94, 0.55), 0 0 0 5px rgba(34, 197, 94, 0.18); }
+}
+
+.guided-ring-pulse {
+  animation: guided-ring-pulse 2s ease-in-out infinite;
+}
+
+.guided-book-pulse {
+  animation: guided-book-pulse 2s ease-in-out infinite;
+}

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { usePosStore } from "./use-pos-store";
 import { usePosFlavorStore } from "./use-pos-flavor-store";
 import { usePosLayoutStore } from "./use-pos-layout-store";
+import { useGuidedModeStore } from "./use-guided-mode-store";
 import { useAdmin } from "./admin-context";
 import type { CartFontSize, PaymentConfig, TextColorMode } from "./use-pos-layout-store";
 import { computeTextColor } from "./use-pos-layout-store";
@@ -112,10 +113,14 @@ function FlavorCard({
   flavor,
   onClick,
   isSelected = false,
+  guidedMode = false,
+  hasAnySelection = false,
 }: {
   flavor: FlavorConfig;
   onClick: () => void;
   isSelected?: boolean;
+  guidedMode?: boolean;
+  hasAnySelection?: boolean;
 }) {
   const allFlavors = useFlavorList();
   const isMix = !!flavor.isMix && !!flavor.mixColors;
@@ -126,15 +131,23 @@ function FlavorCard({
     <button
       aria-label={flavor.name}
       onClick={onClick}
-      className="group flex w-full flex-col items-center gap-1.5 select-none focus-visible:outline-none"
+      className="group relative flex w-full flex-col items-center gap-1.5 select-none focus-visible:outline-none"
     >
+      {/* Guided checkmark overlay */}
+      {guidedMode && isSelected && (
+        <div className="absolute right-0 top-0 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-[10px] font-black text-white shadow ring-2 ring-white">
+          ✓
+        </div>
+      )}
       {/* Circle icon */}
       <div
         className={cn(
           "relative w-full aspect-square overflow-hidden rounded-full shadow-lg transition-all",
           "group-hover:shadow-2xl group-hover:ring-4 group-hover:ring-primaq-400/50 group-hover:ring-offset-2 group-hover:ring-offset-white",
           "group-active:scale-[0.92]",
-          isSelected && "ring-[4px] ring-primaq-500 ring-offset-[3px] ring-offset-white"
+          guidedMode && isSelected && "ring-[4px] ring-green-500 ring-offset-[3px] ring-offset-white scale-[1.08]",
+          guidedMode && !isSelected && hasAnySelection && "opacity-65",
+          !guidedMode && isSelected && "ring-[4px] ring-primaq-500 ring-offset-[3px] ring-offset-white"
         )}
       >
         {/* Background: linear-gradient diagonal for mix, solid for regular */}
@@ -273,12 +286,14 @@ function FlavorGroup({
   onFlavorClick,
   cardSize,
   selectedFlavorId,
+  guidedMode = false,
 }: {
   label: string;
   flavors: FlavorConfig[];
   onFlavorClick: (flavor: FlavorConfig) => void;
   cardSize: number;
   selectedFlavorId: string | null;
+  guidedMode?: boolean;
 }) {
   if (flavors.length === 0) return null;
 
@@ -306,6 +321,8 @@ function FlavorGroup({
             flavor={f}
             onClick={() => onFlavorClick(f)}
             isSelected={f.id === selectedFlavorId}
+            guidedMode={guidedMode}
+            hasAnySelection={selectedFlavorId !== null}
           />
         ))}
       </div>
@@ -478,18 +495,32 @@ function FlavorColumn({
   onFlavorClick,
   cardSize,
   pendingFlavor,
+  guidedMode = false,
+  guidedActive = false,
 }: {
   onFlavorClick: (flavor: FlavorConfig) => void;
   cardSize: number;
   pendingFlavor: FlavorConfig | null;
+  guidedMode?: boolean;
+  guidedActive?: boolean;
 }) {
   const allFlavors = useFlavorList();
   const groups = Object.entries(MACHINE_GROUP_LABELS);
 
   return (
-    <div data-testid="flavor-zone" className="flex flex-col rounded-2xl bg-white shadow min-h-0 overflow-hidden">
+    <div
+      data-testid="flavor-zone"
+      data-guided-active={guidedMode && guidedActive ? "true" : undefined}
+      className={cn(
+        "flex flex-col rounded-2xl bg-white shadow min-h-0 overflow-hidden transition-all",
+        guidedMode && guidedActive && "ring-2 ring-[#00D6A3]/50"
+      )}
+    >
       <div className="shrink-0 px-3 pt-2 pb-1.5">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">
+        <p className={cn(
+          "text-[11px] font-bold uppercase tracking-widest transition-colors",
+          guidedMode && guidedActive ? "text-[#00D6A3]" : "text-black/40"
+        )}>
           Sorte wählen
         </p>
       </div>
@@ -504,6 +535,7 @@ function FlavorColumn({
               onFlavorClick={onFlavorClick}
               cardSize={cardSize}
               selectedFlavorId={pendingFlavor?.id ?? null}
+              guidedMode={guidedMode}
             />
           );
         })}
@@ -518,14 +550,33 @@ function SizeRow({
   effectiveSizes,
   pendingFlavor,
   onSizePick,
+  guidedMode = false,
+  guidedActive = false,
 }: {
   effectiveSizes: EffectiveSizeConfig[];
   pendingFlavor: FlavorConfig | null;
   onSizePick: (sizeId: string, priceCents: number) => void;
+  guidedMode?: boolean;
+  guidedActive?: boolean;
 }) {
   const active = !!pendingFlavor;
   return (
-    <div data-testid="size-zone" className="rounded-2xl bg-white shadow px-3 py-2.5">
+    <div
+      data-testid="size-zone"
+      data-guided-active={guidedMode && guidedActive ? "true" : undefined}
+      className={cn(
+        "rounded-2xl bg-white shadow px-3 py-2.5 transition-all",
+        guidedMode && guidedActive && "guided-ring-pulse"
+      )}
+    >
+      {guidedMode && guidedActive && (
+        <div className="mb-2 flex items-center gap-2">
+          <span className="rounded-full bg-[#00D6A3]/15 px-2.5 py-0.5 text-xs font-black uppercase tracking-widest text-[#00D6A3]">
+            Schritt 2 von 4
+          </span>
+          <span className="text-xs font-semibold text-[#00D6A3]">Größe auswählen</span>
+        </div>
+      )}
       <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-black/40">
         Größe wählen
       </p>
@@ -570,6 +621,61 @@ function SizeRow({
   );
 }
 
+// ── Guided steps bar ─────────────────────────────────────────────────────────
+
+const GUIDED_STEPS = [
+  { n: 1, label: "Sorte" },
+  { n: 2, label: "Größe" },
+  { n: 3, label: "Zahlung" },
+  { n: 4, label: "Buchen" },
+] as const;
+
+function GuidedStepsBar({ step }: { step: 1 | 2 | 3 | 4 }) {
+  return (
+    <div
+      data-testid="guided-steps-bar"
+      data-active-step={step}
+      className="flex shrink-0 items-center gap-1 rounded-2xl bg-white/90 px-4 py-2.5 shadow backdrop-blur-sm"
+    >
+      {GUIDED_STEPS.map(({ n, label }, i) => {
+        const done = n < step;
+        const active = n === step;
+        const isLast = i === GUIDED_STEPS.length - 1;
+        return (
+          <div key={n} className={cn("flex items-center gap-1.5", !isLast && "flex-1")}>
+            <div
+              data-testid={`guided-step-${n}`}
+              data-state={done ? "done" : active ? "active" : "pending"}
+              className={cn(
+                "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-black transition-all",
+                done  && "bg-[#22C55E] text-white",
+                active && "bg-[#00D6A3] text-white",
+                !done && !active && "bg-black/10 text-black/35"
+              )}
+            >
+              {done ? "✓" : n}
+            </div>
+            <span className={cn(
+              "whitespace-nowrap text-sm font-bold transition-colors",
+              done  && "text-[#22C55E]",
+              active && "text-[#00D6A3]",
+              !done && !active && "text-black/30"
+            )}>
+              {label}
+            </span>
+            {!isLast && (
+              <div className={cn(
+                "ml-1 h-0.5 flex-1 rounded-full transition-colors",
+                done ? "bg-[#22C55E]/50" : "bg-black/8"
+              )} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Payment + book block – sits below FlavorColumn in the left area ──────────
 
 const PAYMENT_ICONS: Record<PaymentMethod, React.ReactNode> = {
@@ -591,6 +697,8 @@ function PaymentBlock({
   onBook,
   effectiveSizes,
   paymentConfig,
+  guidedMode = false,
+  guidedStep = null,
 }: {
   showPayment: boolean;
   paymentMethod: PaymentMethod;
@@ -604,6 +712,8 @@ function PaymentBlock({
   onBook: () => void;
   effectiveSizes: EffectiveSizeConfig[];
   paymentConfig: PaymentConfig;
+  guidedMode?: boolean;
+  guidedStep?: 3 | 4 | null;
 }) {
   const barColor   = paymentConfig.barColor   ?? "#16a34a";
   const karteColor = paymentConfig.karteColor ?? "#2563eb";
@@ -649,11 +759,41 @@ function PaymentBlock({
   const inlineBook = showPayment && paymentMethod === "bar";
 
   return (
-    <div data-testid="payment-zone" className="shrink-0 rounded-2xl bg-white p-2.5 shadow">
+    <div
+      data-testid="payment-zone"
+      className={cn(
+        "shrink-0 rounded-2xl bg-white p-2.5 shadow transition-all",
+        guidedMode && guidedStep === 3 && "ring-2 ring-[#00D6A3]/50",
+        guidedMode && guidedStep === 4 && "ring-2 ring-green-400/40"
+      )}
+    >
+      {/* Guided step labels */}
+      {guidedMode && showPayment && guidedStep === 3 && (
+        <div className="mb-2 flex items-center gap-2">
+          <span className="rounded-full bg-[#00D6A3]/15 px-2.5 py-0.5 text-xs font-black uppercase tracking-widest text-[#00D6A3]">
+            Schritt 3 von 4
+          </span>
+          <span className="text-xs font-semibold text-[#00D6A3]">Zahlungsart auswählen</span>
+        </div>
+      )}
+      {guidedMode && guidedStep === 4 && (
+        <div className="mb-2 flex items-center gap-2">
+          <span className="rounded-full bg-[#00D6A3]/15 px-2.5 py-0.5 text-xs font-black uppercase tracking-widest text-[#00D6A3]">
+            Schritt {showPayment ? "4 von 4" : "3 von 3"}
+          </span>
+          <span className="text-xs font-semibold text-[#00D6A3]">Betrag eingeben</span>
+        </div>
+      )}
       {showPayment && (
         <>
           {/* Zeile 1: Payment tabs – 64 px */}
-          <div className="mb-2 flex gap-2">
+          <div
+            data-guided-active={guidedMode && guidedStep === 3 ? "true" : undefined}
+            className={cn(
+              "mb-2 flex gap-2 rounded-2xl transition-all",
+              guidedMode && guidedStep === 3 && "guided-ring-pulse"
+            )}
+          >
             {(["bar", "karte", "qr"] as PaymentMethod[]).map((m) => {
               const color = methodColor[m];
               const isActive = paymentMethod === m;
@@ -690,7 +830,13 @@ function PaymentBlock({
 
           {/* Zeile 2: Gegeben-Eingabe (nur Bar) */}
           {paymentMethod === "bar" && (
-            <div className="mb-1.5 flex items-stretch gap-1.5">
+            <div
+              data-guided-active={guidedMode && guidedStep === 4 && !canBook ? "true" : undefined}
+              className={cn(
+                "mb-1.5 flex items-stretch gap-1.5",
+                guidedMode && guidedStep === 4 && !canBook && "guided-ring-pulse rounded-xl"
+              )}
+            >
               <button
                 data-testid="cash-minus"
                 onClick={() => onCashInput((Math.max(0, cashCents - 50) / 100).toFixed(2))}
@@ -747,6 +893,7 @@ function PaymentBlock({
         {/* Bestellung buchen */}
         <button
           data-testid="book-button"
+          data-guided-ready={guidedMode && guidedStep === 4 && canBook ? "true" : undefined}
           onClick={onBook}
           disabled={!canBook}
           className={cn(
@@ -754,7 +901,8 @@ function PaymentBlock({
             inlineBook ? "w-[230px] text-base px-3" : "flex-1 text-xl px-4",
             canBook
               ? "text-white shadow-lg hover:brightness-90 active:scale-[0.98]"
-              : "bg-black/8 text-black/30 cursor-not-allowed"
+              : "bg-black/8 text-black/30 cursor-not-allowed",
+            guidedMode && guidedStep === 4 && canBook && "guided-book-pulse"
           )}
           style={canBook ? { backgroundColor: bookColor } : undefined}
         >
@@ -1245,10 +1393,12 @@ export function SalesPage() {
   const { allFlavors, hydrated: flavorsHydrated } = usePosFlavorStore();
   const { active: layout, hydrated: layoutHydrated } = usePosLayoutStore();
   const { isAdmin } = useAdmin();
+  const { guidedMode } = useGuidedModeStore();
 
   const [pendingFlavor, setPendingFlavor] = useState<FlavorConfig | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("bar");
   const [cashInput, setCashInput] = useState("");
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   useEffect(() => {
@@ -1286,6 +1436,18 @@ export function SalesPage() {
 
   const canBook = cart.length > 0 && (showPayment ? (payment !== "bar" || cashCents >= cartTotal) : true);
 
+  // Derived guided step — pure function of existing state, no new store needed
+  const guidedStep: 1 | 2 | 3 | 4 =
+    pendingFlavor !== null ? 2 :
+    cart.length === 0 ? 1 :
+    (!paymentConfirmed && showPayment) ? 3 :
+    4;
+
+  // Reset paymentConfirmed when cart empties (booking or manual removal)
+  useEffect(() => {
+    if (cart.length === 0) setPaymentConfirmed(false);
+  }, [cart.length]);
+
   const handleFlavorClick = useCallback((flavor: FlavorConfig) => {
     setPendingFlavor(flavor);
   }, []);
@@ -1304,6 +1466,7 @@ export function SalesPage() {
   const handlePaymentChange = useCallback((method: PaymentMethod) => {
     setPayment(method);
     setCashInput("");
+    setPaymentConfirmed(true);
   }, []);
 
   const handleBook = useCallback(() => {
@@ -1314,12 +1477,14 @@ export function SalesPage() {
     }
     bookOrder(showPayment ? payment : "karte");
     setCashInput("");
+    setPaymentConfirmed(false);
   }, [canBook, showPayment, payment, bookOrder]);
 
   const handleQrConfirm = useCallback(() => {
     bookOrder("qr");
     setShowQr(false);
     setCashInput("");
+    setPaymentConfirmed(false);
   }, [bookOrder]);
 
   if (!hydrated || !flavorsHydrated || !layoutHydrated) {
@@ -1331,6 +1496,7 @@ export function SalesPage() {
   return (
     <FlavorsCtx.Provider value={allFlavors}>
     <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
+      {guidedMode && <GuidedStepsBar step={guidedStep} />}
       {/* Main area: left 3-zone grid | right cart – stable CSS Grid, no flex push-out */}
       <div
         className="flex-1 min-h-0 overflow-hidden grid gap-3"
@@ -1348,11 +1514,15 @@ export function SalesPage() {
             onFlavorClick={handleFlavorClick}
             cardSize={layout.flavorCardSize}
             pendingFlavor={pendingFlavor}
+            guidedMode={guidedMode}
+            guidedActive={guidedStep === 1}
           />
           <SizeRow
             effectiveSizes={effectiveSizes}
             pendingFlavor={pendingFlavor}
             onSizePick={handleSizePick}
+            guidedMode={guidedMode}
+            guidedActive={guidedStep === 2}
           />
           <PaymentBlock
             showPayment={showPayment}
@@ -1367,6 +1537,8 @@ export function SalesPage() {
             onBook={handleBook}
             effectiveSizes={effectiveSizes}
             paymentConfig={layout.payment}
+            guidedMode={guidedMode}
+            guidedStep={guidedStep === 3 ? 3 : guidedStep === 4 ? 4 : null}
           />
         </div>
         {/* Right: cart – full height */}

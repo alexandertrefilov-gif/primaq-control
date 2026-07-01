@@ -9,6 +9,7 @@ import type { ReportPermissions } from "./use-report-permissions-store";
 import { PageHeader } from "@/components/ui/page-header";
 import { PosFlavorSettings } from "./pos-flavor-settings";
 import { PosLayoutSettings } from "./pos-layout-settings";
+import { useGuidedModeStore } from "./use-guided-mode-store";
 import { SyncPanel } from "@/components/sync/sync-panel";
 
 // Settings: Sorten, Bilder, Farben, Preise, Größen, Jahresdaten.
@@ -394,6 +395,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 export function EinstellungenTabs({ legacySettings }: { legacySettings: React.ReactNode }) {
   const [tab, setTab] = useState<Tab>("sorten");
+  const { guidedMode, setGuidedMode } = useGuidedModeStore();
 
   return (
     <div>
@@ -438,6 +440,31 @@ export function EinstellungenTabs({ legacySettings }: { legacySettings: React.Re
             title="Verkaufsoberfläche"
             description="Reihenfolge und Größe der Kassenbereiche anpassen – ohne Programmierung."
           />
+          <div className="mb-4 rounded-2xl border border-black/8 bg-white/60 px-4 py-3">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-ink">Geführter Verkaufsmodus</p>
+                <p className="text-xs text-black/50">Schritt-für-Schritt-Hervorhebung beim Kassieren</p>
+              </div>
+              <button
+                data-testid="guided-mode-toggle"
+                onClick={() => setGuidedMode(!guidedMode)}
+                className={cn(
+                  "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                  guidedMode ? "bg-[#00D6A3]" : "bg-black/20"
+                )}
+                role="switch"
+                aria-checked={guidedMode}
+              >
+                <span
+                  className={cn(
+                    "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform",
+                    guidedMode ? "translate-x-5" : "translate-x-0"
+                  )}
+                />
+              </button>
+            </div>
+          </div>
           <PosLayoutSettings />
         </>
       )}
