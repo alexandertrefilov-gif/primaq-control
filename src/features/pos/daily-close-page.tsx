@@ -8,6 +8,7 @@ import { usePosYearStore } from "./use-pos-year-store";
 import { useAdmin } from "./admin-context";
 import { getFlavorName, getItemSizeName } from "./pos-config";
 import { usePosVatStore, calcNet } from "./use-pos-vat-store";
+import { useEventPlanStore } from "./use-event-plan-store";
 import type { DailySummary } from "./pos-types";
 
 function fmt(cents: number): string {
@@ -88,16 +89,27 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
   const { saveDay } = usePosYearStore();
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
   const { vatRate, setVatRate, hydrated: vatHydrated } = usePosVatStore();
+  const { events: eventPlans, hydrated: eventPlanHydrated } = useEventPlanStore();
   const [confirming, setConfirming] = useState(false);
   const [startCashInput, setStartCashInput] = useState("");
   const [bankDepositInput, setBankDepositInput] = useState("");
   const [eventInput, setEventInput] = useState("");
   const [eventToast, setEventToast] = useState<string | null>(null);
 
-  // Initialise input from stored value after hydration
+  // Initialise input from stored value after hydration; auto-fill from plan if no name set
   useEffect(() => {
-    if (hydrated) setEventInput(daily.eventName ?? "");
-  }, [hydrated]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!hydrated || !eventPlanHydrated) return;
+    const stored = daily.eventName ?? null;
+    if (stored) {
+      setEventInput(stored);
+      return;
+    }
+    const plan = eventPlans.find((e) => e.date === daily.date);
+    if (plan) {
+      setEventInput(plan.name);
+      setEventName(plan.name);
+    }
+  }, [hydrated, eventPlanHydrated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSaveEvent = useCallback(() => {
     const name = eventInput.trim() || null;
@@ -119,7 +131,7 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
     setConfirming(false);
   }, [confirming, daily, saveDay, resetDaily]);
 
-  if (!hydrated || !adminHydrated || !vatHydrated) {
+  if (!hydrated || !adminHydrated || !vatHydrated || !eventPlanHydrated) {
     return <div className="flex h-40 items-center justify-center text-black/40">Laden…</div>;
   }
 

@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useState, useMemo } from "react";
-import { ChevronDown, Download, FileSpreadsheet, Lock, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Lock, Plus, Trash2 } from "lucide-react";
 import { useAdmin } from "./admin-context";
 import { usePosYearStore } from "./use-pos-year-store";
 import { ReportResetDialog } from "./report-reset-dialog";
 import { getFlavorName, getItemSizeName } from "./pos-config";
 import { usePosVatStore, calcNet } from "./use-pos-vat-store";
+import { useEventPlanStore } from "./use-event-plan-store";
 import { getSyncService } from "@/lib/sync/sync-service";
 import type { DailySummary } from "./pos-types";
 
@@ -287,6 +288,263 @@ function PaymentBar({ label, cents, total }: { label: string; cents: number; tot
   );
 }
 
+// ── Event plan calendar ───────────────────────────────────────────────────────
+
+const DAYS_HEADER = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+function EventPlanTab() {
+  const { events, saveEvent, removeEvent } = useEventPlanStore();
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const [calYear, setCalYear] = useState(today.getFullYear());
+  const [calMonth, setCalMonth] = useState(today.getMonth()); // 0-11
+  const [editDate, setEditDate] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+
+  const eventMap = useMemo(() => new Map(events.map((e) => [e.date, e.name])), [events]);
+  const yearEvents = useMemo(
+    () => events.filter((e) => e.date.startsWith(String(calYear))),
+    [events, calYear]
+  );
+
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const startOffset = (new Date(calYear, calMonth, 1).getDay() + 6) % 7;
+  const cells: (number | null)[] = [
+    ...Array<null>(startOffset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  function prevMonth() {
+    if (calMonth === 0) { setCalYear((y) => y - 1); setCalMonth(11); }
+    else setCalMonth((m) => m - 1);
+  }
+  function nextMonth() {
+    if (calMonth === 11) { setCalYear((y) => y + 1); setCalMonth(0); }
+    else setCalMonth((m) => m + 1);
+  }
+
+  function openDay(dayNum: number) {
+    const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+    setEditDate(dateStr);
+    setEditName(eventMap.get(dateStr) ?? "");
+  }
+
+  function handleSave() {
+    if (!editDate || !editName.trim()) return;
+    saveEvent({ date: editDate, name: editName.trim() });
+    setEditDate(null);
+    setEditName("");
+  }
+
+  function handleDelete() {
+    if (!editDate) return;
+    removeEvent(editDate);
+    setEditDate(null);
+    setEditName("");
+  }
+
+  function openEditFromList(date: string, name: string) {
+    setCalYear(parseInt(date.slice(0, 4)));
+    setCalMonth(parseInt(date.slice(5, 7)) - 1);
+    setEditDate(date);
+    setEditName(name);
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Month navigator */}
+      <div className="flex items-center gap-3">
+        <button
+          data-testid="plan-prev-month"
+          onClick={prevMonth}
+          className="grid h-9 w-9 place-items-center rounded-xl border border-black/10 bg-white shadow hover:bg-black/5 transition-colors"
+          aria-label="Vorheriger Monat"
+        >
+          <ChevronLeft className="h-4 w-4 text-black/50" />
+        </button>
+        <div className="flex-1 text-center">
+          <p data-testid="plan-month-label" className="text-lg font-black text-ink">
+            {MONTHS[calMonth]} {calYear}
+          </p>
+        </div>
+        <button
+          data-testid="plan-next-month"
+          onClick={nextMonth}
+          className="grid h-9 w-9 place-items-center rounded-xl border border-black/10 bg-white shadow hover:bg-black/5 transition-colors"
+          aria-label="Nächster Monat"
+        >
+          <ChevronRight className="h-4 w-4 text-black/50" />
+        </button>
+      </div>
+
+      {/* Calendar grid */}
+      <div className="rounded-2xl bg-white shadow overflow-hidden">
+        <div className="grid grid-cols-7 border-b border-black/5">
+          {DAYS_HEADER.map((d) => (
+            <div
+              key={d}
+              className="py-2.5 text-center text-[11px] font-bold uppercase tracking-widest text-black/40"
+            >
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {cells.map((dayNum, i) => {
+            if (dayNum === null) {
+              return <div key={i} className="aspect-square" />;
+            }
+            const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+            const hasEvent = eventMap.has(dateStr);
+            const isToday = dateStr === todayStr;
+            const isEditing = editDate === dateStr;
+            return (
+              <button
+                key={i}
+                data-testid={`cal-day-${dateStr}`}
+                onClick={() => openDay(dayNum)}
+                className={`flex flex-col items-center gap-0.5 py-2.5 transition-colors hover:bg-black/5 ${isEditing ? "bg-primaq-50" : ""}`}
+              >
+                <span
+                  className={`text-sm font-semibold leading-none ${
+                    isToday
+                      ? "flex h-7 w-7 items-center justify-center rounded-full bg-primaq-500 text-white"
+                      : hasEvent
+                        ? "text-primaq-700"
+                        : "text-ink"
+                  }`}
+                >
+                  {dayNum}
+                </span>
+                {hasEvent && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-primaq-500" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Edit / Add form */}
+      {editDate && (
+        <div
+          data-testid="event-plan-form"
+          className="rounded-2xl border border-primaq-200 bg-primaq-50 p-4 space-y-3"
+        >
+          <p className="text-[11px] font-bold uppercase tracking-widest text-primaq-700/60">
+            {editDate} · {eventMap.has(editDate) ? "Einsatz bearbeiten" : "Neuer Einsatz"}
+          </p>
+          <input
+            data-testid="event-plan-name-input"
+            type="text"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSave();
+              if (e.key === "Escape") { setEditDate(null); setEditName(""); }
+            }}
+            placeholder="Name des Einsatzes"
+            autoFocus
+            className="w-full rounded-xl border border-primaq-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink placeholder-black/25 focus:border-primaq-500 focus:outline-none focus:ring-2 focus:ring-primaq-500/20"
+          />
+          <div className="flex gap-2">
+            <button
+              data-testid="event-plan-save"
+              onClick={handleSave}
+              disabled={!editName.trim()}
+              className="rounded-xl bg-primaq-500 px-4 py-2 text-sm font-bold text-white hover:bg-primaq-700 disabled:bg-black/10 disabled:text-black/30 transition-colors"
+            >
+              Speichern
+            </button>
+            {eventMap.has(editDate) && (
+              <button
+                data-testid="event-plan-delete"
+                onClick={handleDelete}
+                className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors"
+              >
+                Löschen
+              </button>
+            )}
+            <button
+              onClick={() => { setEditDate(null); setEditName(""); }}
+              className="ml-auto rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-bold text-black/50 hover:bg-black/5 transition-colors"
+            >
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Events list */}
+      <div className="rounded-2xl bg-white shadow overflow-hidden">
+        <div className="flex items-center justify-between border-b border-black/5 px-5 py-3">
+          <p className="text-xs font-bold uppercase tracking-widest text-black/40">
+            Geplante Einsätze {calYear}
+          </p>
+          <span className="text-xs text-black/30">
+            {yearEvents.length} {yearEvents.length === 1 ? "Einsatz" : "Einsätze"}
+          </span>
+        </div>
+        {yearEvents.length === 0 ? (
+          <p className="px-5 py-8 text-center text-sm text-black/30">
+            Noch keine Einsätze für {calYear} geplant.{" "}
+            Wähle einen Tag im Kalender aus.
+          </p>
+        ) : (
+          <div className="divide-y divide-black/5">
+            {yearEvents.map((ev) => (
+              <div
+                key={ev.date}
+                data-testid={`event-plan-item-${ev.date}`}
+                className="flex items-center gap-3 px-5 py-3"
+              >
+                <span className="shrink-0 rounded-lg bg-primaq-50 px-2.5 py-1 text-xs font-black tabular-nums text-primaq-700">
+                  {ev.date}
+                </span>
+                <span className="flex-1 min-w-0 truncate text-sm font-semibold text-ink">
+                  {ev.name}
+                </span>
+                <button
+                  data-testid={`event-plan-edit-${ev.date}`}
+                  onClick={() => openEditFromList(ev.date, ev.name)}
+                  className="shrink-0 rounded-lg border border-black/10 bg-white px-3 py-1 text-xs font-bold text-black/50 hover:bg-black/5 transition-colors"
+                >
+                  Bearb.
+                </button>
+                <button
+                  data-testid={`event-plan-remove-${ev.date}`}
+                  onClick={() => removeEvent(ev.date)}
+                  className="shrink-0 rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-bold text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Quick add button */}
+      <button
+        data-testid="event-plan-add-btn"
+        onClick={() => {
+          const prefix = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
+          const d = todayStr.startsWith(prefix)
+            ? todayStr
+            : `${prefix}-01`;
+          setEditDate(d);
+          setEditName(eventMap.get(d) ?? "");
+        }}
+        className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primaq-200 px-5 py-3 text-sm font-bold text-primaq-600 hover:border-primaq-400 hover:bg-primaq-50/50 transition-colors"
+      >
+        <Plus className="h-4 w-4" />
+        Einsatz hinzufügen
+      </button>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }) {
@@ -296,6 +554,7 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState<"uebersicht" | "planung">("uebersicht");
 
   const handleResetSuccess = useCallback(() => {
     setShowResetDialog(false);
@@ -346,6 +605,28 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
 
   return (
     <div className="space-y-6">
+      {/* ── Tab bar ──────────────────────────────────────────────────────── */}
+      <div className="flex gap-1 rounded-2xl bg-black/5 p-1">
+        {(["uebersicht", "planung"] as const).map((tab) => (
+          <button
+            key={tab}
+            data-testid={`jahresabschluss-tab-${tab}`}
+            onClick={() => setActiveTab(tab)}
+            className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors ${
+              activeTab === tab
+                ? "bg-white shadow text-ink"
+                : "text-black/40 hover:text-black/60"
+            }`}
+          >
+            {tab === "uebersicht" ? "Übersicht" : "Planung"}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "planung" && <EventPlanTab />}
+
+      {activeTab === "uebersicht" && (
+      <>
       {/* ── Year selector ────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
         <p className="text-sm font-bold text-black/40">Jahr</p>
@@ -570,6 +851,8 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
           handleResetSuccess();
         }}
       />
+      </>
+      )}
     </div>
   );
 }
