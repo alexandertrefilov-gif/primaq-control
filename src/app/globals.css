@@ -5,15 +5,15 @@
 /* ── POS Theme CSS Custom Properties ─────────────────────────────────────────── */
 
 :root {
-  /* Default: Nacht (Graphit) */
+  /* Default: Nacht (helles Graphit-Grau) */
   color-scheme: dark;
-  --pos-bg:        #1E1F22;
-  --pos-surface:   #27292E;
-  --pos-section:   #2F3137;
-  --pos-border:    #3A3D43;
-  --pos-text:      #E4E6ED;
-  --header-bg:     rgba(30, 31, 34, 0.97);
-  --header-border: #3A3D43;
+  --pos-bg:        #3A3C42;
+  --pos-surface:   #44474E;
+  --pos-section:   #4C505A;
+  --pos-border:    #585C67;
+  --pos-text:      #E8EAF0;
+  --header-bg:     rgba(58, 60, 66, 0.97);
+  --header-border: #585C67;
 }
 
 [data-pos-theme="hell"] {

@@ -19,10 +19,10 @@ export const COLOR_LABELS: Record<ColorVar, string> = {
 
 const DEFAULTS: Record<PosTheme, Record<ColorVar, string>> = {
   graphite: {
-    "--pos-bg":      "#1E1F22",
-    "--pos-surface": "#27292E",
-    "--pos-section": "#2F3137",
-    "--pos-text":    "#E4E6ED",
+    "--pos-bg":      "#3A3C42",
+    "--pos-surface": "#44474E",
+    "--pos-section": "#4C505A",
+    "--pos-text":    "#E8EAF0",
   },
   hell: {
     "--pos-bg":      "#f7f8f4",
