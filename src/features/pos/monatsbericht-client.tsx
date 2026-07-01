@@ -46,12 +46,12 @@ function buildMonthCsv(days: DailySummary[], year: number, month: number, vatRat
   const rows: string[] = [
     `PrimaQ POS – Monatsbericht ${monthLabel} ${year}`,
     "",
-    `Datum;Wochentag;Umsatz brutto (€);Bar (€);Karte (€);QR (€);Bestellungen;Netto ${vatLabel} (€);MwSt ${vatLabel} (€)`,
+    `Datum;Wochentag;Einsatz / Veranstaltung;Umsatz brutto (€);Bar (€);Karte (€);QR (€);Bestellungen;Netto ${vatLabel} (€);MwSt ${vatLabel} (€)`,
   ];
   let totalCents = 0, cashCents = 0, cardCents = 0, qrCents = 0, orders = 0;
   for (const d of days) {
     const net = calcNet(d.totalCents, vatRate);
-    rows.push([d.date, weekdayLabel(d.date), fmtNum(d.totalCents), fmtNum(d.cashCents),
+    rows.push([d.date, weekdayLabel(d.date), d.eventName ?? "", fmtNum(d.totalCents), fmtNum(d.cashCents),
       fmtNum(d.cardCents), fmtNum(d.qrCents), d.orderCount,
       fmtNum(net), fmtNum(d.totalCents - net)].join(";"));
     totalCents += d.totalCents; cashCents += d.cashCents;
@@ -192,6 +192,7 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
                 <tr className="border-b border-black/5 text-left">
                   <th className="px-5 py-3 font-bold text-black/40">Datum</th>
                   <th className="px-4 py-3 font-bold text-black/40">Tag</th>
+                  <th className="px-4 py-3 font-bold text-black/40">Einsatz</th>
                   <th className="px-4 py-3 text-right font-bold text-black/40">Umsatz</th>
                   <th className="px-4 py-3 text-right font-bold text-black/40">Bar</th>
                   <th className="px-4 py-3 text-right font-bold text-black/40">Karte</th>
@@ -208,6 +209,7 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
                   >
                     <td className="px-5 py-3 font-semibold text-ink tabular-nums">{d.date}</td>
                     <td className="px-4 py-3 text-black/60">{weekdayLabel(d.date)}</td>
+                    <td className="px-4 py-3 text-sm text-black/60">{d.eventName ?? "—"}</td>
                     <td className="px-4 py-3 text-right font-bold text-ink tabular-nums">{fmt(d.totalCents)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-black/60">
                       {d.cashCents > 0 ? fmt(d.cashCents) : "—"}
@@ -224,7 +226,7 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
               </tbody>
               <tfoot>
                 <tr className="bg-black/[0.02] font-bold">
-                  <td className="px-5 py-3 font-black text-ink" colSpan={2}>Gesamt</td>
+                  <td className="px-5 py-3 font-black text-ink" colSpan={3}>Gesamt</td>
                   <td className="px-4 py-3 text-right text-ink tabular-nums">{fmt(totalCents)}</td>
                   <td className="px-4 py-3 text-right text-ink tabular-nums">{fmt(cashCents)}</td>
                   <td className="px-4 py-3 text-right text-ink tabular-nums">{fmt(cardCents)}</td>

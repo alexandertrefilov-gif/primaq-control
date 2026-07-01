@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Download, Lock, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { usePosStore } from "./use-pos-store";
@@ -27,6 +27,7 @@ function buildCsv(
   const rows: string[] = [
     "KASSENBUCH PRIMAQ",
     `Datum;${new Date(daily.date).toLocaleDateString("de-DE")}`,
+    `Einsatz / Veranstaltung;${daily.eventName ?? ""}`,
     "",
     "KASSENÜBERSICHT",
     `Startgeld;${(startCashCents / 100).toFixed(2)}`,
@@ -83,13 +84,28 @@ function downloadCsv(
 }
 
 export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
-  const { daily, resetDaily, hydrated } = usePosStore();
+  const { daily, resetDaily, setEventName, hydrated } = usePosStore();
   const { saveDay } = usePosYearStore();
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
   const { vatRate, setVatRate, hydrated: vatHydrated } = usePosVatStore();
   const [confirming, setConfirming] = useState(false);
   const [startCashInput, setStartCashInput] = useState("");
   const [bankDepositInput, setBankDepositInput] = useState("");
+  const [eventInput, setEventInput] = useState("");
+  const [eventToast, setEventToast] = useState<string | null>(null);
+
+  // Initialise input from stored value after hydration
+  useEffect(() => {
+    if (hydrated) setEventInput(daily.eventName ?? "");
+  }, [hydrated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSaveEvent = useCallback(() => {
+    const name = eventInput.trim() || null;
+    setEventName(name);
+    const msg = name ? "Einsatzname gespeichert" : "Einsatzname entfernt";
+    setEventToast(msg);
+    setTimeout(() => setEventToast(null), 2500);
+  }, [eventInput, setEventName]);
 
   const handleReset = useCallback(() => {
     if (!confirming) {
@@ -140,6 +156,42 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
 
   return (
     <div className="space-y-6">
+      {/* Einsatz / Veranstaltung */}
+      <div className="rounded-2xl bg-white shadow px-5 py-4">
+        <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-black/40">
+          Einsatz / Veranstaltung
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            data-testid="event-name-input"
+            value={eventInput}
+            onChange={(e) => setEventInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSaveEvent(); }}
+            placeholder="z. B. Backnanger Straßenfest"
+            className="flex-1 rounded-xl border border-black/15 bg-black/[0.02] px-4 py-2.5 text-sm font-semibold text-ink placeholder-black/25 focus:border-primaq-500 focus:outline-none focus:ring-2 focus:ring-primaq-500/20"
+          />
+          <button
+            data-testid="event-name-save"
+            onClick={handleSaveEvent}
+            className="shrink-0 rounded-xl bg-primaq-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-primaq-700 transition-colors"
+          >
+            Speichern
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-black/40">
+          Gespeichert:{" "}
+          <span data-testid="event-name-display" className="font-semibold text-black/60">
+            {daily.eventName ?? "—"}
+          </span>
+        </p>
+        {eventToast && (
+          <p className="mt-2 rounded-xl bg-green-50 px-3 py-2 text-xs font-bold text-green-700">
+            {eventToast}
+          </p>
+        )}
+      </div>
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <SummaryCard label="Gesamtumsatz" value={fmt(daily.totalCents)} accent />

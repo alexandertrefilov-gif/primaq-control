@@ -26,6 +26,7 @@ export type DailySummary = {
   qrCents: number;
   orderCount: number;
   orders: Order[];
+  eventName?: string | null;
 };
 
 export type PosState = {

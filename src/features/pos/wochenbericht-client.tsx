@@ -72,24 +72,24 @@ function buildWeekCsv(days: WeekDay[], isoYear: number, isoWeek: number, vatRate
   const rows: string[] = [
     `PrimaQ POS – Wochenbericht ${kw} ${isoYear}`,
     "",
-    `Datum;Wochentag;Umsatz brutto (€);Bar (€);Karte (€);QR (€);Bestellungen;Netto ${vatLabel} (€);MwSt ${vatLabel} (€)`,
+    `Datum;Wochentag;Einsatz / Veranstaltung;Umsatz brutto (€);Bar (€);Karte (€);QR (€);Bestellungen;Netto ${vatLabel} (€);MwSt ${vatLabel} (€)`,
   ];
   let totalCents = 0, cashCents = 0, cardCents = 0, qrCents = 0, orders = 0;
   for (const d of days) {
     const s = d.summary;
     if (s) {
       const net = calcNet(s.totalCents, vatRate);
-      rows.push([d.dateStr, d.label, fmtNum(s.totalCents), fmtNum(s.cashCents),
+      rows.push([d.dateStr, d.label, s.eventName ?? "", fmtNum(s.totalCents), fmtNum(s.cashCents),
         fmtNum(s.cardCents), fmtNum(s.qrCents), s.orderCount,
         fmtNum(net), fmtNum(s.totalCents - net)].join(";"));
       totalCents += s.totalCents; cashCents += s.cashCents;
       cardCents += s.cardCents; qrCents += s.qrCents; orders += s.orderCount;
     } else {
-      rows.push([d.dateStr, d.label, "0,00", "0,00", "0,00", "0,00", "0", "0,00", "0,00"].join(";"));
+      rows.push([d.dateStr, d.label, "", "0,00", "0,00", "0,00", "0,00", "0", "0,00", "0,00"].join(";"));
     }
   }
   const net = calcNet(totalCents, vatRate);
-  rows.push(["", "Gesamt", fmtNum(totalCents), fmtNum(cashCents),
+  rows.push(["", "Gesamt", "", fmtNum(totalCents), fmtNum(cashCents),
     fmtNum(cardCents), fmtNum(qrCents), orders,
     fmtNum(net), fmtNum(totalCents - net)].join(";"));
   return "﻿" + rows.join("\n");
@@ -248,6 +248,7 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
               <tr className="border-b border-black/5 text-left">
                 <th className="px-5 py-3 font-bold text-black/40">Datum</th>
                 <th className="px-4 py-3 font-bold text-black/40">Wochentag</th>
+                <th className="px-4 py-3 font-bold text-black/40">Einsatz</th>
                 <th className="px-4 py-3 text-right font-bold text-black/40">Umsatz</th>
                 <th className="px-4 py-3 text-right font-bold text-black/40">Bar</th>
                 <th className="px-4 py-3 text-right font-bold text-black/40">Karte</th>
@@ -264,6 +265,9 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
                 >
                   <td className="px-5 py-3 font-semibold text-ink tabular-nums">{d.dateStr}</td>
                   <td className="px-4 py-3 text-black/60">{d.label}</td>
+                  <td className="px-4 py-3 text-sm text-black/60">
+                    {d.summary?.eventName ?? "—"}
+                  </td>
                   <td className="px-4 py-3 text-right font-bold text-ink tabular-nums">
                     {d.summary ? fmt(d.summary.totalCents) : "—"}
                   </td>

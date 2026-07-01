@@ -150,6 +150,13 @@ export function usePosStore() {
     });
   }, []);
 
+  const setEventName = useCallback((name: string | null) => {
+    setState((current) => ({
+      ...current,
+      daily: { ...current.daily, eventName: name ?? undefined },
+    }));
+  }, []);
+
   const resetDaily = useCallback(() => {
     setState((current) => ({ ...current, daily: emptyDaily() }));
   }, []);
@@ -186,6 +193,7 @@ export function usePosStore() {
     changeQty,
     clearCart,
     bookOrder,
+    setEventName,
     resetDaily,
     voidLastOrder,
   };

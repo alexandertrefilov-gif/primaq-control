@@ -101,13 +101,14 @@ function buildCsv(days: DailySummary[], year: number, vatRate: number): string {
   const rows: string[] = [
     `PrimaQ POS – Jahresübersicht ${year}`,
     "",
-    `Datum;Umsatz brutto (€);Bar (€);Karte (€);QR (€);Bestellungen;Netto ${vatLabel} (€);MwSt ${vatLabel} (€)`,
+    `Datum;Einsatz / Veranstaltung;Umsatz brutto (€);Bar (€);Karte (€);QR (€);Bestellungen;Netto ${vatLabel} (€);MwSt ${vatLabel} (€)`,
   ];
   for (const d of days) {
     const net = calcNet(d.totalCents, vatRate);
     rows.push(
       [
         d.date,
+        d.eventName ?? "",
         fmtNum(d.totalCents),
         fmtNum(d.cashCents),
         fmtNum(d.cardCents),
