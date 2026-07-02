@@ -522,11 +522,12 @@ function FlavorColumn({
       data-testid="flavor-zone"
       data-guided-active={guidedMode && guidedActive ? "true" : undefined}
       className={cn(
-        "rounded-2xl pos-surface shadow overflow-hidden transition-all",
+        // h-full + flex-col: fills the FreeDashboardPanel body entirely
+        "h-full flex flex-col rounded-2xl pos-surface overflow-hidden transition-all",
         guidedMode && guidedActive && "ring-2 ring-[#00D6A3]/50"
       )}
     >
-      <div className="px-3 pt-2 pb-1.5">
+      <div className="flex-none px-3 pt-2 pb-1.5">
         <p className={cn(
           "text-[11px] font-bold uppercase tracking-widest transition-colors",
           guidedMode && guidedActive ? "text-[#00D6A3]" : "pos-text-label"
@@ -534,7 +535,8 @@ function FlavorColumn({
           Sorte wählen
         </p>
       </div>
-      <div className="px-3 pb-2 space-y-2">
+      {/* Scrollable flavor list – flex-1 fills remaining panel height */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-2 space-y-2">
         {groups.map(([groupId, groupLabel]) => {
           const flavors = allFlavors.filter((f) => f.group === groupId);
           return (
@@ -575,7 +577,8 @@ function SizeRow({
       data-testid="size-zone"
       data-guided-active={guidedMode && guidedActive ? "true" : undefined}
       className={cn(
-        "rounded-2xl pos-section shadow px-3 py-2 transition-all",
+        // h-full: fills the FreeDashboardPanel body; overflow-auto: internal scroll if panel too small
+        "h-full flex flex-col justify-center rounded-2xl pos-section overflow-auto px-3 py-2 transition-all",
         guidedMode && guidedActive && "guided-ring-pulse"
       )}
     >
@@ -774,7 +777,8 @@ function PaymentBlock({
     <div
       data-testid="payment-zone"
       className={cn(
-        "shrink-0 rounded-2xl pos-section p-2 shadow transition-all",
+        // h-full + flex-col: fills the FreeDashboardPanel body; overflow-auto: internal scroll if panel too small
+        "h-full flex flex-col overflow-auto rounded-2xl pos-section p-2 transition-all",
         guidedMode && guidedStep === 3 && "ring-2 ring-[#00D6A3]/50",
         guidedMode && guidedStep === 4 && "ring-2 ring-green-400/40"
       )}
@@ -1003,8 +1007,9 @@ function CartColumn({
 
   return (
     <div data-testid="cart-zone" className="w-full h-full">
-      <div className="flex flex-col rounded-2xl pos-surface shadow">
-        <div className="flex shrink-0 items-center gap-2 border-b pos-border-c px-4 py-2.5">
+      {/* h-full + flex-col: fills the FreeDashboardPanel body; items list scrolls inside */}
+      <div className="h-full flex flex-col rounded-2xl pos-surface shadow">
+        <div className="flex-none flex items-center gap-2 border-b pos-border-c px-4 py-2.5">
           <span className="text-[11px] font-bold uppercase tracking-widest pos-text-label mr-auto">
             Warenkorb
           </span>
@@ -1036,7 +1041,8 @@ function CartColumn({
           )}
         </div>
 
-        <div className="overflow-y-auto" style={{ maxHeight: "380px" }}>
+        {/* flex-1 min-h-0: grows to fill remaining panel height; items scroll internally */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {cart.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 pos-text-dim py-6">
               <ShoppingCart className="h-8 w-8" />
@@ -1102,14 +1108,13 @@ function CartColumn({
           )}
         </div>
 
-        <div className="shrink-0 border-t pos-border-c px-4 py-3">
+        <div className="flex-none border-t pos-border-c px-4 py-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold pos-text-muted">Gesamt</span>
             <span className="text-2xl font-black pos-text tabular-nums">{fmt(cartTotal)}</span>
           </div>
         </div>
       </div>
-
     </div>
   );
 }
@@ -1394,44 +1399,48 @@ function FreeDashboardPanel({
   onResizeStart: (panelId: PanelId, mode: "e" | "s" | "se", e: React.PointerEvent) => void;
 }) {
   return (
+    // Panel = single unit: position + dimensions from store; flex column so header + body fill exactly
     <div
       data-panel={panelId}
       style={{ position: "absolute", left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
-      className={cn("overflow-hidden", editMode && "ring-2 ring-primaq-400/50 rounded-2xl")}
+      className={cn(
+        "flex flex-col overflow-hidden rounded-2xl",
+        editMode && "ring-2 ring-primaq-400/60"
+      )}
     >
-      {/* Move handle (top bar) */}
+      {/* Drag handle – flex-none so it doesn't steal height from body */}
       {editMode && (
         <div
           data-testid={`fl-drag-${panelId}`}
-          className="absolute inset-x-0 top-0 h-7 z-20 cursor-move flex items-center justify-between px-2 bg-primaq-500/25 hover:bg-primaq-500/40 touch-none select-none"
+          className="flex-none h-7 z-10 cursor-move flex items-center justify-between px-2 bg-primaq-500/30 hover:bg-primaq-500/45 touch-none select-none backdrop-blur-sm"
           onPointerDown={(e) => onDragStart(panelId, e)}
         >
-          <span className="text-[9px] font-black uppercase tracking-widest text-white/80 truncate">{label}</span>
-          <span className="text-white/40 text-sm leading-none">⠿</span>
+          <span className="text-[9px] font-black uppercase tracking-widest text-white/90 truncate">{label}</span>
+          <span className="text-white/50 text-sm leading-none">⠿</span>
         </div>
       )}
 
-      {/* Content */}
-      <div className="absolute inset-0" style={editMode ? { top: 28 } : undefined}>
+      {/* Body – takes remaining height; children fill this via h-full */}
+      <div className="flex-1 min-h-0 overflow-hidden">
         {children}
       </div>
 
-      {/* Resize handles */}
+      {/* Resize handles – absolute within the panel, above body content */}
       {editMode && (
         <>
           <div
             data-testid={`fl-resize-e-${panelId}`}
-            className="absolute right-0 top-0 bottom-0 w-3 z-20 cursor-ew-resize touch-none select-none bg-primaq-500/10 hover:bg-primaq-500/30"
+            className="absolute right-0 top-0 bottom-0 w-2 z-20 cursor-ew-resize touch-none select-none hover:bg-primaq-400/35 transition-colors"
             onPointerDown={(e) => onResizeStart(panelId, "e", e)}
           />
           <div
             data-testid={`fl-resize-s-${panelId}`}
-            className="absolute bottom-0 left-0 right-0 h-3 z-20 cursor-ns-resize touch-none select-none bg-primaq-500/10 hover:bg-primaq-500/30"
+            className="absolute bottom-0 left-0 right-0 h-2 z-20 cursor-ns-resize touch-none select-none hover:bg-primaq-400/35 transition-colors"
             onPointerDown={(e) => onResizeStart(panelId, "s", e)}
           />
           <div
             data-testid={`fl-resize-se-${panelId}`}
-            className="absolute right-0 bottom-0 w-5 h-5 z-30 cursor-se-resize touch-none select-none flex items-end justify-end p-1"
+            className="absolute right-0 bottom-0 w-6 h-6 z-30 cursor-se-resize touch-none select-none flex items-end justify-end p-1.5"
             onPointerDown={(e) => onResizeStart(panelId, "se", e)}
           >
             <div className="w-3 h-3 border-b-2 border-r-2 border-primaq-400/80 rounded-br-sm" />

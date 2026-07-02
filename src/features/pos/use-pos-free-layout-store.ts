@@ -12,23 +12,23 @@ export type PanelRect = { x: number; y: number; w: number; h: number };
 export type FreeLayout = { panels: Record<PanelId, PanelRect>; updatedAt?: string };
 
 export const FL_PANEL_MINS: Record<PanelId, { w: number; h: number }> = {
-  flavors: { w: 240, h: 160 },
-  sizes:   { w: 240, h: 60  },
-  payment: { w: 240, h: 120 },
-  cart:    { w: 220, h: 160 },
+  flavors: { w: 520, h: 360 },
+  sizes:   { w: 420, h: 100 },
+  payment: { w: 520, h: 210 },
+  cart:    { w: 320, h: 360 },
 };
 
 const HEADER_H = 56; // approximate header height to subtract from window.innerHeight
 
-/** Calculate default panel rects for the given viewport dimensions. */
+/** Calculate default panel rects from viewport dimensions, respecting FL_PANEL_MINS. */
 export function defaultPanels(vw: number, vh: number): Record<PanelId, PanelRect> {
-  const ch      = Math.max(400, vh - HEADER_H);
-  const cw      = Math.max(600, vw);
-  const cartW   = Math.max(300, Math.round(cw * 0.34));
-  const leftW   = Math.max(300, cw - cartW - 8);
-  const flavorH = Math.max(160, Math.round(ch * 0.56));
-  const sizesH  = Math.max(60,  Math.round(ch * 0.13));
-  const payH    = Math.max(120, ch - flavorH - sizesH);
+  const ch      = Math.max(700, vh - HEADER_H);
+  const cw      = Math.max(900, vw);
+  const cartW   = Math.max(FL_PANEL_MINS.cart.w,    Math.round(cw * 0.34));
+  const leftW   = Math.max(FL_PANEL_MINS.flavors.w, cw - cartW - 8);
+  const flavorH = Math.max(FL_PANEL_MINS.flavors.h, Math.round(ch * 0.55));
+  const sizesH  = Math.max(FL_PANEL_MINS.sizes.h,   Math.round(ch * 0.13));
+  const payH    = Math.max(FL_PANEL_MINS.payment.h, ch - flavorH - sizesH);
   return {
     flavors: { x: 0,         y: 0,                w: leftW, h: flavorH },
     sizes:   { x: 0,         y: flavorH,          w: leftW, h: sizesH  },
