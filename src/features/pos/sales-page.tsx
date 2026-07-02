@@ -9,6 +9,15 @@ import { usePosFlavorStore } from "./use-pos-flavor-store";
 import { usePosLayoutStore } from "./use-pos-layout-store";
 import { useGuidedModeStore } from "./use-guided-mode-store";
 import { useAdmin } from "./admin-context";
+import {
+  usePosDeviceLayoutStore,
+  DL_PRESETS,
+  DL_MINS,
+  DL_MAXS,
+  clampDeviceLayout,
+  type DLPresetId,
+  type DeviceLayout,
+} from "./use-pos-device-layout-store";
 import type { CartFontSize, PaymentConfig, TextColorMode } from "./use-pos-layout-store";
 import { computeTextColor } from "./use-pos-layout-store";
 import {
@@ -1367,6 +1376,50 @@ function SalesStatusBar({
   );
 }
 
+// ── Device-layout drag helpers ────────────────────────────────────────────────
+
+function ResizeHandle({
+  testId,
+  direction,
+  editMode,
+  onPointerDown,
+}: {
+  testId: string;
+  direction: "ns" | "ew";
+  editMode: boolean;
+  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
+}) {
+  const isNS = direction === "ns";
+  return (
+    <div
+      data-testid={testId}
+      onPointerDown={editMode ? onPointerDown : undefined}
+      className={cn(
+        "shrink-0 flex items-center justify-center touch-none select-none transition-colors",
+        isNS ? "w-full" : "h-full",
+        editMode
+          ? cn(
+              isNS ? "h-3 cursor-ns-resize" : "w-full cursor-ew-resize",
+              "bg-primaq-500/15 hover:bg-primaq-500/35"
+            )
+          : cn(isNS ? "h-2" : "w-full", "pointer-events-none")
+      )}
+    >
+      {editMode && (
+        <div className={cn("rounded-full bg-primaq-400/80", isNS ? "h-1 w-16" : "h-16 w-1")} />
+      )}
+    </div>
+  );
+}
+
+function SectionLabel({ label }: { label: string }) {
+  return (
+    <div className="absolute top-1.5 right-1.5 z-10 rounded-md bg-primaq-500/85 px-2 py-0.5 text-[10px] font-black text-white uppercase tracking-wider backdrop-blur-sm pointer-events-none">
+      {label}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function SalesPage() {
@@ -1387,6 +1440,78 @@ export function SalesPage() {
   const { active: layout, hydrated: layoutHydrated } = usePosLayoutStore();
   const { isAdmin } = useAdmin();
   const { guidedMode } = useGuidedModeStore();
+
+  // Device-local layout (NOT synced to Supabase)
+  const { layout: deviceLayout, update: updateDL, commit: commitDL, applyPreset, reset: resetDL } = usePosDeviceLayoutStore();
+  const [editMode, setEditMode] = useState(false);
+  const [savedSnack, setSavedSnack] = useState(false);
+
+  // Drag-state stored in a ref for perf – avoids re-rendering during every pointermove
+  const dragRef = useRef<{
+    type: "flavor-size" | "size-payment" | "cart-width";
+    last: number;
+    snap: DeviceLayout;
+  } | null>(null);
+
+  // Exit edit mode when admin logs out
+  useEffect(() => { if (!isAdmin) setEditMode(false); }, [isAdmin]);
+
+  // Attach pointer listeners once; they only act when dragRef is set
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const isX = d.type === "cart-width";
+      const cur = isX ? e.clientX : e.clientY;
+      const delta = cur - d.last;
+      d.last = cur;
+      if (delta === 0) return;
+      const s = d.snap;
+      const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+      if (d.type === "flavor-size") {
+        s.flavorAreaHeight = clamp(s.flavorAreaHeight + delta, DL_MINS.flavorAreaHeight, DL_MAXS.flavorAreaHeight);
+        s.sizeAreaHeight   = clamp(s.sizeAreaHeight   - delta, DL_MINS.sizeAreaHeight,   DL_MAXS.sizeAreaHeight);
+      } else if (d.type === "size-payment") {
+        s.sizeAreaHeight    = clamp(s.sizeAreaHeight    + delta, DL_MINS.sizeAreaHeight,    DL_MAXS.sizeAreaHeight);
+        s.paymentAreaHeight = clamp(s.paymentAreaHeight - delta, DL_MINS.paymentAreaHeight, DL_MAXS.paymentAreaHeight);
+      } else {
+        s.cartWidth = clamp(s.cartWidth - delta, DL_MINS.cartWidth, DL_MAXS.cartWidth);
+      }
+      updateDL({ ...s });
+    };
+    const onUp = () => {
+      if (!dragRef.current) return;
+      dragRef.current = null;
+      commitDL();
+      setSavedSnack(true);
+      setTimeout(() => setSavedSnack(false), 2500);
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+    return () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+    };
+  }, [updateDL, commitDL]);
+
+  const startDrag = useCallback((type: "flavor-size" | "size-payment" | "cart-width", e: React.PointerEvent) => {
+    e.preventDefault();
+    const coord = type === "cart-width" ? e.clientX : e.clientY;
+    dragRef.current = { type, last: coord, snap: { ...deviceLayout } };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, [deviceLayout]);
+
+  const handlePreset = useCallback((id: DLPresetId) => {
+    applyPreset(id);
+    setSavedSnack(true);
+    setTimeout(() => setSavedSnack(false), 2500);
+  }, [applyPreset]);
+
+  const handleReset = useCallback(() => {
+    resetDL();
+    setSavedSnack(true);
+    setTimeout(() => setSavedSnack(false), 2500);
+  }, [resetDL]);
 
   const [pendingFlavor, setPendingFlavor] = useState<FlavorConfig | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("bar");
@@ -1490,60 +1615,125 @@ export function SalesPage() {
     <FlavorsCtx.Provider value={allFlavors}>
     <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
       {guidedMode && <GuidedStepsBar step={guidedStep} />}
-      {/* Main area: left 3-zone grid | right cart – stable CSS Grid, no flex push-out */}
+      {/* Main area: left 3-zone | cart-width-handle | right cart */}
       <div
-        className="flex-1 min-h-0 overflow-hidden grid gap-3"
+        className="flex-1 min-h-0 overflow-hidden grid"
         style={{
-          gridTemplateColumns: `minmax(0, 1fr) ${layout.cartWidth}px`,
+          gridTemplateColumns: `minmax(0, 1fr) 12px ${deviceLayout.cartWidth}px`,
           gridTemplateRows: "1fr",
           alignItems: "start",
+          gap: 0,
         }}
       >
-        {/* Left: flex-column – Sorten | Größen | Zahlung natural stacking */}
-        <div className="flex flex-col gap-2">
-          <FlavorColumn
-            onFlavorClick={handleFlavorClick}
-            cardSize={layout.flavorCardSize}
-            pendingFlavor={pendingFlavor}
-            guidedMode={guidedMode}
-            guidedActive={guidedStep === 1}
+        {/* Left: Sorten | Größen | Zahlung with device-local heights */}
+        <div className="flex flex-col pr-1.5">
+          {/* Sortenbereich */}
+          <div
+            data-testid="dl-flavor-wrapper"
+            className={cn("relative overflow-hidden", editMode && "ring-2 ring-primaq-400/50 rounded-2xl")}
+            style={{ height: deviceLayout.flavorAreaHeight }}
+          >
+            {editMode && <SectionLabel label="Sortenbereich ↕" />}
+            <FlavorColumn
+              onFlavorClick={handleFlavorClick}
+              cardSize={layout.flavorCardSize}
+              pendingFlavor={pendingFlavor}
+              guidedMode={guidedMode}
+              guidedActive={guidedStep === 1}
+            />
+          </div>
+
+          {editMode ? (
+            <ResizeHandle
+              testId="resize-handle-flavor-size"
+              direction="ns"
+              editMode={editMode}
+              onPointerDown={(e) => startDrag("flavor-size", e)}
+            />
+          ) : (
+            <div className="h-2 shrink-0" />
+          )}
+
+          {/* Größenbereich */}
+          <div
+            data-testid="dl-size-wrapper"
+            className={cn("relative overflow-hidden", editMode && "ring-2 ring-primaq-400/50 rounded-xl")}
+            style={{ height: deviceLayout.sizeAreaHeight }}
+          >
+            {editMode && <SectionLabel label="Größenbereich ↕" />}
+            <SizeRow
+              effectiveSizes={effectiveSizes}
+              pendingFlavor={pendingFlavor}
+              onSizePick={handleSizePick}
+              guidedMode={guidedMode}
+              guidedActive={guidedStep === 2}
+            />
+          </div>
+
+          {editMode ? (
+            <ResizeHandle
+              testId="resize-handle-size-payment"
+              direction="ns"
+              editMode={editMode}
+              onPointerDown={(e) => startDrag("size-payment", e)}
+            />
+          ) : (
+            <div className="h-2 shrink-0" />
+          )}
+
+          {/* Zahlungsbereich */}
+          <div
+            data-testid="dl-payment-wrapper"
+            className={cn("relative overflow-hidden", editMode && "ring-2 ring-primaq-400/50 rounded-2xl")}
+            style={{ height: deviceLayout.paymentAreaHeight }}
+          >
+            {editMode && <SectionLabel label="Zahlungsbereich" />}
+            <PaymentBlock
+              showPayment={showPayment}
+              paymentMethod={payment}
+              cashInput={cashInput}
+              cashCents={cashCents}
+              cartTotal={cartTotal}
+              change={change}
+              canBook={canBook}
+              onPaymentChange={handlePaymentChange}
+              onCashInput={setCashInput}
+              onBook={handleBook}
+              effectiveSizes={effectiveSizes}
+              paymentConfig={layout.payment}
+              guidedMode={guidedMode}
+              guidedStep={guidedStep === 3 ? 3 : guidedStep === 4 ? 4 : null}
+            />
+          </div>
+        </div>
+
+        {/* Cart-width resize handle (col 2 – 12 px) */}
+        {editMode ? (
+          <ResizeHandle
+            testId="resize-handle-cart-width"
+            direction="ew"
+            editMode={editMode}
+            onPointerDown={(e) => startDrag("cart-width", e)}
           />
-          <SizeRow
-            effectiveSizes={effectiveSizes}
-            pendingFlavor={pendingFlavor}
-            onSizePick={handleSizePick}
-            guidedMode={guidedMode}
-            guidedActive={guidedStep === 2}
-          />
-          <PaymentBlock
-            showPayment={showPayment}
-            paymentMethod={payment}
-            cashInput={cashInput}
-            cashCents={cashCents}
+        ) : (
+          <div className="h-full" />
+        )}
+
+        {/* Right: cart (col 3) */}
+        <div className={cn("relative", editMode && "ring-2 ring-primaq-400/50 rounded-2xl")}>
+          {editMode && <SectionLabel label="Warenkorb ↔" />}
+          <CartColumn
+            widthPx={deviceLayout.cartWidth}
+            qtyBtnSize={layout.qtyButtonSize}
+            cartFontSize={layout.cartFontSize}
+            cart={cart}
             cartTotal={cartTotal}
-            change={change}
-            canBook={canBook}
-            onPaymentChange={handlePaymentChange}
-            onCashInput={setCashInput}
-            onBook={handleBook}
+            onChangeQty={changeQty}
+            onRemove={removeFromCart}
+            onClear={clearCart}
             effectiveSizes={effectiveSizes}
-            paymentConfig={layout.payment}
-            guidedMode={guidedMode}
-            guidedStep={guidedStep === 3 ? 3 : guidedStep === 4 ? 4 : null}
           />
         </div>
-        {/* Right: cart – full height */}
-        <CartColumn
-          widthPx={layout.cartWidth}
-          qtyBtnSize={layout.qtyButtonSize}
-          cartFontSize={layout.cartFontSize}
-          cart={cart}
-          cartTotal={cartTotal}
-          onChangeQty={changeQty}
-          onRemove={removeFromCart}
-          onClear={clearCart}
-          effectiveSizes={effectiveSizes}
-        />
       </div>
 
       {/* Bottom status bar – visibility controlled by letzte-bestellung toggle */}
@@ -1554,6 +1744,60 @@ export function SalesPage() {
           showLastBooking={layout.toggles["live-monitor"]}
           showStats={layout.toggles["verkaufszaehler"]}
         />
+      )}
+
+      {/* Admin: layout edit toggle */}
+      {isAdmin && (
+        <button
+          data-testid="layout-edit-toggle"
+          onClick={() => setEditMode((v) => !v)}
+          className={cn(
+            "fixed bottom-4 left-4 z-40 rounded-full px-3 py-1.5 text-xs font-bold shadow-md transition-all",
+            editMode
+              ? "bg-primaq-500 text-white shadow-primaq-500/30"
+              : "bg-black/25 text-white/60 hover:bg-black/40 backdrop-blur-sm"
+          )}
+        >
+          {editMode ? "✓ Fertig" : "✏ Layout"}
+        </button>
+      )}
+
+      {/* Edit-mode floating panel with presets + reset */}
+      {editMode && (
+        <div
+          data-testid="layout-edit-panel"
+          className="fixed top-16 right-4 z-40 w-52 rounded-2xl pos-surface shadow-2xl border pos-border-c p-3 space-y-2.5"
+        >
+          <p className="text-[10px] font-black uppercase tracking-widest pos-text-label">Presets</p>
+          <div className="grid grid-cols-2 gap-1">
+            {(Object.entries(DL_PRESETS) as [DLPresetId, (typeof DL_PRESETS)[DLPresetId]][]).map(([id, { label }]) => (
+              <button
+                key={id}
+                data-testid={`layout-preset-${id}`}
+                onClick={() => handlePreset(id)}
+                className="rounded-lg px-2 py-1.5 text-[11px] font-semibold pos-text-muted pos-overlay pos-overlay-hover transition-colors text-left"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="border-t pos-border-c pt-2">
+            <button
+              data-testid="layout-reset-btn"
+              onClick={handleReset}
+              className="w-full rounded-lg px-3 py-1.5 text-xs font-semibold text-red-400 pos-overlay hover:bg-red-500/10 transition-colors"
+            >
+              ↺ Layout zurücksetzen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Saved snackbar */}
+      {savedSnack && (
+        <div className="fixed bottom-14 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-primaq-500 px-4 py-2 text-sm font-bold text-white shadow-lg pointer-events-none">
+          Layout für dieses Gerät gespeichert
+        </div>
       )}
 
       {/* QR overlay */}
