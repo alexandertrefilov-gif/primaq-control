@@ -10,15 +10,12 @@ import { usePosLayoutStore } from "./use-pos-layout-store";
 import { useGuidedModeStore } from "./use-guided-mode-store";
 import { useAdmin } from "./admin-context";
 import {
-  usePosDeviceLayoutStore,
-  DL_PRESETS,
-  DL_MINS,
-  DL_MAXS,
-  applyDeviceLayoutCssVars,
-  clampDeviceLayout,
-  type DLPresetId,
-  type DeviceLayout,
-} from "./use-pos-device-layout-store";
+  usePosFreePanelStore,
+  FL_PANEL_MINS,
+  type PanelId,
+  type PanelRect,
+  type ResizeMode,
+} from "./use-pos-free-layout-store";
 import type { CartFontSize, PaymentConfig, TextColorMode } from "./use-pos-layout-store";
 import { computeTextColor } from "./use-pos-layout-store";
 import {
@@ -1005,7 +1002,7 @@ function CartColumn({
   useEffect(() => () => clearTimeout(clearTimerRef.current), []);
 
   return (
-    <div data-testid="cart-zone" style={{ width: "var(--pos-cart-width)" }}>
+    <div data-testid="cart-zone" className="w-full h-full">
       <div className="flex flex-col rounded-2xl pos-surface shadow">
         <div className="flex shrink-0 items-center gap-2 border-b pos-border-c px-4 py-2.5">
           <span className="text-[11px] font-bold uppercase tracking-widest pos-text-label mr-auto">
@@ -1377,46 +1374,70 @@ function SalesStatusBar({
   );
 }
 
-// ── Device-layout drag helpers ────────────────────────────────────────────────
+// ── Free-panel drag/resize helpers ───────────────────────────────────────────
 
-function ResizeHandle({
-  testId,
-  direction,
+function FreeDashboardPanel({
+  panelId,
+  rect,
   editMode,
-  onPointerDown,
+  label,
+  children,
+  onDragStart,
+  onResizeStart,
 }: {
-  testId: string;
-  direction: "ns" | "ew";
+  panelId: PanelId;
+  rect: PanelRect;
   editMode: boolean;
-  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
+  label: string;
+  children: React.ReactNode;
+  onDragStart: (panelId: PanelId, e: React.PointerEvent) => void;
+  onResizeStart: (panelId: PanelId, mode: "e" | "s" | "se", e: React.PointerEvent) => void;
 }) {
-  const isNS = direction === "ns";
   return (
     <div
-      data-testid={testId}
-      onPointerDown={editMode ? onPointerDown : undefined}
-      className={cn(
-        "shrink-0 flex items-center justify-center touch-none select-none transition-colors",
-        isNS ? "w-full" : "h-full",
-        editMode
-          ? cn(
-              isNS ? "h-3 cursor-ns-resize" : "w-full cursor-ew-resize",
-              "bg-primaq-500/15 hover:bg-primaq-500/35"
-            )
-          : cn(isNS ? "h-2" : "w-full", "pointer-events-none")
-      )}
+      data-panel={panelId}
+      style={{ position: "absolute", left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+      className={cn("overflow-hidden", editMode && "ring-2 ring-primaq-400/50 rounded-2xl")}
     >
+      {/* Move handle (top bar) */}
       {editMode && (
-        <div className={cn("rounded-full bg-primaq-400/80", isNS ? "h-1 w-16" : "h-16 w-1")} />
+        <div
+          data-testid={`fl-drag-${panelId}`}
+          className="absolute inset-x-0 top-0 h-7 z-20 cursor-move flex items-center justify-between px-2 bg-primaq-500/25 hover:bg-primaq-500/40 touch-none select-none"
+          onPointerDown={(e) => onDragStart(panelId, e)}
+        >
+          <span className="text-[9px] font-black uppercase tracking-widest text-white/80 truncate">{label}</span>
+          <span className="text-white/40 text-sm leading-none">⠿</span>
+        </div>
       )}
-    </div>
-  );
-}
 
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <div className="absolute top-1.5 right-1.5 z-10 rounded-md bg-primaq-500/85 px-2 py-0.5 text-[10px] font-black text-white uppercase tracking-wider backdrop-blur-sm pointer-events-none">
-      {label}
+      {/* Content */}
+      <div className="absolute inset-0" style={editMode ? { top: 28 } : undefined}>
+        {children}
+      </div>
+
+      {/* Resize handles */}
+      {editMode && (
+        <>
+          <div
+            data-testid={`fl-resize-e-${panelId}`}
+            className="absolute right-0 top-0 bottom-0 w-3 z-20 cursor-ew-resize touch-none select-none bg-primaq-500/10 hover:bg-primaq-500/30"
+            onPointerDown={(e) => onResizeStart(panelId, "e", e)}
+          />
+          <div
+            data-testid={`fl-resize-s-${panelId}`}
+            className="absolute bottom-0 left-0 right-0 h-3 z-20 cursor-ns-resize touch-none select-none bg-primaq-500/10 hover:bg-primaq-500/30"
+            onPointerDown={(e) => onResizeStart(panelId, "s", e)}
+          />
+          <div
+            data-testid={`fl-resize-se-${panelId}`}
+            className="absolute right-0 bottom-0 w-5 h-5 z-30 cursor-se-resize touch-none select-none flex items-end justify-end p-1"
+            onPointerDown={(e) => onResizeStart(panelId, "se", e)}
+          >
+            <div className="w-3 h-3 border-b-2 border-r-2 border-primaq-400/80 rounded-br-sm" />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1442,49 +1463,70 @@ export function SalesPage() {
   const { isAdmin } = useAdmin();
   const { guidedMode } = useGuidedModeStore();
 
-  // Device-local layout (NOT synced to Supabase)
-  const { layout: deviceLayout, save: saveDL, applyPreset, reset: resetDL } = usePosDeviceLayoutStore();
+  // Free-panel layout – device-local, NOT synced to Supabase
+  const { panels, panelsRef, hydrated: panelsHydrated, save: savePanels, reset: resetPanels } = usePosFreePanelStore();
+  const containerRef = useRef<HTMLDivElement>(null);
   const [editMode, setEditMode] = useState(false);
   const [savedSnack, setSavedSnack] = useState(false);
 
-  // Drag state – mutated in place during drag; CSS vars set directly (no React re-renders)
-  const dragRef = useRef<{
-    type: "flavor-size" | "size-payment" | "cart-width";
-    last: number;
-    snap: DeviceLayout;
+  // Free-panel drag state – mutated in place during drag (no React re-renders)
+  const freeDragRef = useRef<{
+    panelId: PanelId;
+    mode: ResizeMode;
+    startX: number;
+    startY: number;
+    startRect: PanelRect;
   } | null>(null);
 
   // Exit edit mode when admin logs out
   useEffect(() => { if (!isAdmin) setEditMode(false); }, [isAdmin]);
 
-  // Pointer listeners – active for the SalesPage lifetime; no React state during drag
+  // Pointer listeners for free-panel drag/resize – direct DOM updates, no React re-renders
   useEffect(() => {
-    const cl = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+    let rafId = 0;
     const onMove = (e: PointerEvent) => {
-      const d = dragRef.current;
+      const d = freeDragRef.current;
       if (!d) return;
-      const cur = d.type === "cart-width" ? e.clientX : e.clientY;
-      const delta = cur - d.last;
-      d.last = cur;
-      if (delta === 0) return;
-      const s = d.snap;
-      if (d.type === "flavor-size") {
-        s.flavorsHeight = cl(s.flavorsHeight + delta, DL_MINS.flavorsHeight, DL_MAXS.flavorsHeight);
-        s.sizesHeight   = cl(s.sizesHeight   - delta, DL_MINS.sizesHeight,   DL_MAXS.sizesHeight);
-      } else if (d.type === "size-payment") {
-        s.sizesHeight   = cl(s.sizesHeight   + delta, DL_MINS.sizesHeight,   DL_MAXS.sizesHeight);
-        s.paymentHeight = cl(s.paymentHeight - delta, DL_MINS.paymentHeight, DL_MAXS.paymentHeight);
-      } else {
-        s.cartWidth = cl(s.cartWidth - delta, DL_MINS.cartWidth, DL_MAXS.cartWidth);
-      }
-      // Direct CSS var update – no React re-render needed
-      applyDeviceLayoutCssVars(s);
+      const ctr = containerRef.current;
+      if (!ctr) return;
+      const el = ctr.querySelector<HTMLElement>(`[data-panel="${d.panelId}"]`);
+      if (!el) return;
+      const dx = e.clientX - d.startX;
+      const dy = e.clientY - d.startY;
+      const r  = d.startRect;
+      const mn = FL_PANEL_MINS[d.panelId];
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (d.mode === "move") {
+          el.style.left = `${r.x + dx}px`;
+          el.style.top  = `${r.y + dy}px`;
+        } else if (d.mode === "e") {
+          el.style.width = `${Math.max(mn.w, r.w + dx)}px`;
+        } else if (d.mode === "s") {
+          el.style.height = `${Math.max(mn.h, r.h + dy)}px`;
+        } else {
+          el.style.width  = `${Math.max(mn.w, r.w + dx)}px`;
+          el.style.height = `${Math.max(mn.h, r.h + dy)}px`;
+        }
+      });
     };
     const onUp = () => {
-      if (!dragRef.current) return;
-      const final = clampDeviceLayout(dragRef.current.snap);
-      dragRef.current = null;
-      saveDL(final);
+      const d = freeDragRef.current;
+      if (!d) return;
+      cancelAnimationFrame(rafId);
+      freeDragRef.current = null;
+      const ctr = containerRef.current;
+      if (!ctr) return;
+      const el = ctr.querySelector<HTMLElement>(`[data-panel="${d.panelId}"]`);
+      if (!el) return;
+      const newRect: PanelRect = {
+        x: parseFloat(el.style.left)   || d.startRect.x,
+        y: parseFloat(el.style.top)    || d.startRect.y,
+        w: parseFloat(el.style.width)  || d.startRect.w,
+        h: parseFloat(el.style.height) || d.startRect.h,
+      };
+      const updated = { ...panelsRef.current!, [d.panelId]: newRect };
+      savePanels(updated);
       setSavedSnack(true);
       setTimeout(() => setSavedSnack(false), 2500);
     };
@@ -1493,27 +1535,33 @@ export function SalesPage() {
     return () => {
       document.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerup", onUp);
+      cancelAnimationFrame(rafId);
     };
-  }, [saveDL]);
+  }, [savePanels, panelsRef]);
 
-  const startDrag = useCallback((type: "flavor-size" | "size-payment" | "cart-width", e: React.PointerEvent) => {
+  const startPanelDrag = useCallback((panelId: PanelId, e: React.PointerEvent) => {
     e.preventDefault();
-    const coord = type === "cart-width" ? e.clientX : e.clientY;
-    dragRef.current = { type, last: coord, snap: { ...deviceLayout } };
+    e.stopPropagation();
+    const rect = panelsRef.current?.[panelId];
+    if (!rect) return;
+    freeDragRef.current = { panelId, mode: "move", startX: e.clientX, startY: e.clientY, startRect: { ...rect } };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }, [deviceLayout]);
+  }, [panelsRef]);
 
-  const handlePreset = useCallback((id: DLPresetId) => {
-    applyPreset(id);
-    setSavedSnack(true);
-    setTimeout(() => setSavedSnack(false), 2500);
-  }, [applyPreset]);
+  const startPanelResize = useCallback((panelId: PanelId, mode: "e" | "s" | "se", e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = panelsRef.current?.[panelId];
+    if (!rect) return;
+    freeDragRef.current = { panelId, mode, startX: e.clientX, startY: e.clientY, startRect: { ...rect } };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, [panelsRef]);
 
   const handleReset = useCallback(() => {
-    resetDL();
+    resetPanels();
     setSavedSnack(true);
     setTimeout(() => setSavedSnack(false), 2500);
-  }, [resetDL]);
+  }, [resetPanels]);
 
   const [pendingFlavor, setPendingFlavor] = useState<FlavorConfig | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("bar");
@@ -1607,7 +1655,7 @@ export function SalesPage() {
     setPaymentConfirmed(false);
   }, [bookOrder]);
 
-  if (!hydrated || !flavorsHydrated || !layoutHydrated) {
+  if (!hydrated || !flavorsHydrated || !layoutHydrated || !panelsHydrated) {
     return (
       <div className="flex h-full items-center justify-center pos-text-muted">Laden…</div>
     );
@@ -1615,131 +1663,98 @@ export function SalesPage() {
 
   return (
     <FlavorsCtx.Provider value={allFlavors}>
-    <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
+    <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
       {guidedMode && <GuidedStepsBar step={guidedStep} />}
-      {/* Main area: left 3-zone | cart-width-handle | right cart.
-           CSS vars drive grid + section heights → drag updates only the vars, zero React re-renders */}
-      <div
-        className="flex-1 min-h-0 overflow-hidden grid"
-        style={{
-          gridTemplateColumns: "minmax(0, 1fr) 12px var(--pos-cart-width)",
-          gridTemplateRows: "1fr",
-          alignItems: "start",
-          gap: 0,
-        }}
-      >
-        {/* Left: Sorten | Größen | Zahlung with device-local heights */}
-        <div className="flex flex-col pr-1.5">
-          {/* Sortenbereich */}
-          <div
-            data-testid="dl-flavor-wrapper"
-            className={cn("relative overflow-hidden", editMode && "ring-2 ring-primaq-400/50 rounded-2xl")}
-            style={{ height: "var(--pos-flavors-height)" }}
-          >
-            {editMode && <SectionLabel label="Sortenbereich ↕" />}
-            <FlavorColumn
-              onFlavorClick={handleFlavorClick}
-              cardSize={layout.flavorCardSize}
-              pendingFlavor={pendingFlavor}
-              guidedMode={guidedMode}
-              guidedActive={guidedStep === 1}
-            />
-          </div>
 
-          {editMode ? (
-            <ResizeHandle
-              testId="resize-handle-flavor-size"
-              direction="ns"
+      {/* Free-panel container – each panel is absolutely positioned inside */}
+      <div ref={containerRef} data-testid="fl-container" className="flex-1 min-h-0 relative overflow-hidden">
+        {panels && (
+          <>
+            <FreeDashboardPanel
+              panelId="flavors"
+              rect={panels.flavors}
               editMode={editMode}
-              onPointerDown={(e) => startDrag("flavor-size", e)}
-            />
-          ) : (
-            <div className="h-2 shrink-0" />
-          )}
+              label="Sorten"
+              onDragStart={startPanelDrag}
+              onResizeStart={startPanelResize}
+            >
+              <FlavorColumn
+                onFlavorClick={handleFlavorClick}
+                cardSize={layout.flavorCardSize}
+                pendingFlavor={pendingFlavor}
+                guidedMode={guidedMode}
+                guidedActive={guidedStep === 1}
+              />
+            </FreeDashboardPanel>
 
-          {/* Größenbereich */}
-          <div
-            data-testid="dl-size-wrapper"
-            className={cn("relative overflow-hidden", editMode && "ring-2 ring-primaq-400/50 rounded-xl")}
-            style={{ height: "var(--pos-sizes-height)" }}
-          >
-            {editMode && <SectionLabel label="Größenbereich ↕" />}
-            <SizeRow
-              effectiveSizes={effectiveSizes}
-              pendingFlavor={pendingFlavor}
-              onSizePick={handleSizePick}
-              guidedMode={guidedMode}
-              guidedActive={guidedStep === 2}
-            />
-          </div>
-
-          {editMode ? (
-            <ResizeHandle
-              testId="resize-handle-size-payment"
-              direction="ns"
+            <FreeDashboardPanel
+              panelId="sizes"
+              rect={panels.sizes}
               editMode={editMode}
-              onPointerDown={(e) => startDrag("size-payment", e)}
-            />
-          ) : (
-            <div className="h-2 shrink-0" />
-          )}
+              label="Größen"
+              onDragStart={startPanelDrag}
+              onResizeStart={startPanelResize}
+            >
+              <SizeRow
+                effectiveSizes={effectiveSizes}
+                pendingFlavor={pendingFlavor}
+                onSizePick={handleSizePick}
+                guidedMode={guidedMode}
+                guidedActive={guidedStep === 2}
+              />
+            </FreeDashboardPanel>
 
-          {/* Zahlungsbereich */}
-          <div
-            data-testid="dl-payment-wrapper"
-            className={cn("relative overflow-hidden", editMode && "ring-2 ring-primaq-400/50 rounded-2xl")}
-            style={{ height: "var(--pos-payment-height)" }}
-          >
-            {editMode && <SectionLabel label="Zahlungsbereich" />}
-            <PaymentBlock
-              showPayment={showPayment}
-              paymentMethod={payment}
-              cashInput={cashInput}
-              cashCents={cashCents}
-              cartTotal={cartTotal}
-              change={change}
-              canBook={canBook}
-              onPaymentChange={handlePaymentChange}
-              onCashInput={setCashInput}
-              onBook={handleBook}
-              effectiveSizes={effectiveSizes}
-              paymentConfig={layout.payment}
-              guidedMode={guidedMode}
-              guidedStep={guidedStep === 3 ? 3 : guidedStep === 4 ? 4 : null}
-            />
-          </div>
-        </div>
+            <FreeDashboardPanel
+              panelId="payment"
+              rect={panels.payment}
+              editMode={editMode}
+              label="Zahlung"
+              onDragStart={startPanelDrag}
+              onResizeStart={startPanelResize}
+            >
+              <PaymentBlock
+                showPayment={showPayment}
+                paymentMethod={payment}
+                cashInput={cashInput}
+                cashCents={cashCents}
+                cartTotal={cartTotal}
+                change={change}
+                canBook={canBook}
+                onPaymentChange={handlePaymentChange}
+                onCashInput={setCashInput}
+                onBook={handleBook}
+                effectiveSizes={effectiveSizes}
+                paymentConfig={layout.payment}
+                guidedMode={guidedMode}
+                guidedStep={guidedStep === 3 ? 3 : guidedStep === 4 ? 4 : null}
+              />
+            </FreeDashboardPanel>
 
-        {/* Cart-width resize handle (col 2 – 12 px) */}
-        {editMode ? (
-          <ResizeHandle
-            testId="resize-handle-cart-width"
-            direction="ew"
-            editMode={editMode}
-            onPointerDown={(e) => startDrag("cart-width", e)}
-          />
-        ) : (
-          <div className="h-full" />
+            <FreeDashboardPanel
+              panelId="cart"
+              rect={panels.cart}
+              editMode={editMode}
+              label="Warenkorb"
+              onDragStart={startPanelDrag}
+              onResizeStart={startPanelResize}
+            >
+              <CartColumn
+                widthPx={panels.cart.w}
+                qtyBtnSize={layout.qtyButtonSize}
+                cartFontSize={layout.cartFontSize}
+                cart={cart}
+                cartTotal={cartTotal}
+                onChangeQty={changeQty}
+                onRemove={removeFromCart}
+                onClear={clearCart}
+                effectiveSizes={effectiveSizes}
+              />
+            </FreeDashboardPanel>
+          </>
         )}
-
-        {/* Right: cart (col 3) */}
-        <div className={cn("relative", editMode && "ring-2 ring-primaq-400/50 rounded-2xl")}>
-          {editMode && <SectionLabel label="Warenkorb ↔" />}
-          <CartColumn
-            widthPx={deviceLayout.cartWidth}
-            qtyBtnSize={layout.qtyButtonSize}
-            cartFontSize={layout.cartFontSize}
-            cart={cart}
-            cartTotal={cartTotal}
-            onChangeQty={changeQty}
-            onRemove={removeFromCart}
-            onClear={clearCart}
-            effectiveSizes={effectiveSizes}
-          />
-        </div>
       </div>
 
-      {/* Bottom status bar – visibility controlled by letzte-bestellung toggle */}
+      {/* Status bar – stays outside the free-panel container so its modal isn't clipped */}
       {layout.toggles["letzte-bestellung"] && (
         <SalesStatusBar
           daily={daily}
@@ -1765,25 +1780,14 @@ export function SalesPage() {
         </button>
       )}
 
-      {/* Edit-mode floating panel with presets + reset */}
+      {/* Edit-mode floating panel */}
       {editMode && (
         <div
           data-testid="layout-edit-panel"
-          className="fixed top-16 right-4 z-40 w-52 rounded-2xl pos-surface shadow-2xl border pos-border-c p-3 space-y-2.5"
+          className="fixed top-16 right-4 z-40 w-52 rounded-2xl pos-surface shadow-2xl border pos-border-c p-3 space-y-2"
         >
-          <p className="text-[10px] font-black uppercase tracking-widest pos-text-label">Presets</p>
-          <div className="grid grid-cols-2 gap-1">
-            {(Object.entries(DL_PRESETS) as [DLPresetId, (typeof DL_PRESETS)[DLPresetId]][]).map(([id, { label }]) => (
-              <button
-                key={id}
-                data-testid={`layout-preset-${id}`}
-                onClick={() => handlePreset(id)}
-                className="rounded-lg px-2 py-1.5 text-[11px] font-semibold pos-text-muted pos-overlay pos-overlay-hover transition-colors text-left"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <p className="text-[10px] font-black uppercase tracking-widest pos-text-label">Freies Layout</p>
+          <p className="text-[11px] pos-text-muted leading-snug">Leiste ziehen = verschieben · Ecken/Kanten = skalieren</p>
           <div className="border-t pos-border-c pt-2">
             <button
               data-testid="layout-reset-btn"
