@@ -14,6 +14,7 @@ import {
   DL_PRESETS,
   DL_MINS,
   DL_MAXS,
+  applyDeviceLayoutCssVars,
   clampDeviceLayout,
   type DLPresetId,
   type DeviceLayout,
@@ -1004,7 +1005,7 @@ function CartColumn({
   useEffect(() => () => clearTimeout(clearTimerRef.current), []);
 
   return (
-    <div data-testid="cart-zone" style={{ width: widthPx }}>
+    <div data-testid="cart-zone" style={{ width: "var(--pos-cart-width)" }}>
       <div className="flex flex-col rounded-2xl pos-surface shadow">
         <div className="flex shrink-0 items-center gap-2 border-b pos-border-c px-4 py-2.5">
           <span className="text-[11px] font-bold uppercase tracking-widest pos-text-label mr-auto">
@@ -1442,11 +1443,11 @@ export function SalesPage() {
   const { guidedMode } = useGuidedModeStore();
 
   // Device-local layout (NOT synced to Supabase)
-  const { layout: deviceLayout, update: updateDL, commit: commitDL, applyPreset, reset: resetDL } = usePosDeviceLayoutStore();
+  const { layout: deviceLayout, save: saveDL, applyPreset, reset: resetDL } = usePosDeviceLayoutStore();
   const [editMode, setEditMode] = useState(false);
   const [savedSnack, setSavedSnack] = useState(false);
 
-  // Drag-state stored in a ref for perf – avoids re-rendering during every pointermove
+  // Drag state – mutated in place during drag; CSS vars set directly (no React re-renders)
   const dragRef = useRef<{
     type: "flavor-size" | "size-payment" | "cart-width";
     last: number;
@@ -1456,33 +1457,34 @@ export function SalesPage() {
   // Exit edit mode when admin logs out
   useEffect(() => { if (!isAdmin) setEditMode(false); }, [isAdmin]);
 
-  // Attach pointer listeners once; they only act when dragRef is set
+  // Pointer listeners – active for the SalesPage lifetime; no React state during drag
   useEffect(() => {
+    const cl = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
     const onMove = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d) return;
-      const isX = d.type === "cart-width";
-      const cur = isX ? e.clientX : e.clientY;
+      const cur = d.type === "cart-width" ? e.clientX : e.clientY;
       const delta = cur - d.last;
       d.last = cur;
       if (delta === 0) return;
       const s = d.snap;
-      const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
       if (d.type === "flavor-size") {
-        s.flavorAreaHeight = clamp(s.flavorAreaHeight + delta, DL_MINS.flavorAreaHeight, DL_MAXS.flavorAreaHeight);
-        s.sizeAreaHeight   = clamp(s.sizeAreaHeight   - delta, DL_MINS.sizeAreaHeight,   DL_MAXS.sizeAreaHeight);
+        s.flavorsHeight = cl(s.flavorsHeight + delta, DL_MINS.flavorsHeight, DL_MAXS.flavorsHeight);
+        s.sizesHeight   = cl(s.sizesHeight   - delta, DL_MINS.sizesHeight,   DL_MAXS.sizesHeight);
       } else if (d.type === "size-payment") {
-        s.sizeAreaHeight    = clamp(s.sizeAreaHeight    + delta, DL_MINS.sizeAreaHeight,    DL_MAXS.sizeAreaHeight);
-        s.paymentAreaHeight = clamp(s.paymentAreaHeight - delta, DL_MINS.paymentAreaHeight, DL_MAXS.paymentAreaHeight);
+        s.sizesHeight   = cl(s.sizesHeight   + delta, DL_MINS.sizesHeight,   DL_MAXS.sizesHeight);
+        s.paymentHeight = cl(s.paymentHeight - delta, DL_MINS.paymentHeight, DL_MAXS.paymentHeight);
       } else {
-        s.cartWidth = clamp(s.cartWidth - delta, DL_MINS.cartWidth, DL_MAXS.cartWidth);
+        s.cartWidth = cl(s.cartWidth - delta, DL_MINS.cartWidth, DL_MAXS.cartWidth);
       }
-      updateDL({ ...s });
+      // Direct CSS var update – no React re-render needed
+      applyDeviceLayoutCssVars(s);
     };
     const onUp = () => {
       if (!dragRef.current) return;
+      const final = clampDeviceLayout(dragRef.current.snap);
       dragRef.current = null;
-      commitDL();
+      saveDL(final);
       setSavedSnack(true);
       setTimeout(() => setSavedSnack(false), 2500);
     };
@@ -1492,7 +1494,7 @@ export function SalesPage() {
       document.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerup", onUp);
     };
-  }, [updateDL, commitDL]);
+  }, [saveDL]);
 
   const startDrag = useCallback((type: "flavor-size" | "size-payment" | "cart-width", e: React.PointerEvent) => {
     e.preventDefault();
@@ -1615,11 +1617,12 @@ export function SalesPage() {
     <FlavorsCtx.Provider value={allFlavors}>
     <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
       {guidedMode && <GuidedStepsBar step={guidedStep} />}
-      {/* Main area: left 3-zone | cart-width-handle | right cart */}
+      {/* Main area: left 3-zone | cart-width-handle | right cart.
+           CSS vars drive grid + section heights → drag updates only the vars, zero React re-renders */}
       <div
         className="flex-1 min-h-0 overflow-hidden grid"
         style={{
-          gridTemplateColumns: `minmax(0, 1fr) 12px ${deviceLayout.cartWidth}px`,
+          gridTemplateColumns: "minmax(0, 1fr) 12px var(--pos-cart-width)",
           gridTemplateRows: "1fr",
           alignItems: "start",
           gap: 0,
@@ -1631,7 +1634,7 @@ export function SalesPage() {
           <div
             data-testid="dl-flavor-wrapper"
             className={cn("relative overflow-hidden", editMode && "ring-2 ring-primaq-400/50 rounded-2xl")}
-            style={{ height: deviceLayout.flavorAreaHeight }}
+            style={{ height: "var(--pos-flavors-height)" }}
           >
             {editMode && <SectionLabel label="Sortenbereich ↕" />}
             <FlavorColumn
@@ -1658,7 +1661,7 @@ export function SalesPage() {
           <div
             data-testid="dl-size-wrapper"
             className={cn("relative overflow-hidden", editMode && "ring-2 ring-primaq-400/50 rounded-xl")}
-            style={{ height: deviceLayout.sizeAreaHeight }}
+            style={{ height: "var(--pos-sizes-height)" }}
           >
             {editMode && <SectionLabel label="Größenbereich ↕" />}
             <SizeRow
@@ -1685,7 +1688,7 @@ export function SalesPage() {
           <div
             data-testid="dl-payment-wrapper"
             className={cn("relative overflow-hidden", editMode && "ring-2 ring-primaq-400/50 rounded-2xl")}
-            style={{ height: deviceLayout.paymentAreaHeight }}
+            style={{ height: "var(--pos-payment-height)" }}
           >
             {editMode && <SectionLabel label="Zahlungsbereich" />}
             <PaymentBlock

@@ -6,31 +6,31 @@ import { useCallback, useEffect, useState } from "react";
 const LS_KEY = "primaq-pos-device-layout-v1";
 
 export type DeviceLayout = {
-  cartWidth: number;         // 320 – 520
-  flavorAreaHeight: number;  // 280 – 700
-  sizeAreaHeight: number;    // 90  – 200
-  paymentAreaHeight: number; // 180 – 450
+  cartWidth:     number; // 300 – 540
+  flavorsHeight: number; // 280 – 620
+  sizesHeight:   number; // 80  – 180
+  paymentHeight: number; // 190 – 360
 };
 
 export const DL_MINS: DeviceLayout = {
-  cartWidth: 320,
-  flavorAreaHeight: 280,
-  sizeAreaHeight: 90,
-  paymentAreaHeight: 180,
+  cartWidth:     300,
+  flavorsHeight: 280,
+  sizesHeight:    80,
+  paymentHeight: 190,
 };
 
 export const DL_MAXS: DeviceLayout = {
-  cartWidth: 520,
-  flavorAreaHeight: 700,
-  sizeAreaHeight: 200,
-  paymentAreaHeight: 450,
+  cartWidth:     540,
+  flavorsHeight: 620,
+  sizesHeight:   180,
+  paymentHeight: 360,
 };
 
 export const DL_DEFAULTS: DeviceLayout = {
-  cartWidth: 400,
-  flavorAreaHeight: 480,
-  sizeAreaHeight: 116,
-  paymentAreaHeight: 240,
+  cartWidth:     400,
+  flavorsHeight: 480,
+  sizesHeight:   116,
+  paymentHeight: 240,
 };
 
 export type DLPresetId =
@@ -42,12 +42,12 @@ export type DLPresetId =
   | "large-cart";
 
 export const DL_PRESETS: Record<DLPresetId, { label: string; layout: DeviceLayout }> = {
-  "ipad-12-9":    { label: 'iPad 12.9"',      layout: { cartWidth: 400, flavorAreaHeight: 480, sizeAreaHeight: 116, paymentAreaHeight: 240 } },
-  "ipad-11":      { label: 'iPad 11"',         layout: { cartWidth: 360, flavorAreaHeight: 400, sizeAreaHeight: 105, paymentAreaHeight: 220 } },
-  "desktop-wide": { label: "Desktop breit",    layout: { cartWidth: 460, flavorAreaHeight: 500, sizeAreaHeight: 120, paymentAreaHeight: 260 } },
-  "compact":      { label: "Kompakt",          layout: { cartWidth: 340, flavorAreaHeight: 380, sizeAreaHeight: 95,  paymentAreaHeight: 210 } },
-  "large-flavors":{ label: "Große Sorten",     layout: { cartWidth: 380, flavorAreaHeight: 580, sizeAreaHeight: 110, paymentAreaHeight: 220 } },
-  "large-cart":   { label: "Großer Warenkorb", layout: { cartWidth: 500, flavorAreaHeight: 450, sizeAreaHeight: 110, paymentAreaHeight: 215 } },
+  "ipad-12-9":    { label: 'iPad 12.9"',      layout: { cartWidth: 400, flavorsHeight: 480, sizesHeight: 116, paymentHeight: 240 } },
+  "ipad-11":      { label: 'iPad 11"',         layout: { cartWidth: 360, flavorsHeight: 400, sizesHeight: 105, paymentHeight: 220 } },
+  "desktop-wide": { label: "Desktop breit",    layout: { cartWidth: 460, flavorsHeight: 500, sizesHeight: 120, paymentHeight: 260 } },
+  "compact":      { label: "Kompakt",          layout: { cartWidth: 340, flavorsHeight: 380, sizesHeight:  95, paymentHeight: 210 } },
+  "large-flavors":{ label: "Große Sorten",     layout: { cartWidth: 380, flavorsHeight: 580, sizesHeight: 110, paymentHeight: 220 } },
+  "large-cart":   { label: "Großer Warenkorb", layout: { cartWidth: 500, flavorsHeight: 450, sizesHeight: 110, paymentHeight: 215 } },
 };
 
 function clamp(v: number, lo: number, hi: number) {
@@ -56,11 +56,20 @@ function clamp(v: number, lo: number, hi: number) {
 
 export function clampDeviceLayout(l: Partial<DeviceLayout>): DeviceLayout {
   return {
-    cartWidth:         clamp(l.cartWidth         ?? DL_DEFAULTS.cartWidth,         DL_MINS.cartWidth,         DL_MAXS.cartWidth),
-    flavorAreaHeight:  clamp(l.flavorAreaHeight  ?? DL_DEFAULTS.flavorAreaHeight,  DL_MINS.flavorAreaHeight,  DL_MAXS.flavorAreaHeight),
-    sizeAreaHeight:    clamp(l.sizeAreaHeight    ?? DL_DEFAULTS.sizeAreaHeight,    DL_MINS.sizeAreaHeight,    DL_MAXS.sizeAreaHeight),
-    paymentAreaHeight: clamp(l.paymentAreaHeight ?? DL_DEFAULTS.paymentAreaHeight, DL_MINS.paymentAreaHeight, DL_MAXS.paymentAreaHeight),
+    cartWidth:     clamp(l.cartWidth     ?? DL_DEFAULTS.cartWidth,     DL_MINS.cartWidth,     DL_MAXS.cartWidth),
+    flavorsHeight: clamp(l.flavorsHeight ?? DL_DEFAULTS.flavorsHeight, DL_MINS.flavorsHeight, DL_MAXS.flavorsHeight),
+    sizesHeight:   clamp(l.sizesHeight   ?? DL_DEFAULTS.sizesHeight,   DL_MINS.sizesHeight,   DL_MAXS.sizesHeight),
+    paymentHeight: clamp(l.paymentHeight ?? DL_DEFAULTS.paymentHeight, DL_MINS.paymentHeight, DL_MAXS.paymentHeight),
   };
+}
+
+// Apply CSS custom properties to <html> element (smooth drag – no React re-render)
+export function applyDeviceLayoutCssVars(l: DeviceLayout): void {
+  const el = document.documentElement;
+  el.style.setProperty("--pos-cart-width",     `${l.cartWidth}px`);
+  el.style.setProperty("--pos-flavors-height", `${l.flavorsHeight}px`);
+  el.style.setProperty("--pos-sizes-height",   `${l.sizesHeight}px`);
+  el.style.setProperty("--pos-payment-height", `${l.paymentHeight}px`);
 }
 
 function loadFromLS(): DeviceLayout {
@@ -82,33 +91,29 @@ export function usePosDeviceLayoutStore() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setLayout(loadFromLS());
+    const l = loadFromLS();
+    setLayout(l);
+    applyDeviceLayoutCssVars(l);
     setHydrated(true);
   }, []);
 
-  // update in memory only (during drag – no LS write)
-  const update = useCallback((partial: Partial<DeviceLayout>) => {
-    setLayout((prev) => clampDeviceLayout({ ...prev, ...partial }));
-  }, []);
-
-  // commit current state to localStorage (on pointerup)
-  const commit = useCallback(() => {
-    setLayout((prev) => {
-      saveToLS(prev);
-      return prev;
-    });
+  // Save to state + CSS vars + localStorage (called on drag-end and preset apply)
+  const save = useCallback((l: DeviceLayout) => {
+    const clamped = clampDeviceLayout(l);
+    setLayout(clamped);
+    applyDeviceLayoutCssVars(clamped);
+    saveToLS(clamped);
   }, []);
 
   const applyPreset = useCallback((id: DLPresetId) => {
-    const l = clampDeviceLayout(DL_PRESETS[id].layout);
-    setLayout(l);
-    saveToLS(l);
-  }, []);
+    save(DL_PRESETS[id].layout);
+  }, [save]);
 
   const reset = useCallback(() => {
     localStorage.removeItem(LS_KEY);
     setLayout(DL_DEFAULTS);
+    applyDeviceLayoutCssVars(DL_DEFAULTS);
   }, []);
 
-  return { layout, hydrated, update, commit, applyPreset, reset };
+  return { layout, hydrated, save, applyPreset, reset };
 }

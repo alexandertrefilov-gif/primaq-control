@@ -8,6 +8,12 @@
   /* Default: Nacht (helles Graphit-Grau) */
   color-scheme: dark;
   --pos-bg:        #3A3C42;
+
+  /* ── Device-local layout defaults (overridden per-device via JS) ─── */
+  --pos-cart-width:     400px;
+  --pos-flavors-height: 480px;
+  --pos-sizes-height:   116px;
+  --pos-payment-height: 240px;
   --pos-surface:   #44474E;
   --pos-section:   #4C505A;
   --pos-border:    #585C67;
