@@ -1385,6 +1385,7 @@ function FreeDashboardPanel({
   panelId,
   rect,
   editMode,
+  isOverlapping,
   label,
   children,
   onDragStart,
@@ -1393,19 +1394,22 @@ function FreeDashboardPanel({
   panelId: PanelId;
   rect: PanelRect;
   editMode: boolean;
+  isOverlapping: boolean;
   label: string;
   children: React.ReactNode;
   onDragStart: (panelId: PanelId, e: React.PointerEvent) => void;
-  onResizeStart: (panelId: PanelId, mode: "e" | "s" | "se", e: React.PointerEvent) => void;
+  onResizeStart: (panelId: PanelId, mode: Exclude<ResizeMode, "move">, e: React.PointerEvent) => void;
 }) {
   return (
     // Panel = single unit: position + dimensions from store; flex column so header + body fill exactly
     <div
       data-panel={panelId}
+      data-overlap={isOverlapping ? "true" : undefined}
       style={{ position: "absolute", left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
       className={cn(
         "flex flex-col overflow-hidden rounded-2xl",
-        editMode && "ring-2 ring-primaq-400/60"
+        editMode && !isOverlapping && "ring-2 ring-primaq-400/60",
+        editMode && isOverlapping  && "ring-2 ring-red-500/80",
       )}
     >
       {/* Drag handle – flex-none so it doesn't steal height from body */}
@@ -1425,30 +1429,104 @@ function FreeDashboardPanel({
         {children}
       </div>
 
-      {/* Resize handles – absolute within the panel, above body content */}
+      {/* Resize handles – absolute within the panel. Edges: 16px hitbox + 4px stripe. Corners: 24px. */}
       {editMode && (
         <>
-          <div
-            data-testid={`fl-resize-e-${panelId}`}
-            className="absolute right-0 top-0 bottom-0 w-2 z-20 cursor-ew-resize touch-none select-none hover:bg-primaq-400/35 transition-colors"
-            onPointerDown={(e) => onResizeStart(panelId, "e", e)}
-          />
-          <div
-            data-testid={`fl-resize-s-${panelId}`}
-            className="absolute bottom-0 left-0 right-0 h-2 z-20 cursor-ns-resize touch-none select-none hover:bg-primaq-400/35 transition-colors"
-            onPointerDown={(e) => onResizeStart(panelId, "s", e)}
-          />
-          <div
-            data-testid={`fl-resize-se-${panelId}`}
-            className="absolute right-0 bottom-0 w-6 h-6 z-30 cursor-se-resize touch-none select-none flex items-end justify-end p-1.5"
-            onPointerDown={(e) => onResizeStart(panelId, "se", e)}
-          >
+          {/* Edges – z-20; inner div shows visual stripe at the edge, outer div is the full hitbox */}
+          <div data-testid={`fl-resize-n-${panelId}`}
+            className="absolute inset-x-0 top-0 h-3 z-20 cursor-ns-resize touch-none select-none group"
+            onPointerDown={(e) => onResizeStart(panelId, "n", e)}>
+            <div className="absolute inset-x-0 top-0 h-1 bg-primaq-400/30 group-hover:bg-primaq-400/75 transition-colors" />
+          </div>
+          <div data-testid={`fl-resize-s-${panelId}`}
+            className="absolute inset-x-0 bottom-0 h-3 z-20 cursor-ns-resize touch-none select-none group"
+            onPointerDown={(e) => onResizeStart(panelId, "s", e)}>
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-primaq-400/30 group-hover:bg-primaq-400/75 transition-colors" />
+          </div>
+          <div data-testid={`fl-resize-e-${panelId}`}
+            className="absolute inset-y-0 right-0 w-4 z-20 cursor-ew-resize touch-none select-none group"
+            onPointerDown={(e) => onResizeStart(panelId, "e", e)}>
+            <div className="absolute inset-y-0 right-0 w-1 bg-primaq-400/30 group-hover:bg-primaq-400/75 transition-colors" />
+          </div>
+          <div data-testid={`fl-resize-w-${panelId}`}
+            className="absolute inset-y-0 left-0 w-4 z-20 cursor-ew-resize touch-none select-none group"
+            onPointerDown={(e) => onResizeStart(panelId, "w", e)}>
+            <div className="absolute inset-y-0 left-0 w-1 bg-primaq-400/30 group-hover:bg-primaq-400/75 transition-colors" />
+          </div>
+          {/* Corners – z-30; override edge hitboxes at intersection areas */}
+          <div data-testid={`fl-resize-nw-${panelId}`}
+            className="absolute top-0 left-0 w-6 h-6 z-30 cursor-nw-resize touch-none select-none"
+            onPointerDown={(e) => onResizeStart(panelId, "nw", e)} />
+          <div data-testid={`fl-resize-ne-${panelId}`}
+            className="absolute top-0 right-0 w-6 h-6 z-30 cursor-ne-resize touch-none select-none"
+            onPointerDown={(e) => onResizeStart(panelId, "ne", e)} />
+          <div data-testid={`fl-resize-sw-${panelId}`}
+            className="absolute bottom-0 left-0 w-6 h-6 z-30 cursor-sw-resize touch-none select-none"
+            onPointerDown={(e) => onResizeStart(panelId, "sw", e)} />
+          <div data-testid={`fl-resize-se-${panelId}`}
+            className="absolute bottom-0 right-0 w-6 h-6 z-30 cursor-se-resize touch-none select-none flex items-end justify-end p-1.5"
+            onPointerDown={(e) => onResizeStart(panelId, "se", e)}>
             <div className="w-3 h-3 border-b-2 border-r-2 border-primaq-400/80 rounded-br-sm" />
           </div>
         </>
       )}
     </div>
   );
+}
+
+/** True if two rects share any area. */
+function rectsOverlap(a: PanelRect, b: PanelRect): boolean {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+/** Returns the set of panel IDs that are part of any overlapping pair. */
+function findOverlappingPanels(panels: Record<PanelId, PanelRect>): Set<PanelId> {
+  const ids = Object.keys(panels) as PanelId[];
+  const result = new Set<PanelId>();
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      if (rectsOverlap(panels[ids[i]], panels[ids[j]])) {
+        result.add(ids[i]);
+        result.add(ids[j]);
+      }
+    }
+  }
+  return result;
+}
+
+/** Clamp panel to workspace bounds; adjusts dimension when position hits an edge. */
+function clampToWorkspace(r: PanelRect, wsW: number, wsH: number, mn: { w: number; h: number }): PanelRect {
+  let { x, y, w, h } = r;
+  w = Math.max(mn.w, Math.min(w, wsW));
+  h = Math.max(mn.h, Math.min(h, wsH));
+  if (x < 0) { w = Math.max(mn.w, w + x); x = 0; }
+  if (y < 0) { h = Math.max(mn.h, h + y); y = 0; }
+  x = Math.min(x, wsW - w);
+  y = Math.min(y, wsH - h);
+  return { x, y, w, h };
+}
+
+/** Pure helper: derive new rect from start rect + pointer delta for any resize mode. */
+function computePanelRect(
+  mode: ResizeMode,
+  r: PanelRect,
+  dx: number,
+  dy: number,
+  mn: { w: number; h: number }
+): PanelRect {
+  const cw = (v: number) => Math.max(mn.w, v);
+  const ch = (v: number) => Math.max(mn.h, v);
+  switch (mode) {
+    case "move": return { x: r.x + dx, y: r.y + dy, w: r.w, h: r.h };
+    case "n":  { const h = ch(r.h - dy); return { x: r.x, y: r.y + r.h - h, w: r.w, h }; }
+    case "s":  return { x: r.x, y: r.y, w: r.w, h: ch(r.h + dy) };
+    case "e":  return { x: r.x, y: r.y, w: cw(r.w + dx), h: r.h };
+    case "w":  { const w = cw(r.w - dx); return { x: r.x + r.w - w, y: r.y, w, h: r.h }; }
+    case "nw": { const w = cw(r.w - dx); const h = ch(r.h - dy); return { x: r.x + r.w - w, y: r.y + r.h - h, w, h }; }
+    case "ne": { const h = ch(r.h - dy); return { x: r.x, y: r.y + r.h - h, w: cw(r.w + dx), h }; }
+    case "sw": { const w = cw(r.w - dx); return { x: r.x + r.w - w, y: r.y, w, h: ch(r.h + dy) }; }
+    case "se": return { x: r.x, y: r.y, w: cw(r.w + dx), h: ch(r.h + dy) };
+  }
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -1473,10 +1551,12 @@ export function SalesPage() {
   const { guidedMode } = useGuidedModeStore();
 
   // Free-panel layout – device-local, NOT synced to Supabase
-  const { panels, panelsRef, hydrated: panelsHydrated, save: savePanels, reset: resetPanels } = usePosFreePanelStore();
+  const { panels, panelsRef, hydrated: panelsHydrated, save: savePanels, updateState, reset: resetPanels } = usePosFreePanelStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const [editMode, setEditMode] = useState(false);
   const [savedSnack, setSavedSnack] = useState(false);
+  const [overlapSet, setOverlapSet] = useState<Set<PanelId>>(new Set());
+  const [overlapSnack, setOverlapSnack] = useState(false);
 
   // Free-panel drag state – mutated in place during drag (no React re-renders)
   const freeDragRef = useRef<{
@@ -1489,6 +1569,12 @@ export function SalesPage() {
 
   // Exit edit mode when admin logs out
   useEffect(() => { if (!isAdmin) setEditMode(false); }, [isAdmin]);
+
+  // Keep overlap indicators in sync with panel state (catches initial load with bad layout too)
+  useEffect(() => {
+    if (!panels) { setOverlapSet(new Set()); return; }
+    setOverlapSet(findOverlappingPanels(panels));
+  }, [panels]);
 
   // Pointer listeners for free-panel drag/resize – direct DOM updates, no React re-renders
   useEffect(() => {
@@ -1506,17 +1592,12 @@ export function SalesPage() {
       const mn = FL_PANEL_MINS[d.panelId];
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
-        if (d.mode === "move") {
-          el.style.left = `${r.x + dx}px`;
-          el.style.top  = `${r.y + dy}px`;
-        } else if (d.mode === "e") {
-          el.style.width = `${Math.max(mn.w, r.w + dx)}px`;
-        } else if (d.mode === "s") {
-          el.style.height = `${Math.max(mn.h, r.h + dy)}px`;
-        } else {
-          el.style.width  = `${Math.max(mn.w, r.w + dx)}px`;
-          el.style.height = `${Math.max(mn.h, r.h + dy)}px`;
-        }
+        const raw = computePanelRect(d.mode, r, dx, dy, mn);
+        const nr  = clampToWorkspace(raw, ctr.clientWidth, ctr.clientHeight, mn);
+        el.style.left   = `${nr.x}px`;
+        el.style.top    = `${nr.y}px`;
+        el.style.width  = `${nr.w}px`;
+        el.style.height = `${nr.h}px`;
       });
     };
     const onUp = () => {
@@ -1528,6 +1609,7 @@ export function SalesPage() {
       if (!ctr) return;
       const el = ctr.querySelector<HTMLElement>(`[data-panel="${d.panelId}"]`);
       if (!el) return;
+      el.style.zIndex = ""; // restore stacking order after drag/resize
       const newRect: PanelRect = {
         x: parseFloat(el.style.left)   || d.startRect.x,
         y: parseFloat(el.style.top)    || d.startRect.y,
@@ -1535,9 +1617,16 @@ export function SalesPage() {
         h: parseFloat(el.style.height) || d.startRect.h,
       };
       const updated = { ...panelsRef.current!, [d.panelId]: newRect };
-      savePanels(updated);
-      setSavedSnack(true);
-      setTimeout(() => setSavedSnack(false), 2500);
+      const overlapping = findOverlappingPanels(updated);
+      if (overlapping.size > 0) {
+        updateState(updated); // persist position in-memory but NOT to localStorage
+        setOverlapSnack(true);
+        setTimeout(() => setOverlapSnack(false), 4000);
+      } else {
+        savePanels(updated);
+        setSavedSnack(true);
+        setTimeout(() => setSavedSnack(false), 2500);
+      }
     };
     document.addEventListener("pointermove", onMove);
     document.addEventListener("pointerup", onUp);
@@ -1546,7 +1635,7 @@ export function SalesPage() {
       document.removeEventListener("pointerup", onUp);
       cancelAnimationFrame(rafId);
     };
-  }, [savePanels, panelsRef]);
+  }, [savePanels, updateState, panelsRef]);
 
   const startPanelDrag = useCallback((panelId: PanelId, e: React.PointerEvent) => {
     e.preventDefault();
@@ -1554,20 +1643,26 @@ export function SalesPage() {
     const rect = panelsRef.current?.[panelId];
     if (!rect) return;
     freeDragRef.current = { panelId, mode: "move", startX: e.clientX, startY: e.clientY, startRect: { ...rect } };
+    // Bring active panel above all others during drag
+    const el = containerRef.current?.querySelector<HTMLElement>(`[data-panel="${panelId}"]`);
+    if (el) el.style.zIndex = "40";
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }, [panelsRef]);
 
-  const startPanelResize = useCallback((panelId: PanelId, mode: "e" | "s" | "se", e: React.PointerEvent) => {
+  const startPanelResize = useCallback((panelId: PanelId, mode: Exclude<ResizeMode, "move">, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const rect = panelsRef.current?.[panelId];
     if (!rect) return;
     freeDragRef.current = { panelId, mode, startX: e.clientX, startY: e.clientY, startRect: { ...rect } };
+    const el = containerRef.current?.querySelector<HTMLElement>(`[data-panel="${panelId}"]`);
+    if (el) el.style.zIndex = "40";
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }, [panelsRef]);
 
   const handleReset = useCallback(() => {
     resetPanels();
+    setOverlapSet(new Set());
     setSavedSnack(true);
     setTimeout(() => setSavedSnack(false), 2500);
   }, [resetPanels]);
@@ -1683,6 +1778,7 @@ export function SalesPage() {
               panelId="flavors"
               rect={panels.flavors}
               editMode={editMode}
+              isOverlapping={overlapSet.has("flavors")}
               label="Sorten"
               onDragStart={startPanelDrag}
               onResizeStart={startPanelResize}
@@ -1700,6 +1796,7 @@ export function SalesPage() {
               panelId="sizes"
               rect={panels.sizes}
               editMode={editMode}
+              isOverlapping={overlapSet.has("sizes")}
               label="Größen"
               onDragStart={startPanelDrag}
               onResizeStart={startPanelResize}
@@ -1717,6 +1814,7 @@ export function SalesPage() {
               panelId="payment"
               rect={panels.payment}
               editMode={editMode}
+              isOverlapping={overlapSet.has("payment")}
               label="Zahlung"
               onDragStart={startPanelDrag}
               onResizeStart={startPanelResize}
@@ -1743,6 +1841,7 @@ export function SalesPage() {
               panelId="cart"
               rect={panels.cart}
               editMode={editMode}
+              isOverlapping={overlapSet.has("cart")}
               label="Warenkorb"
               onDragStart={startPanelDrag}
               onResizeStart={startPanelResize}
@@ -1813,6 +1912,13 @@ export function SalesPage() {
       {savedSnack && (
         <div className="fixed bottom-14 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-primaq-500 px-4 py-2 text-sm font-bold text-white shadow-lg pointer-events-none">
           Layout für dieses Gerät gespeichert
+        </div>
+      )}
+
+      {/* Overlap warning – shown when panels collide; layout NOT saved to localStorage */}
+      {overlapSnack && (
+        <div className="fixed bottom-14 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white shadow-lg pointer-events-none">
+          Überlappung – bitte Layout korrigieren
         </div>
       )}
 

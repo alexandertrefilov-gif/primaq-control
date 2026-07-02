@@ -6,16 +6,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const LS_KEY = "primaq-pos-free-layout-v1";
 
 export type PanelId = "flavors" | "sizes" | "payment" | "cart";
-export type ResizeMode = "move" | "e" | "s" | "se";
+export type ResizeMode = "move" | "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se";
 
 export type PanelRect = { x: number; y: number; w: number; h: number };
 export type FreeLayout = { panels: Record<PanelId, PanelRect>; updatedAt?: string };
 
 export const FL_PANEL_MINS: Record<PanelId, { w: number; h: number }> = {
-  flavors: { w: 520, h: 360 },
-  sizes:   { w: 420, h: 100 },
-  payment: { w: 520, h: 210 },
-  cart:    { w: 320, h: 360 },
+  flavors: { w: 480, h: 320 },
+  sizes:   { w: 360, h: 90  },
+  payment: { w: 480, h: 190 },
+  cart:    { w: 320, h: 320 },
 };
 
 const HEADER_H = 56; // approximate header height to subtract from window.innerHeight
@@ -78,6 +78,11 @@ export function usePosFreePanelStore() {
     saveToLS(p);
   }, []);
 
+  /** Update in-memory state only – does NOT write to localStorage (used when overlap detected). */
+  const updateState = useCallback((p: Record<PanelId, PanelRect>) => {
+    setPanels(p);
+  }, []);
+
   const reset = useCallback(() => {
     localStorage.removeItem(LS_KEY);
     const { vw, vh } = getWindowDims();
@@ -88,5 +93,5 @@ export function usePosFreePanelStore() {
   const panelsRef = useRef(panels);
   useEffect(() => { panelsRef.current = panels; }, [panels]);
 
-  return { panels, panelsRef, hydrated, save, reset };
+  return { panels, panelsRef, hydrated, save, updateState, reset };
 }

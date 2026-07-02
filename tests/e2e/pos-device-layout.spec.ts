@@ -13,6 +13,18 @@
  * FL 10 – Layoutwerte werden NICHT via Supabase synchronisiert
  * FL 11 – Kein horizontaler Scroll auf 1366×1024
  * FL 12 – Verkauf bleibt funktionsfähig im Edit-Modus
+ * FL 13 – N-Kante nach unten verkleinert Höhe und erhöht Y
+ * FL 14 – N-Kante nach oben vergrößert Höhe und verringert Y
+ * FL 15 – W-Kante nach rechts verkleinert Breite und erhöht X
+ * FL 16 – NE-Ecke erhöht Breite und verringert Y
+ * FL 17 – Drag-Handle verschiebt Panel ohne Höhenänderung
+ * FL 18 – N-Kante ändert Höhe, nicht Breite (Resize, kein Move)
+ * FL 19 – minHeight wird beim N-Resize eingehalten
+ * FL 20 – Normalmodus zeigt keine Resize-Handles
+ * FL 21 – Überlappung zeigt roten Rahmen (data-overlap="true")
+ * FL 22 – Überlappung blockiert localStorage-Speicherung
+ * FL 23 – Reset erzeugt überlappungsfreies Layout
+ * FL 24 – Panel-Header bleibt innerhalb der Panel-Breite
  */
 
 import { expect, test } from "@playwright/test";
@@ -294,4 +306,244 @@ test("FL 12 – Verkauf bleibt funktionsfähig im Edit-Modus", async ({ page }) 
   await expect(page.getByTestId("layout-edit-panel")).not.toBeVisible();
   // Drag handles must be gone after leaving edit mode
   await expect(page.locator('[data-testid^="fl-drag-"]')).toHaveCount(0);
+});
+
+// ─── 8-Richtungs-Resize Tests ─────────────────────────────────────────────────
+
+/** Compact layout: cart at (400, 80, 450, 500) – well inside a 1280×800 viewport.
+ *  cart.w=450 leaves 130px above minW(320) so W-edge drag of 60px stays unclamped. */
+const compactLayout = {
+  flavors: { x: 0,   y: 0,   w: 380, h: 360 },
+  sizes:   { x: 0,   y: 360, w: 380, h: 100 },
+  payment: { x: 0,   y: 460, w: 380, h: 220 },
+  cart:    { x: 400, y: 80,  w: 450, h: 500 },
+};
+
+test("FL 13 – N-Kante nach unten verkleinert Höhe und erhöht Y", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await seedFreeLayout(page, compactLayout);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  const before = await page.locator('[data-panel="cart"]').boundingBox();
+  const beforeY = before?.y ?? 0;
+  const beforeH = before?.height ?? 0;
+
+  await enterEditMode(page);
+  await drag(page, '[data-testid="fl-resize-n-cart"]', 0, 60);
+
+  const after = await page.locator('[data-panel="cart"]').boundingBox();
+  expect((after?.y ?? 0)).toBeGreaterThan(beforeY + 30);
+  expect((after?.height ?? 0)).toBeLessThan(beforeH - 30);
+});
+
+test("FL 14 – N-Kante nach oben vergrößert Höhe und verringert Y", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await seedFreeLayout(page, compactLayout);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  const before = await page.locator('[data-panel="cart"]').boundingBox();
+  const beforeY = before?.y ?? 0;
+  const beforeH = before?.height ?? 0;
+
+  await enterEditMode(page);
+  await drag(page, '[data-testid="fl-resize-n-cart"]', 0, -50);
+
+  const after = await page.locator('[data-panel="cart"]').boundingBox();
+  expect((after?.y ?? 0)).toBeLessThan(beforeY - 20);
+  expect((after?.height ?? 0)).toBeGreaterThan(beforeH + 20);
+});
+
+test("FL 15 – W-Kante nach rechts verkleinert Breite und erhöht X", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await seedFreeLayout(page, compactLayout);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  const before = await page.locator('[data-panel="cart"]').boundingBox();
+  const beforeX = before?.x ?? 0;
+  const beforeW = before?.width ?? 0;
+
+  await enterEditMode(page);
+  await drag(page, '[data-testid="fl-resize-w-cart"]', 60, 0);
+
+  const after = await page.locator('[data-panel="cart"]').boundingBox();
+  expect((after?.x ?? 0)).toBeGreaterThan(beforeX + 30);
+  expect((after?.width ?? 0)).toBeLessThan(beforeW - 30);
+});
+
+test("FL 16 – NE-Ecke erhöht Breite und verringert Y", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await seedFreeLayout(page, compactLayout);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  const before = await page.locator('[data-panel="cart"]').boundingBox();
+  const beforeY = before?.y ?? 0;
+  const beforeW = before?.width ?? 0;
+
+  await enterEditMode(page);
+  await drag(page, '[data-testid="fl-resize-ne-cart"]', 50, -50);
+
+  const after = await page.locator('[data-panel="cart"]').boundingBox();
+  expect((after?.width ?? 0)).toBeGreaterThan(beforeW + 20);
+  expect((after?.y ?? 0)).toBeLessThan(beforeY - 20);
+});
+
+test("FL 17 – Drag-Handle verschiebt Panel ohne Höhenänderung", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await seedFreeLayout(page, compactLayout);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  const before = await page.locator('[data-panel="cart"]').boundingBox();
+  const beforeH = before?.height ?? 0;
+
+  await enterEditMode(page);
+  // Drag upward (avoids workspace-bottom clamp with a tall panel)
+  await drag(page, '[data-testid="fl-drag-cart"]', 0, -60);
+
+  const after = await page.locator('[data-panel="cart"]').boundingBox();
+  // Position must have moved up
+  expect((after?.y ?? 0)).toBeLessThan((before?.y ?? 0) - 20);
+  // Height must be unchanged
+  expect(Math.abs((after?.height ?? 0) - beforeH)).toBeLessThan(5);
+});
+
+test("FL 18 – N-Kante ändert Höhe, nicht Breite (Resize, kein Move)", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await seedFreeLayout(page, compactLayout);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  const before = await page.locator('[data-panel="cart"]').boundingBox();
+  const beforeW = before?.width ?? 0;
+  const beforeH = before?.height ?? 0;
+
+  await enterEditMode(page);
+  await drag(page, '[data-testid="fl-resize-n-cart"]', 0, 60);
+
+  const after = await page.locator('[data-panel="cart"]').boundingBox();
+  // Width must be unchanged (it's a resize, not a move)
+  expect(Math.abs((after?.width ?? 0) - beforeW)).toBeLessThan(5);
+  // Height must have changed
+  expect(Math.abs((after?.height ?? 0) - beforeH)).toBeGreaterThan(20);
+});
+
+test("FL 19 – minHeight wird beim N-Resize eingehalten", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  // Cart starts at y=80, h=500; minHeight for cart = 360
+  await seedFreeLayout(page, compactLayout);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await enterEditMode(page);
+  // Drag N handle down 250px — would make h=250, below minHeight 360
+  await drag(page, '[data-testid="fl-resize-n-cart"]', 0, 250);
+
+  const after = await page.locator('[data-panel="cart"]').boundingBox();
+  // Height must be clamped to at least minHeight for cart (320)
+  expect((after?.height ?? 0)).toBeGreaterThanOrEqual(315);
+});
+
+test("FL 20 – Normalmodus zeigt keine Resize-Handles", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  // Not entering edit mode – handles must not exist
+  await expect(page.locator('[data-testid^="fl-resize-"]')).toHaveCount(0);
+});
+
+// ─── Überlappungs-Tests ────────────────────────────────────────────────────────
+
+/** Non-overlapping seed: flavors at 0-500, cart at 510+ */
+const overlapSeedBase = {
+  flavors: { x: 0,   y: 0,   w: 500, h: 360 },
+  sizes:   { x: 0,   y: 360, w: 500, h: 100 },
+  payment: { x: 0,   y: 460, w: 500, h: 200 },
+  cart:    { x: 510, y: 0,   w: 350, h: 400 },
+};
+
+test("FL 21 – Überlappung zeigt roten Rahmen (data-overlap='true')", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await seedFreeLayout(page, overlapSeedBase);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  // Confirm no overlap initially
+  await expect(page.locator('[data-overlap="true"]')).toHaveCount(0);
+
+  await enterEditMode(page);
+  // Drag cart 120px left – cart moves from x=510 to ~x=390, overlapping flavors (0-500)
+  await drag(page, '[data-testid="fl-drag-cart"]', -120, 0);
+
+  // Cart and flavors should both show overlap indicator
+  await expect(page.locator('[data-panel="cart"][data-overlap="true"]')).toBeVisible();
+});
+
+test("FL 22 – Überlappung blockiert localStorage-Speicherung", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await seedFreeLayout(page, overlapSeedBase);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  // Capture LS value before dragging
+  const lsBefore = await page.evaluate((key) => localStorage.getItem(key), LS_FREE_KEY);
+
+  await enterEditMode(page);
+  // Drag cart to cause overlap
+  await drag(page, '[data-testid="fl-drag-cart"]', -120, 0);
+
+  // LS must still have the original (pre-drag) value
+  const lsAfter = await page.evaluate((key) => localStorage.getItem(key), LS_FREE_KEY);
+  expect(lsAfter).toBe(lsBefore);
+});
+
+test("FL 23 – Reset erzeugt überlappungsfreies Layout", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await seedFreeLayout(page, overlapSeedBase);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await enterEditMode(page);
+  // Create overlap first
+  await drag(page, '[data-testid="fl-drag-cart"]', -120, 0);
+  await expect(page.locator('[data-overlap="true"]')).not.toHaveCount(0);
+
+  // Reset
+  await page.getByTestId("layout-reset-btn").click();
+
+  // After reset, no panels should have overlap indicator
+  await expect(page.locator('[data-overlap="true"]')).toHaveCount(0);
+});
+
+test("FL 24 – Panel-Header bleibt innerhalb der Panel-Breite", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await enterEditMode(page);
+
+  // Check all four panels: header width must not exceed panel width
+  for (const panelId of ["flavors", "sizes", "payment", "cart"]) {
+    const panelBox  = await page.locator(`[data-panel="${panelId}"]`).boundingBox();
+    const headerBox = await page.locator(`[data-testid="fl-drag-${panelId}"]`).boundingBox();
+    // header should be inside the panel width (allow 2px tolerance for borders/subpixel)
+    expect(headerBox?.width ?? 0).toBeLessThanOrEqual((panelBox?.width ?? 0) + 2);
+    expect(headerBox?.x ?? 0).toBeGreaterThanOrEqual((panelBox?.x ?? 0) - 2);
+  }
 });
