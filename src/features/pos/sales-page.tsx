@@ -515,11 +515,11 @@ function FlavorColumn({
       data-testid="flavor-zone"
       data-guided-active={guidedMode && guidedActive ? "true" : undefined}
       className={cn(
-        "flex flex-col rounded-2xl pos-surface shadow min-h-0 overflow-hidden transition-all",
+        "rounded-2xl pos-surface shadow overflow-hidden transition-all",
         guidedMode && guidedActive && "ring-2 ring-[#00D6A3]/50"
       )}
     >
-      <div className="shrink-0 px-3 pt-2 pb-1.5">
+      <div className="px-3 pt-2 pb-1.5">
         <p className={cn(
           "text-[11px] font-bold uppercase tracking-widest transition-colors",
           guidedMode && guidedActive ? "text-[#00D6A3]" : "pos-text-label"
@@ -527,7 +527,7 @@ function FlavorColumn({
           Sorte wählen
         </p>
       </div>
-      <div className="flex-1 overflow-y-auto min-h-0 px-3 pb-2 space-y-2">
+      <div className="px-3 pb-2 space-y-2">
         {groups.map(([groupId, groupLabel]) => {
           const flavors = allFlavors.filter((f) => f.group === groupId);
           return (
@@ -568,7 +568,7 @@ function SizeRow({
       data-testid="size-zone"
       data-guided-active={guidedMode && guidedActive ? "true" : undefined}
       className={cn(
-        "rounded-2xl pos-section shadow px-3 py-2.5 transition-all",
+        "rounded-2xl pos-section shadow px-3 py-2 transition-all",
         guidedMode && guidedActive && "guided-ring-pulse"
       )}
     >
@@ -640,7 +640,7 @@ function GuidedStepsBar({ step }: { step: 1 | 2 | 3 | 4 }) {
     <div
       data-testid="guided-steps-bar"
       data-active-step={step}
-      className="flex shrink-0 items-center gap-1 rounded-2xl pos-section px-4 py-2.5 shadow backdrop-blur-sm"
+      className="flex shrink-0 items-center gap-1 rounded-2xl pos-section px-3 py-1.5 shadow backdrop-blur-sm"
     >
       {GUIDED_STEPS.map(({ n, label }, i) => {
         const done = n < step;
@@ -671,7 +671,7 @@ function GuidedStepsBar({ step }: { step: 1 | 2 | 3 | 4 }) {
             {!isLast && (
               <div className={cn(
                 "ml-1 h-0.5 flex-1 rounded-full transition-colors",
-                done ? "bg-[#22C55E]/50" : "bg-white/10"
+                done ? "bg-[#22C55E]/50" : "pos-overlay"
               )} />
             )}
           </div>
@@ -767,7 +767,7 @@ function PaymentBlock({
     <div
       data-testid="payment-zone"
       className={cn(
-        "shrink-0 rounded-2xl pos-section p-2.5 shadow transition-all",
+        "shrink-0 rounded-2xl pos-section p-2 shadow transition-all",
         guidedMode && guidedStep === 3 && "ring-2 ring-[#00D6A3]/50",
         guidedMode && guidedStep === 4 && "ring-2 ring-green-400/40"
       )}
@@ -995,9 +995,8 @@ function CartColumn({
   useEffect(() => () => clearTimeout(clearTimerRef.current), []);
 
   return (
-    <div data-testid="cart-zone" className="flex shrink-0 flex-col min-h-0" style={{ width: widthPx }}>
-      {/* Cart – full height */}
-      <div className="flex flex-1 flex-col rounded-2xl pos-surface shadow min-h-0">
+    <div data-testid="cart-zone" style={{ width: widthPx }}>
+      <div className="flex flex-col rounded-2xl pos-surface shadow">
         <div className="flex shrink-0 items-center gap-2 border-b pos-border-c px-4 py-2.5">
           <span className="text-[11px] font-bold uppercase tracking-widest pos-text-label mr-auto">
             Warenkorb
@@ -1030,7 +1029,7 @@ function CartColumn({
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="overflow-y-auto" style={{ maxHeight: "380px" }}>
           {cart.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 pos-text-dim py-6">
               <ShoppingCart className="h-8 w-8" />
@@ -1283,7 +1282,7 @@ function SalesStatusBar({
     <>
       <div
         data-testid="last-booking-bar"
-        className="shrink-0 flex items-center gap-3 rounded-2xl pos-section px-5 py-2.5 shadow backdrop-blur-sm"
+        className="shrink-0 flex items-center gap-2 rounded-2xl pos-section px-4 py-1.5 shadow backdrop-blur-sm"
       >
       {/* Left: last booking */}
       {showLastBooking && (
@@ -1497,13 +1496,11 @@ export function SalesPage() {
         style={{
           gridTemplateColumns: `minmax(0, 1fr) ${layout.cartWidth}px`,
           gridTemplateRows: "1fr",
+          alignItems: "start",
         }}
       >
-        {/* Left: 3-zone stable grid – Sorten (flex) | Größen (auto) | Zahlung (auto) */}
-        <div
-          className="min-h-0 overflow-hidden grid gap-2"
-          style={{ gridTemplateColumns: "minmax(0, 1fr)", gridTemplateRows: "minmax(0, 1fr) auto auto" }}
-        >
+        {/* Left: flex-column – Sorten | Größen | Zahlung natural stacking */}
+        <div className="flex flex-col gap-2">
           <FlavorColumn
             onFlavorClick={handleFlavorClick}
             cardSize={layout.flavorCardSize}
