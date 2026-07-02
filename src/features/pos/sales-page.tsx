@@ -12,6 +12,8 @@ import { useAdmin } from "./admin-context";
 import {
   usePosFreePanelStore,
   FL_PANEL_MINS,
+  PANEL_GAP,
+  normalizeLayout,
   type PanelId,
   type PanelRect,
   type ResizeMode,
@@ -929,11 +931,18 @@ function PaymentBlock({
         </button>
       </div>
 
-      {/* Rückgeld – unterhalb der kombinierten Zeile */}
+      {/* Rückgeld – gleiche Schriftgröße wie Gegeben-Feld */}
       {showPayment && paymentMethod === "bar" && cashCents >= cartTotal && cartTotal > 0 && (
-        <div className="mt-1.5 flex items-center justify-between rounded-xl bg-green-500/15 px-3 py-2">
-          <span className="text-sm font-bold text-green-400">Rückgeld</span>
-          <span className="text-xl font-black text-green-400 tabular-nums">{fmt(change)}</span>
+        <div className="mt-1.5 flex items-center justify-between rounded-xl bg-green-500/15 px-4 py-2">
+          <span className="text-sm font-bold uppercase tracking-wide text-green-400">Rückgeld</span>
+          <span className="text-4xl font-black tabular-nums text-green-400">{fmt(change)}</span>
+        </div>
+      )}
+      {/* Noch offen – wenn eingegebener Betrag noch nicht ausreicht */}
+      {showPayment && paymentMethod === "bar" && cashCents > 0 && cashCents < cartTotal && cartTotal > 0 && (
+        <div className="mt-1.5 flex items-center justify-between rounded-xl bg-orange-500/15 px-4 py-2">
+          <span className="text-sm font-bold uppercase tracking-wide text-orange-400">Noch offen</span>
+          <span className="text-4xl font-black tabular-nums text-orange-400">{fmt(cartTotal - cashCents)}</span>
         </div>
       )}
     </div>
@@ -1479,6 +1488,53 @@ function rectsOverlap(a: PanelRect, b: PanelRect): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
+/**
+ * Clamps a drag-move delta so the panel stops at PANEL_GAP from any other panel.
+ * Uses the start position to determine which side of each obstacle we're approaching.
+ * If panels already overlap at the start (e.g. stale layout), clamping is skipped so
+ * the user can drag them apart.
+ */
+function clampMoveAgainstOthers(
+  startRect: PanelRect,
+  dx: number,
+  dy: number,
+  others: PanelRect[],
+  gap: number,
+): { dx: number; dy: number } {
+  let cdx = dx;
+  let cdy = dy;
+
+  for (const O of others) {
+    const P = startRect;
+    const nx = P.x + cdx;
+    const ny = P.y + cdy;
+
+    // Would the proposed position collide with O (including gap zone)?
+    const colX = nx < O.x + O.w + gap && nx + P.w > O.x - gap;
+    const colY = ny < O.y + O.h + gap && ny + P.h > O.y - gap;
+    if (!colX || !colY) continue;
+
+    // Horizontal constraint: clamp based on original relative position
+    if (P.x + P.w <= O.x) {
+      // P was to the left of O – prevent right entry
+      cdx = Math.min(cdx, O.x - gap - P.x - P.w);
+    } else if (P.x >= O.x + O.w) {
+      // P was to the right of O – prevent left entry
+      cdx = Math.max(cdx, O.x + O.w + gap - P.x);
+    }
+    // Vertical constraint: clamp based on original relative position
+    if (P.y + P.h <= O.y) {
+      // P was above O – prevent downward entry
+      cdy = Math.min(cdy, O.y - gap - P.y - P.h);
+    } else if (P.y >= O.y + O.h) {
+      // P was below O – prevent upward entry
+      cdy = Math.max(cdy, O.y + O.h + gap - P.y);
+    }
+  }
+
+  return { dx: cdx, dy: cdy };
+}
+
 /** Returns the set of panel IDs that are part of any overlapping pair. */
 function findOverlappingPanels(panels: Record<PanelId, PanelRect>): Set<PanelId> {
   const ids = Object.keys(panels) as PanelId[];
@@ -1494,15 +1550,16 @@ function findOverlappingPanels(panels: Record<PanelId, PanelRect>): Set<PanelId>
   return result;
 }
 
-/** Clamp panel to workspace bounds; adjusts dimension when position hits an edge. */
+/** Clamp panel to workspace bounds with PANEL_GAP margin; adjusts dimension when position hits an edge. */
 function clampToWorkspace(r: PanelRect, wsW: number, wsH: number, mn: { w: number; h: number }): PanelRect {
+  const G = PANEL_GAP;
   let { x, y, w, h } = r;
-  w = Math.max(mn.w, Math.min(w, wsW));
-  h = Math.max(mn.h, Math.min(h, wsH));
-  if (x < 0) { w = Math.max(mn.w, w + x); x = 0; }
-  if (y < 0) { h = Math.max(mn.h, h + y); y = 0; }
-  x = Math.min(x, wsW - w);
-  y = Math.min(y, wsH - h);
+  w = Math.max(mn.w, Math.min(w, wsW - 2 * G));
+  h = Math.max(mn.h, Math.min(h, wsH - 2 * G));
+  if (x < G) { w = Math.max(mn.w, w + x - G); x = G; }
+  if (y < G) { h = Math.max(mn.h, h + y - G); y = G; }
+  x = Math.min(x, wsW - w - G);
+  y = Math.min(y, wsH - h - G);
   return { x, y, w, h };
 }
 
@@ -1592,8 +1649,18 @@ export function SalesPage() {
       const mn = FL_PANEL_MINS[d.panelId];
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
-        const raw = computePanelRect(d.mode, r, dx, dy, mn);
-        const nr  = clampToWorkspace(raw, ctr.clientWidth, ctr.clientHeight, mn);
+        let raw: PanelRect;
+        if (d.mode === "move") {
+          // Collision prevention: clamp delta so panel stops at PANEL_GAP from others
+          const others = (Object.entries(panelsRef.current!) as [PanelId, PanelRect][])
+            .filter(([id]) => id !== d.panelId)
+            .map(([, rect]) => rect);
+          const { dx: cdx, dy: cdy } = clampMoveAgainstOthers(r, dx, dy, others, PANEL_GAP);
+          raw = computePanelRect("move", r, cdx, cdy, mn);
+        } else {
+          raw = computePanelRect(d.mode, r, dx, dy, mn);
+        }
+        const nr = clampToWorkspace(raw, ctr.clientWidth, ctr.clientHeight, mn);
         el.style.left   = `${nr.x}px`;
         el.style.top    = `${nr.y}px`;
         el.style.width  = `${nr.w}px`;
@@ -1636,6 +1703,25 @@ export function SalesPage() {
       cancelAnimationFrame(rafId);
     };
   }, [savePanels, updateState, panelsRef]);
+
+  // Normalise layout on browser resize (debounced 150 ms)
+  useEffect(() => {
+    let timer = 0;
+    const handleResize = () => {
+      clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const ctr = containerRef.current;
+        const pnls = panelsRef.current;
+        if (!ctr || !pnls) return;
+        savePanels(normalizeLayout(pnls, ctr.clientWidth, ctr.clientHeight));
+      }, 150);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [savePanels, panelsRef]);
 
   const startPanelDrag = useCallback((panelId: PanelId, e: React.PointerEvent) => {
     e.preventDefault();
