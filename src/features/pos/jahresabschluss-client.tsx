@@ -6,7 +6,7 @@ import { useAdmin } from "./admin-context";
 import { usePosYearStore } from "./use-pos-year-store";
 import { ReportResetDialog } from "./report-reset-dialog";
 import { getFlavorName, getItemSizeName } from "./pos-config";
-import { usePosVatStore, calcNet } from "./use-pos-vat-store";
+import { usePosVatStore, calcNetForDay, effectiveVatRate } from "./use-pos-vat-store";
 import { useEventPlanStore } from "./use-event-plan-store";
 import { getSyncService } from "@/lib/sync/sync-service";
 import type { DailySummary } from "./pos-types";
@@ -56,7 +56,7 @@ function computeMonthly(days: DailySummary[], year: number, vatRate: number): Mo
     const prefix = `${year}-${String(month).padStart(2, "0")}`;
     const monthDays = days.filter((d) => d.date.startsWith(prefix));
     const total = monthDays.reduce((s, d) => s + d.totalCents, 0);
-    const net = calcNet(total, vatRate);
+    const net = monthDays.reduce((s, d) => s + calcNetForDay(d, vatRate), 0);
     return {
       month,
       label: MONTHS[i],
@@ -105,7 +105,7 @@ function buildCsv(days: DailySummary[], year: number, vatRate: number): string {
     `Datum;Einsatz / Veranstaltung;Umsatz brutto (€);Bar (€);Karte (€);QR (€);Bestellungen;Netto ${vatLabel} (€);MwSt ${vatLabel} (€)`,
   ];
   for (const d of days) {
-    const net = calcNet(d.totalCents, vatRate);
+    const net = calcNetForDay(d, vatRate);
     rows.push(
       [
         d.date,
@@ -152,12 +152,12 @@ function buildDatevCsv(days: DailySummary[], year: number, vatRate: number): str
     "Belegfeld 1", "Buchungstext",
   ].join(";");
 
-  const revenueAccount = datevRevenueAccount(vatRate);
   const rows: string[] = [];
 
   for (const d of days) {
     const belegdatum = d.date.slice(8, 10) + d.date.slice(5, 7); // DDMM
     const ref = `POS-${d.date.replace(/-/g, "")}`;
+    const revenueAccount = datevRevenueAccount(effectiveVatRate(d, vatRate));
 
     const addRow = (cents: number, konto: string, text: string) => {
       if (cents <= 0) return;
@@ -222,7 +222,7 @@ async function downloadXlsx(
   const dayData = [
     ["Datum", "Umsatz brutto (€)", "Bar (€)", "Karte (€)", "QR (€)", "Bestellungen", `Netto ${vatLabel} (€)`, `MwSt ${vatLabel} (€)`],
     ...days.map((d) => {
-      const net = calcNet(d.totalCents, vatRate);
+      const net = calcNetForDay(d, vatRate);
       return [
         d.date,
         d.totalCents / 100,
@@ -579,7 +579,7 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
   const cashCents = days.reduce((s, d) => s + d.cashCents, 0);
   const cardCents = days.reduce((s, d) => s + d.cardCents, 0);
   const qrCents = days.reduce((s, d) => s + d.qrCents, 0);
-  const netCents = calcNet(totalCents, vatRate);
+  const netCents = days.reduce((s, d) => s + calcNetForDay(d, vatRate), 0);
   const vatCents = totalCents - netCents;
   const hasData = days.length > 0;
 
@@ -663,8 +663,8 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
           {/* ── KPIs ─────────────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <KpiCard label="Umsatz brutto" value={fmt(totalCents)} accent testId="kpi-total" />
-            <KpiCard label="Netto" value={fmt(netCents)} />
-            <KpiCard label={`MwSt ${vatRate} %`} value={fmt(vatCents)} />
+            <KpiCard label="Netto" value={fmt(netCents)} testId="kpi-net" />
+            <KpiCard label={`MwSt ${vatRate} %`} value={fmt(vatCents)} testId="kpi-vat" />
             <KpiCard label="Bestellungen" value={String(totalOrders)} />
           </div>
 

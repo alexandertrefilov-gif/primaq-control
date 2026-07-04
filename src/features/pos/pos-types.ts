@@ -27,6 +27,9 @@ export type DailySummary = {
   orderCount: number;
   orders: Order[];
   eventName?: string | null;
+  /** VAT rate (%) in effect when this day was closed. Undefined for days closed
+   *  before this field existed — reports fall back to the current VAT setting. */
+  vatRate?: number;
 };
 
 export type PosState = {

@@ -126,11 +126,13 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
       return;
     }
     if (daily.orderCount > 0) {
-      saveDay(daily);
+      // Stamp the VAT rate in effect at closing time — historical reports must
+      // keep using this value even if the rate is changed later.
+      saveDay({ ...daily, vatRate });
     }
     resetDaily();
     setConfirming(false);
-  }, [isAdmin, confirming, daily, saveDay, resetDaily]);
+  }, [isAdmin, confirming, daily, vatRate, saveDay, resetDaily]);
 
   if (!hydrated || !adminHydrated || !vatHydrated || !eventPlanHydrated) {
     return <div className="flex h-40 items-center justify-center text-black/40">Laden…</div>;

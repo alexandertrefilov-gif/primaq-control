@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Download, Lock, Trash2 } from "lucide-react";
 import { useAdmin } from "./admin-context";
 import { usePosYearStore } from "./use-pos-year-store";
-import { usePosVatStore, calcNet } from "./use-pos-vat-store";
+import { usePosVatStore, calcNetForDay } from "./use-pos-vat-store";
 import { ReportResetDialog } from "./report-reset-dialog";
 import { getSyncService } from "@/lib/sync/sync-service";
 import type { DailySummary } from "./pos-types";
@@ -74,24 +74,24 @@ function buildWeekCsv(days: WeekDay[], isoYear: number, isoWeek: number, vatRate
     "",
     `Datum;Wochentag;Einsatz / Veranstaltung;Umsatz brutto (€);Bar (€);Karte (€);QR (€);Bestellungen;Netto ${vatLabel} (€);MwSt ${vatLabel} (€)`,
   ];
-  let totalCents = 0, cashCents = 0, cardCents = 0, qrCents = 0, orders = 0;
+  let totalCents = 0, cashCents = 0, cardCents = 0, qrCents = 0, orders = 0, netTotalCents = 0;
   for (const d of days) {
     const s = d.summary;
     if (s) {
-      const net = calcNet(s.totalCents, vatRate);
+      const net = calcNetForDay(s, vatRate);
       rows.push([d.dateStr, d.label, s.eventName ?? "", fmtNum(s.totalCents), fmtNum(s.cashCents),
         fmtNum(s.cardCents), fmtNum(s.qrCents), s.orderCount,
         fmtNum(net), fmtNum(s.totalCents - net)].join(";"));
       totalCents += s.totalCents; cashCents += s.cashCents;
       cardCents += s.cardCents; qrCents += s.qrCents; orders += s.orderCount;
+      netTotalCents += net;
     } else {
       rows.push([d.dateStr, d.label, "", "0,00", "0,00", "0,00", "0,00", "0", "0,00", "0,00"].join(";"));
     }
   }
-  const net = calcNet(totalCents, vatRate);
   rows.push(["", "Gesamt", "", fmtNum(totalCents), fmtNum(cashCents),
     fmtNum(cardCents), fmtNum(qrCents), orders,
-    fmtNum(net), fmtNum(totalCents - net)].join(";"));
+    fmtNum(netTotalCents), fmtNum(totalCents - netTotalCents)].join(";"));
   return "﻿" + rows.join("\n");
 }
 
@@ -135,7 +135,7 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
   const cardCents  = weekDays.reduce((s, d) => s + (d.summary?.cardCents  ?? 0), 0);
   const qrCents    = weekDays.reduce((s, d) => s + (d.summary?.qrCents    ?? 0), 0);
   const orderCount = weekDays.reduce((s, d) => s + (d.summary?.orderCount ?? 0), 0);
-  const netCents   = calcNet(totalCents, vatRate);
+  const netCents   = weekDays.reduce((s, d) => s + (d.summary ? calcNetForDay(d.summary, vatRate) : 0), 0);
   const vatCents   = totalCents - netCents;
   const hasData    = totalCents > 0;
 

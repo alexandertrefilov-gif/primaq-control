@@ -9,6 +9,9 @@
  * 5b – Jahresabschluss KPI + Tabellenkopf nach Änderung auf 19 %
  * 6  – Tagesabschluss zeigt MwSt-Label mit konfiguriertem Steuersatz
  * 7  – CSV-Export enthält konfigurierten Steuersatz im Header
+ * 8  – Tagesabschluss speichert den beim Abschluss gültigen MwSt-Satz dauerhaft
+ * 9  – Monatsbericht zeigt zwei Tage mit unterschiedlichem, jeweils gespeichertem Satz
+ * 10 – Jahresbericht/Export verändert einen historischen Tag nicht rückwirkend
  */
 
 import * as fs from "fs";
@@ -273,4 +276,163 @@ test("VAT 7: CSV-Export Jahresabschluss enthält konfigurierten Steuersatz", asy
   const content = fs.readFileSync(filePath!, "utf-8");
   expect(content).toContain("Netto 19 %");
   expect(content).toContain("MwSt 19 %");
+});
+
+// ── Test 8: Tagesabschluss speichert den gültigen Satz dauerhaft ────────────
+
+test("VAT 8: Tagesabschluss speichert den beim Abschluss gültigen MwSt-Satz", async ({ page }) => {
+  await freshDb(page, "vat8");
+  await seedAdmin(page);
+  await blockSupabase(page);
+
+  await gotoGrundeinstellungen(page);
+  await page.getByTestId("vat-preset-19").click();
+  await expect(page.getByTestId("vat-rate-input")).toHaveValue("19");
+  expect(await readKvEntry(page, "primaq-pos-vat-rate")).toBe("19");
+
+  const today = new Date().toISOString().slice(0, 10);
+  await page.goto("/tagesabschluss");
+  await page.waitForFunction(() => !document.body.textContent?.includes("Laden…"));
+  await writeKvEntry(
+    page,
+    "primaq-pos-state",
+    JSON.stringify({
+      cart: [],
+      daily: {
+        date: today,
+        totalCents: 11900,
+        cashCents: 11900,
+        cardCents: 0,
+        qrCents: 0,
+        orderCount: 1,
+        orders: [],
+      },
+    })
+  );
+  await page.reload();
+  await page.waitForFunction(() => !document.body.textContent?.includes("Laden…"));
+
+  const resetBtn = page.getByTestId("daily-reset-btn");
+  await resetBtn.click();
+  await expect(resetBtn).toHaveText(/Wirklich zurücksetzen\?/);
+  await resetBtn.click();
+
+  await expect(page.getByText("Noch keine Bestellungen heute")).toBeVisible();
+
+  const historyRaw = await readKvEntry(page, "primaq-pos-year-history");
+  const history = JSON.parse(historyRaw ?? "[]") as Array<{ date: string; vatRate?: number }>;
+  const entry = history.find((d) => d.date === today);
+  expect(entry?.vatRate).toBe(19);
+});
+
+// ── Tests 9+10: Fixed historical days at different VAT rates ────────────────
+
+const DAY_JUN_01_AT_7 = {
+  date: "2026-06-01",
+  totalCents: 10700, // net 100,00 € + 7,00 € MwSt at 7 %
+  cashCents: 10700,
+  cardCents: 0,
+  qrCents: 0,
+  orderCount: 1,
+  orders: [],
+  vatRate: 7,
+};
+
+const DAY_JUN_15_AT_19 = {
+  date: "2026-06-15",
+  totalCents: 23800, // net 200,00 € + 38,00 € MwSt at 19 %
+  cashCents: 23800,
+  cardCents: 0,
+  qrCents: 0,
+  orderCount: 1,
+  orders: [],
+  vatRate: 19,
+};
+
+// ── Test 9: Monatsbericht zeigt beide Tage mit jeweiligem Satz ──────────────
+
+test("VAT 9: Monatsbericht rechnet jeden Tag mit seinem eigenen gespeicherten Satz", async ({ page }) => {
+  await freshDb(page, "vat9");
+  await seedAdmin(page);
+  await blockSupabase(page);
+
+  // Current global rate is set to 0 % — deliberately different from both stored
+  // day rates, so a bug that ignores the stored vatRate would be obvious.
+  await gotoGrundeinstellungen(page);
+  await page.getByTestId("vat-preset-0").click();
+  await expect(page.getByTestId("vat-rate-input")).toHaveValue("0");
+  expect(await readKvEntry(page, "primaq-pos-vat-rate")).toBe("0");
+  await writeKvEntry(
+    page,
+    "primaq-pos-year-history",
+    JSON.stringify([DAY_JUN_01_AT_7, DAY_JUN_15_AT_19])
+  );
+
+  await page.goto("/monatsbericht");
+  await page.waitForFunction(() => !document.body.textContent?.includes("Laden…"));
+  await page.getByTestId("prev-month").click(); // July 2026 → June 2026
+
+  await expect(page.getByTestId("month-day-row-2026-06-01")).toBeVisible();
+  await expect(page.getByTestId("month-day-row-2026-06-15")).toBeVisible();
+
+  // Sum of each day's own net/VAT (100+200 / 7+38), NOT calcNet(34500, 0 %).
+  await expect(page.getByTestId("month-net")).toHaveText(/300,00/);
+  await expect(page.getByTestId("month-vat")).toHaveText(/45,00/);
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByTestId("csv-export-month").click(),
+  ]);
+  const filePath = await download.path();
+  const content = fs.readFileSync(filePath!, "utf-8");
+  const rowJun01 = content.split("\n").find((l) => l.startsWith("2026-06-01"));
+  const rowJun15 = content.split("\n").find((l) => l.startsWith("2026-06-15"));
+  // CSV cells use plain toFixed(2) (period decimal), unlike the on-page "," formatting.
+  expect(rowJun01).toContain("100.00;7.00");
+  expect(rowJun15).toContain("200.00;38.00");
+});
+
+// ── Test 10: Jahresbericht/Export ändert historischen Tag nicht rückwirkend ──
+
+test("VAT 10: Spätere MwSt-Änderung verändert einen bereits abgeschlossenen Tag nicht rückwirkend", async ({ page }) => {
+  await freshDb(page, "vat10");
+  await seedAdmin(page);
+  await blockSupabase(page);
+
+  await page.goto("/einstellungen");
+  await writeKvEntry(page, "primaq-pos-year-history", JSON.stringify([DAY_JUN_01_AT_7]));
+
+  // Change the CURRENT rate to 19 % — well after the day above was closed at 7 %.
+  await page.getByRole("button", { name: "Grundeinstellungen" }).click();
+  await waitForVatInput(page);
+  await page.getByTestId("vat-preset-19").click();
+  await expect(page.getByTestId("vat-rate-input")).toHaveValue("19");
+  expect(await readKvEntry(page, "primaq-pos-vat-rate")).toBe("19");
+
+  await page.goto("/jahresabschluss");
+  await page.waitForFunction(() => !document.body.textContent?.includes("Laden…"));
+
+  // Must still reflect the day's own 7 % rate (100,00 € net / 7,00 € MwSt),
+  // not a retroactive recalculation at the now-current 19 %.
+  await expect(page.getByTestId("kpi-net")).toHaveText(/100,00/);
+  await expect(page.getByTestId("kpi-vat")).toHaveText(/7,00/);
+
+  const [csvDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: /CSV exportieren/ }).click(),
+  ]);
+  const csvPath = await csvDownload.path();
+  const csvContent = fs.readFileSync(csvPath!, "utf-8");
+  const csvRow = csvContent.split("\n").find((l) => l.startsWith("2026-06-01"));
+  expect(csvRow).toContain("100.00;7.00");
+
+  const [datevDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: /DATEV exportieren/ }).click(),
+  ]);
+  const datevPath = await datevDownload.path();
+  const datevContent = fs.readFileSync(datevPath!, "utf-8");
+  // 7 % cash revenue posts against account 8300, not the 19 % account 8400.
+  expect(datevContent).toContain(";1000;8300;");
+  expect(datevContent).not.toContain(";1000;8400;");
 });

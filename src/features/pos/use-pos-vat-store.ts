@@ -55,3 +55,18 @@ export function calcNet(grossCents: number, vatRate: number): number {
   if (vatRate === 0) return grossCents;
   return Math.round(grossCents / (1 + vatRate / 100));
 }
+
+/**
+ * The VAT rate that applied to a given day: its own stored rate if the day was
+ * closed after this field was introduced, otherwise the fallback (current) rate.
+ * Historical days must never be recalculated at today's rate once they have
+ * their own stored value — only unstamped legacy days fall back.
+ */
+export function effectiveVatRate(day: { vatRate?: number }, fallbackVatRate: number): number {
+  return day.vatRate ?? fallbackVatRate;
+}
+
+/** Net amount for a day, using its own stored VAT rate (falling back to the given rate). */
+export function calcNetForDay(day: { totalCents: number; vatRate?: number }, fallbackVatRate: number): number {
+  return calcNet(day.totalCents, effectiveVatRate(day, fallbackVatRate));
+}

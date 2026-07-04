@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Download, Lock, Trash2 } from "lucide-react";
 import { useAdmin } from "./admin-context";
 import { usePosYearStore } from "./use-pos-year-store";
-import { usePosVatStore, calcNet } from "./use-pos-vat-store";
+import { usePosVatStore, calcNetForDay } from "./use-pos-vat-store";
 import { ReportResetDialog } from "./report-reset-dialog";
 import { getSyncService } from "@/lib/sync/sync-service";
 import type { DailySummary } from "./pos-types";
@@ -48,19 +48,19 @@ function buildMonthCsv(days: DailySummary[], year: number, month: number, vatRat
     "",
     `Datum;Wochentag;Einsatz / Veranstaltung;Umsatz brutto (€);Bar (€);Karte (€);QR (€);Bestellungen;Netto ${vatLabel} (€);MwSt ${vatLabel} (€)`,
   ];
-  let totalCents = 0, cashCents = 0, cardCents = 0, qrCents = 0, orders = 0;
+  let totalCents = 0, cashCents = 0, cardCents = 0, qrCents = 0, orders = 0, netTotalCents = 0;
   for (const d of days) {
-    const net = calcNet(d.totalCents, vatRate);
+    const net = calcNetForDay(d, vatRate);
     rows.push([d.date, weekdayLabel(d.date), d.eventName ?? "", fmtNum(d.totalCents), fmtNum(d.cashCents),
       fmtNum(d.cardCents), fmtNum(d.qrCents), d.orderCount,
       fmtNum(net), fmtNum(d.totalCents - net)].join(";"));
     totalCents += d.totalCents; cashCents += d.cashCents;
     cardCents += d.cardCents; qrCents += d.qrCents; orders += d.orderCount;
+    netTotalCents += net;
   }
-  const net = calcNet(totalCents, vatRate);
   rows.push(["", "Gesamt", fmtNum(totalCents), fmtNum(cashCents),
     fmtNum(cardCents), fmtNum(qrCents), orders,
-    fmtNum(net), fmtNum(totalCents - net)].join(";"));
+    fmtNum(netTotalCents), fmtNum(totalCents - netTotalCents)].join(";"));
   return "﻿" + rows.join("\n");
 }
 
@@ -93,7 +93,7 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
   const cardCents  = days.reduce((s, d) => s + d.cardCents,  0);
   const qrCents    = days.reduce((s, d) => s + d.qrCents,    0);
   const orderCount = days.reduce((s, d) => s + d.orderCount, 0);
-  const netCents   = calcNet(totalCents, vatRate);
+  const netCents   = days.reduce((s, d) => s + calcNetForDay(d, vatRate), 0);
   const vatCents   = totalCents - netCents;
   const hasData    = days.length > 0;
 
@@ -166,11 +166,11 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
         </div>
         <div className="rounded-2xl bg-white p-5 shadow">
           <p className="text-xs font-bold uppercase tracking-widest text-black/40">Netto</p>
-          <p className="mt-1 text-2xl font-black tabular-nums">{fmt(netCents)}</p>
+          <p data-testid="month-net" className="mt-1 text-2xl font-black tabular-nums">{fmt(netCents)}</p>
         </div>
         <div className="rounded-2xl bg-white p-5 shadow">
           <p className="text-xs font-bold uppercase tracking-widest text-black/40">{`MwSt ${vatRate} %`}</p>
-          <p className="mt-1 text-2xl font-black tabular-nums">{fmt(vatCents)}</p>
+          <p data-testid="month-vat" className="mt-1 text-2xl font-black tabular-nums">{fmt(vatCents)}</p>
         </div>
         <div className="rounded-2xl bg-white p-5 shadow">
           <p className="text-xs font-bold uppercase tracking-widest text-black/40">Bestellungen</p>
