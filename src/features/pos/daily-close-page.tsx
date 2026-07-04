@@ -120,6 +120,7 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
   }, [eventInput, setEventName]);
 
   const handleReset = useCallback(() => {
+    if (!isAdmin) return;
     if (!confirming) {
       setConfirming(true);
       return;
@@ -129,7 +130,7 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
     }
     resetDaily();
     setConfirming(false);
-  }, [confirming, daily, saveDay, resetDaily]);
+  }, [isAdmin, confirming, daily, saveDay, resetDaily]);
 
   if (!hydrated || !adminHydrated || !vatHydrated || !eventPlanHydrated) {
     return <div className="flex h-40 items-center justify-center text-black/40">Laden…</div>;
@@ -362,18 +363,21 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
           CSV exportieren
         </button>
 
-        <button
-          onClick={handleReset}
-          className={
-            confirming
-              ? "flex items-center gap-2 rounded-xl bg-red-600 px-5 py-3 font-bold text-white shadow transition-colors"
-              : "flex items-center gap-2 rounded-xl border border-black/15 bg-white px-5 py-3 font-bold text-black/60 shadow hover:bg-red-50 hover:text-red-700 transition-colors"
-          }
-          onBlur={() => setConfirming(false)}
-        >
-          <RotateCcw className="h-4 w-4" />
-          {confirming ? "Wirklich zurücksetzen?" : "Tagesdaten zurücksetzen"}
-        </button>
+        {isAdmin && (
+          <button
+            data-testid="daily-reset-btn"
+            onClick={handleReset}
+            className={
+              confirming
+                ? "flex items-center gap-2 rounded-xl bg-red-600 px-5 py-3 font-bold text-white shadow transition-colors"
+                : "flex items-center gap-2 rounded-xl border border-black/15 bg-white px-5 py-3 font-bold text-black/60 shadow hover:bg-red-50 hover:text-red-700 transition-colors"
+            }
+            onBlur={() => setConfirming(false)}
+          >
+            <RotateCcw className="h-4 w-4" />
+            {confirming ? "Wirklich zurücksetzen?" : "Tagesdaten zurücksetzen"}
+          </button>
+        )}
       </div>
     </div>
   );

@@ -11,6 +11,8 @@
  * BERICHT 8  – Admin sieht immer alle Tabs unabhängig von Permissions
  * BERICHT 9  – Alte URL /tagesabschluss leitet weiter zu /berichte?tab=tagesabschluss
  * BERICHT 10 – Permissions-Toggle in Einstellungen schaltet Freigabe um
+ * BERICHT 11 – Nicht-Admin mit Tagesabschluss-Freigabe sieht keinen Reset-Button
+ * BERICHT 12 – Admin sieht Reset-Button und kann Bestätigungsdialog öffnen
  */
 
 import { expect, test, type Page } from "@playwright/test";
@@ -92,6 +94,39 @@ async function seedPermissions(
     },
     { p: full }
   );
+}
+
+// Scoped seed for BERICHT 11: identical to seedPermissions but closes the raw
+// IndexedDB connection after the write, so the app's own Dexie connection isn't
+// left blocked waiting on an open handle held by the test (only this test needs
+// the tagesabschluss guest-permission scenario mid-suite).
+async function seedTagesabschlussGuestPermission(page: Page) {
+  await page.addInitScript(() => {
+    const del = indexedDB.deleteDatabase("primaq-pos");
+    del.onsuccess = () => {
+      const req = indexedDB.open("primaq-pos", 2);
+      req.onupgradeneeded = (e: Event) => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        db.createObjectStore("kv", { keyPath: "key" });
+        const sq = db.createObjectStore("sync_queue", { keyPath: "id" });
+        sq.createIndex("status", "status");
+      };
+      req.onsuccess = (e: Event) => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        const tx = db.transaction("kv", "readwrite");
+        tx.objectStore("kv").put({
+          key: "primaq-pos-report-permissions",
+          value: JSON.stringify({
+            tagesabschluss: true,
+            wochenbericht: false,
+            monatsbericht: false,
+            jahresabschluss: false,
+          }),
+        });
+        tx.oncomplete = () => db.close();
+      };
+    };
+  });
 }
 
 function makeSummary(date: string, totalCents: number): DailySummary {
@@ -245,4 +280,32 @@ test("BERICHT 10 – Permission-Toggle in Einstellungen schaltet Freigabe um", a
   await page.goto("/berichte");
   // Non-admin cannot test here easily — just verify page loads and wochenbericht tab visible for admin
   await expect(page.getByTestId("tab-wochenbericht")).toBeVisible();
+});
+
+test("BERICHT 11 – Nicht-Admin mit Tagesabschluss-Freigabe sieht keinen Reset-Button", async ({ page }) => {
+  await blockSupabase(page);
+  // Guest access granted, but not admin
+  await seedTagesabschlussGuestPermission(page);
+  await page.goto("/berichte");
+  await expect(page.getByTestId("tab-tagesabschluss")).toBeVisible();
+  // Guest can see the report content …
+  await expect(page.getByText("Gesamtumsatz")).toBeVisible();
+  // … but must not see or be able to trigger the reset action
+  await expect(page.getByTestId("daily-reset-btn")).toHaveCount(0);
+  await expect(page.getByText("Tagesdaten zurücksetzen")).toHaveCount(0);
+});
+
+test("BERICHT 12 – Admin sieht Reset-Button und kann Bestätigungsdialog öffnen", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await page.goto("/berichte");
+  await expect(page.getByTestId("tab-tagesabschluss")).toBeVisible();
+
+  const resetBtn = page.getByTestId("daily-reset-btn");
+  await expect(resetBtn).toBeVisible();
+  await expect(resetBtn).toHaveText(/Tagesdaten zurücksetzen/);
+
+  // Clicking arms the confirmation step (no data is reset yet)
+  await resetBtn.click();
+  await expect(resetBtn).toHaveText(/Wirklich zurücksetzen\?/);
 });
