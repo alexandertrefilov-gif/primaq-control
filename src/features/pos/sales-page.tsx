@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo, useRef, createContext, useContext } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef, createContext, useContext } from "react";
 import { Banknote, CreditCard, Eye, Minus, Plus, QrCode, ShoppingCart, Trash2, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,8 @@ import {
   FL_PANEL_MINS,
   PANEL_GAP,
   normalizeLayout,
+  defaultPanels,
+  defaultPanelsForWorkspace,
   type PanelId,
   type PanelRect,
   type ResizeMode,
@@ -1535,6 +1537,55 @@ function clampMoveAgainstOthers(
   return { dx: cdx, dy: cdy };
 }
 
+/**
+ * Clamps a resize's candidate rect so the edge(s) being dragged stop at
+ * PANEL_GAP from any neighbour they're growing toward — the same
+ * collision-prevention `clampMoveAgainstOthers` gives drag, applied to
+ * resize. Only edges that actually moved from `startRect` are checked (an
+ * edge that didn't move can't create a new overlap), and only against
+ * neighbours that were on that side already (an already-overlapping stale
+ * layout can still be pulled apart, matching the move-drag behaviour).
+ */
+function clampResizeAgainstOthers(
+  startRect: PanelRect,
+  rawRect: PanelRect,
+  others: PanelRect[],
+  gap: number,
+  mn: { w: number; h: number },
+): PanelRect {
+  let { x, y, w, h } = rawRect;
+
+  const growingRight = x + w > startRect.x + startRect.w;
+  const growingLeft  = x < startRect.x;
+  const growingDown  = y + h > startRect.y + startRect.h;
+  const growingUp    = y < startRect.y;
+
+  for (const O of others) {
+    // Perpendicular-axis overlap decides whether a neighbour is even in the way.
+    const vOverlap = y < O.y + O.h && y + h > O.y;
+    const hOverlap = x < O.x + O.w && x + w > O.x;
+
+    if (growingRight && vOverlap && O.x >= startRect.x + startRect.w) {
+      const maxRight = O.x - gap;
+      if (x + w > maxRight) w = Math.max(mn.w, maxRight - x);
+    }
+    if (growingLeft && vOverlap && O.x + O.w <= startRect.x) {
+      const minLeft = O.x + O.w + gap;
+      if (x < minLeft) { w = Math.max(mn.w, x + w - minLeft); x = minLeft; }
+    }
+    if (growingDown && hOverlap && O.y >= startRect.y + startRect.h) {
+      const maxBottom = O.y - gap;
+      if (y + h > maxBottom) h = Math.max(mn.h, maxBottom - y);
+    }
+    if (growingUp && hOverlap && O.y + O.h <= startRect.y) {
+      const minTop = O.y + O.h + gap;
+      if (y < minTop) { h = Math.max(mn.h, y + h - minTop); y = minTop; }
+    }
+  }
+
+  return { x, y, w, h };
+}
+
 /** Returns the set of panel IDs that are part of any overlapping pair. */
 function findOverlappingPanels(panels: Record<PanelId, PanelRect>): Set<PanelId> {
   const ids = Object.keys(panels) as PanelId[];
@@ -1608,7 +1659,10 @@ export function SalesPage() {
   const { guidedMode } = useGuidedModeStore();
 
   // Free-panel layout – device-local, NOT synced to Supabase
-  const { panels, panelsRef, hydrated: panelsHydrated, save: savePanels, updateState, reset: resetPanels } = usePosFreePanelStore();
+  const {
+    panels, panelsRef, hydrated: panelsHydrated, hasSavedLayout,
+    save: savePanels, updateState, reset: resetPanels,
+  } = usePosFreePanelStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const [editMode, setEditMode] = useState(false);
   const [savedSnack, setSavedSnack] = useState(false);
@@ -1649,16 +1703,19 @@ export function SalesPage() {
       const mn = FL_PANEL_MINS[d.panelId];
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
+        const others = (Object.entries(panelsRef.current!) as [PanelId, PanelRect][])
+          .filter(([id]) => id !== d.panelId)
+          .map(([, rect]) => rect);
         let raw: PanelRect;
         if (d.mode === "move") {
           // Collision prevention: clamp delta so panel stops at PANEL_GAP from others
-          const others = (Object.entries(panelsRef.current!) as [PanelId, PanelRect][])
-            .filter(([id]) => id !== d.panelId)
-            .map(([, rect]) => rect);
           const { dx: cdx, dy: cdy } = clampMoveAgainstOthers(r, dx, dy, others, PANEL_GAP);
           raw = computePanelRect("move", r, cdx, cdy, mn);
         } else {
-          raw = computePanelRect(d.mode, r, dx, dy, mn);
+          // Same collision prevention for resize: the growing edge(s) stop at
+          // PANEL_GAP from any neighbour instead of overlapping it.
+          const candidate = computePanelRect(d.mode, r, dx, dy, mn);
+          raw = clampResizeAgainstOthers(r, candidate, others, PANEL_GAP, mn);
         }
         const nr = clampToWorkspace(raw, ctr.clientWidth, ctr.clientHeight, mn);
         el.style.left   = `${nr.x}px`;
@@ -1704,6 +1761,29 @@ export function SalesPage() {
     };
   }, [savePanels, updateState, panelsRef]);
 
+  // Correct the store's initial window-based size estimate against the REAL
+  // workspace box as soon as it's measurable. The estimate (used before this
+  // container exists) can't know the exact header/guided-bar/status-bar
+  // chrome height, so without this pass a freshly-generated default layout
+  // could be sized for a slightly taller box than actually exists — leaving
+  // zero margin at the workspace's true bottom edge. Runs once per mount.
+  const didMeasureRef = useRef(false);
+  useLayoutEffect(() => {
+    if (didMeasureRef.current || !panelsHydrated || !panels) return;
+    const ctr = containerRef.current;
+    if (!ctr || ctr.clientWidth === 0 || ctr.clientHeight === 0) return;
+    didMeasureRef.current = true;
+    if (hasSavedLayout) {
+      savePanels(normalizeLayout(panels, ctr.clientWidth, ctr.clientHeight));
+    } else {
+      updateState(defaultPanelsForWorkspace(ctr.clientWidth, ctr.clientHeight));
+    }
+    // The container only exists once every store has hydrated (an earlier
+    // "Laden…" placeholder renders in its place until then) — re-run this
+    // effect whenever any of those flags change too, so it doesn't miss the
+    // moment the real DOM node (and thus containerRef) first appears.
+  }, [panelsHydrated, panels, hasSavedLayout, savePanels, updateState, hydrated, flavorsHydrated, layoutHydrated]);
+
   // Normalise layout on browser resize (debounced 150 ms)
   useEffect(() => {
     let timer = 0;
@@ -1747,7 +1827,12 @@ export function SalesPage() {
   }, [panelsRef]);
 
   const handleReset = useCallback(() => {
-    resetPanels();
+    const ctr = containerRef.current;
+    if (ctr && ctr.clientWidth > 0 && ctr.clientHeight > 0) {
+      resetPanels(ctr.clientWidth, ctr.clientHeight);
+    } else {
+      resetPanels();
+    }
     setOverlapSet(new Set());
     setSavedSnack(true);
     setTimeout(() => setSavedSnack(false), 2500);
@@ -1853,7 +1938,7 @@ export function SalesPage() {
 
   return (
     <FlavorsCtx.Provider value={allFlavors}>
-    <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+    <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
       {guidedMode && <GuidedStepsBar step={guidedStep} />}
 
       {/* Free-panel container – each panel is absolutely positioned inside */}

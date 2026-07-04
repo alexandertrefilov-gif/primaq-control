@@ -21,10 +21,17 @@
  * FL 18 – N-Kante ändert Höhe, nicht Breite (Resize, kein Move)
  * FL 19 – minHeight wird beim N-Resize eingehalten
  * FL 20 – Normalmodus zeigt keine Resize-Handles
- * FL 21 – Überlappung zeigt roten Rahmen (data-overlap="true")
- * FL 22 – Überlappung blockiert localStorage-Speicherung
+ * FL 21 – Ein überlappender Alt-Layout wird beim Laden automatisch korrigiert
+ * FL 22 – Die automatische Korrektur wird in localStorage gespeichert
  * FL 23 – Reset erzeugt überlappungsfreies Layout
  * FL 24 – Panel-Header bleibt innerhalb der Panel-Breite
+ * FL 25 – Nach Reset halten Panels 8 px Mindestabstand ein (PANEL_GAP)
+ * FL 26 – Drag stoppt am PANEL_GAP-Rand (Kollisionsprävention)
+ * FL 27 – Browser-Resize auf 1366×1024 schiebt außenliegende Panels rein
+ * FL 28 – Browser-Resize auf 1194×834 schiebt außenliegende Panels rein
+ * FL 29 – Browser-Resize auf 1024×768 lädt valides Layout
+ * FL 30 – Resize (W-Kante) stoppt am PANEL_GAP-Rand (Kollisionsprävention)
+ * FL 31 – Resize (S-Kante) stoppt am PANEL_GAP-Rand (Kollisionsprävention)
  */
 
 import { expect, test } from "@playwright/test";
@@ -118,6 +125,13 @@ test("FL 3 – Klick aktiviert Bearbeitungsmodus und zeigt Drag-Handles", async 
 test("FL 4 – Panel-Drag verschiebt die Position", async ({ page }) => {
   await blockSupabase(page);
   await seedAdmin(page);
+  // Seed a layout with a wide gap between the two columns so drag has room to move
+  await seedFreeLayout(page, {
+    flavors: { x: 8,   y: 8,   w: 520, h: 360 },
+    sizes:   { x: 8,   y: 376, w: 520, h: 100 },
+    payment: { x: 8,   y: 484, w: 520, h: 220 },
+    cart:    { x: 800, y: 8,   w: 340, h: 580 },
+  });
   await page.goto("/verkauf");
   await waitLoaded(page);
 
@@ -127,7 +141,7 @@ test("FL 4 – Panel-Drag verschiebt die Position", async ({ page }) => {
 
   await enterEditMode(page);
 
-  // Drag the flavors panel 80px to the right
+  // Drag the flavors panel 80px to the right (gap to cart is 272 px – no collision)
   await drag(page, '[data-testid="fl-drag-flavors"]', 80, 0);
 
   const after = await page.locator('[data-panel="flavors"]').boundingBox();
@@ -163,9 +177,21 @@ test("FL 5 – Panel-Resize SE-Ecke ändert Breite und Höhe", async ({ page }) 
   expect((after?.height ?? 0)).toBeGreaterThan(beforeH + 20);
 });
 
+// Layout with generous slack on every side of "flavors" — the bare default
+// layout is now intentionally gap-tight (flavors sits exactly PANEL_GAP from
+// cart, per the "perfect default spacing" fix), so E/S-edge growth tests need
+// their own seeded headroom instead of relying on the tight default.
+const spaciousLayout = {
+  flavors: { x: 8,   y: 8,   w: 400, h: 300 },
+  sizes:   { x: 8,   y: 500, w: 400, h: 100 },
+  payment: { x: 8,   y: 608, w: 400, h: 220 },
+  cart:    { x: 900, y: 8,   w: 340, h: 580 },
+};
+
 test("FL 6 – Panel-Resize E-Kante ändert nur die Breite", async ({ page }) => {
   await blockSupabase(page);
   await seedAdmin(page);
+  await seedFreeLayout(page, spaciousLayout);
   await page.goto("/verkauf");
   await waitLoaded(page);
 
@@ -175,7 +201,7 @@ test("FL 6 – Panel-Resize E-Kante ändert nur die Breite", async ({ page }) =>
 
   await enterEditMode(page);
 
-  // Drag E edge of flavors panel 50px to the right
+  // Drag E edge of flavors panel 50px to the right (cart is 492px away — no collision)
   await drag(page, '[data-testid="fl-resize-e-flavors"]', 50, 0);
 
   const after = await page.locator('[data-panel="flavors"]').boundingBox();
@@ -187,6 +213,7 @@ test("FL 6 – Panel-Resize E-Kante ändert nur die Breite", async ({ page }) =>
 test("FL 7 – Panel-Resize S-Kante ändert nur die Höhe", async ({ page }) => {
   await blockSupabase(page);
   await seedAdmin(page);
+  await seedFreeLayout(page, spaciousLayout);
   await page.goto("/verkauf");
   await waitLoaded(page);
 
@@ -196,7 +223,7 @@ test("FL 7 – Panel-Resize S-Kante ändert nur die Höhe", async ({ page }) => 
 
   await enterEditMode(page);
 
-  // Drag S edge of flavors panel 50px down
+  // Drag S edge of flavors panel 50px down ("sizes" is 192px below — no collision)
   await drag(page, '[data-testid="fl-resize-s-flavors"]', 0, 50);
 
   const after = await page.locator('[data-panel="flavors"]').boundingBox();
@@ -310,13 +337,17 @@ test("FL 12 – Verkauf bleibt funktionsfähig im Edit-Modus", async ({ page }) 
 
 // ─── 8-Richtungs-Resize Tests ─────────────────────────────────────────────────
 
-/** Compact layout: cart at (400, 80, 450, 500) – well inside a 1280×800 viewport.
- *  cart.w=450 leaves 130px above minW(320) so W-edge drag of 60px stays unclamped. */
+/** Compact layout: cart at (400, 70, 450, 400) – well inside the workspace.
+ *  cart.w=450 leaves 130px above minW(320) so W-edge drag of 60px stays unclamped.
+ *  cart.y=70/h=400 (bottom=470) keeps the panel's bottom edge safely within the
+ *  real workspace height (~544px behind header/status bar), and y=70 leaves
+ *  enough room above for a -60px upward move/resize without hitting the
+ *  workspace's top-edge clamp (which would otherwise also shrink the panel). */
 const compactLayout = {
   flavors: { x: 0,   y: 0,   w: 380, h: 360 },
   sizes:   { x: 0,   y: 360, w: 380, h: 100 },
   payment: { x: 0,   y: 460, w: 380, h: 220 },
-  cart:    { x: 400, y: 80,  w: 450, h: 500 },
+  cart:    { x: 400, y: 70,  w: 450, h: 400 },
 };
 
 test("FL 13 – N-Kante nach unten verkleinert Höhe und erhöht Y", async ({ page }) => {
@@ -466,64 +497,67 @@ test("FL 20 – Normalmodus zeigt keine Resize-Handles", async ({ page }) => {
 
 // ─── Überlappungs-Tests ────────────────────────────────────────────────────────
 
-/** Non-overlapping seed: flavors at 0-500, cart at 510+ */
+/** Non-overlapping seed: all panels at/above new FL_PANEL_MINS, properly spaced with PANEL_GAP. */
 const overlapSeedBase = {
-  flavors: { x: 0,   y: 0,   w: 500, h: 360 },
-  sizes:   { x: 0,   y: 360, w: 500, h: 100 },
-  payment: { x: 0,   y: 460, w: 500, h: 200 },
-  cart:    { x: 510, y: 0,   w: 350, h: 400 },
+  flavors: { x: 8,   y: 8,   w: 520, h: 360 },
+  sizes:   { x: 8,   y: 376, w: 520, h: 100 },
+  payment: { x: 8,   y: 484, w: 520, h: 220 },
+  cart:    { x: 600, y: 8,   w: 350, h: 500 },
 };
 
-test("FL 21 – Überlappung zeigt roten Rahmen (data-overlap='true')", async ({ page }) => {
+/**
+ * A directly-seeded (not drag/resize-produced) overlapping layout — cart's
+ * x=300 sits well inside flavors' 8–528 span. Since both drag AND resize are
+ * now collision-prevented (they can never CREATE an overlap through normal
+ * use), the only way an overlap can still exist is a stale/corrupted saved
+ * layout — e.g. from before this safeguard existed, or synced from another
+ * device. That's exactly what this fixture simulates.
+ */
+const staleOverlappingSeed = {
+  flavors: { x: 8,   y: 8,   w: 520, h: 360 },
+  sizes:   { x: 8,   y: 376, w: 520, h: 100 },
+  payment: { x: 8,   y: 484, w: 520, h: 220 },
+  cart:    { x: 300, y: 8,   w: 350, h: 500 },
+};
+
+test("FL 21 – Ein überlappender Alt-Layout wird beim Laden automatisch korrigiert", async ({ page }) => {
   await blockSupabase(page);
   await seedAdmin(page);
-  await seedFreeLayout(page, overlapSeedBase);
+  await seedFreeLayout(page, staleOverlappingSeed);
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  // Confirm no overlap initially
+  // The stale overlap must never remain visible — it's corrected before paint.
   await expect(page.locator('[data-overlap="true"]')).toHaveCount(0);
 
-  await enterEditMode(page);
-  // Drag cart 120px left – cart moves from x=510 to ~x=390, overlapping flavors (0-500)
-  await drag(page, '[data-testid="fl-drag-cart"]', -120, 0);
-
-  // Cart and flavors should both show overlap indicator
-  await expect(page.locator('[data-panel="cart"][data-overlap="true"]')).toBeVisible();
+  const flavorsBox = await page.locator('[data-panel="flavors"]').boundingBox();
+  const cartBox    = await page.locator('[data-panel="cart"]').boundingBox();
+  const gap = (cartBox?.x ?? 0) - ((flavorsBox?.x ?? 0) + (flavorsBox?.width ?? 0));
+  expect(gap).toBeGreaterThanOrEqual(4);
 });
 
-test("FL 22 – Überlappung blockiert localStorage-Speicherung", async ({ page }) => {
+test("FL 22 – Die automatische Korrektur wird in localStorage gespeichert", async ({ page }) => {
   await blockSupabase(page);
   await seedAdmin(page);
-  await seedFreeLayout(page, overlapSeedBase);
+  await seedFreeLayout(page, staleOverlappingSeed);
   await page.goto("/verkauf");
   await waitLoaded(page);
+  await expect(page.locator('[data-overlap="true"]')).toHaveCount(0);
 
-  // Capture LS value before dragging
-  const lsBefore = await page.evaluate((key) => localStorage.getItem(key), LS_FREE_KEY);
-
-  await enterEditMode(page);
-  // Drag cart to cause overlap
-  await drag(page, '[data-testid="fl-drag-cart"]', -120, 0);
-
-  // LS must still have the original (pre-drag) value
+  // localStorage must hold the CORRECTED layout, not the original overlapping seed.
   const lsAfter = await page.evaluate((key) => localStorage.getItem(key), LS_FREE_KEY);
-  expect(lsAfter).toBe(lsBefore);
+  const stored = JSON.parse(lsAfter ?? "{}");
+  expect(stored.panels.cart.x).not.toBe(staleOverlappingSeed.cart.x);
 });
 
 test("FL 23 – Reset erzeugt überlappungsfreies Layout", async ({ page }) => {
   await blockSupabase(page);
   await seedAdmin(page);
-  await seedFreeLayout(page, overlapSeedBase);
+  await seedFreeLayout(page, staleOverlappingSeed);
   await page.goto("/verkauf");
   await waitLoaded(page);
 
   await enterEditMode(page);
-  // Create overlap first
-  await drag(page, '[data-testid="fl-drag-cart"]', -120, 0);
-  await expect(page.locator('[data-overlap="true"]')).not.toHaveCount(0);
-
-  // Reset
   await page.getByTestId("layout-reset-btn").click();
 
   // After reset, no panels should have overlap indicator
@@ -546,4 +580,174 @@ test("FL 24 – Panel-Header bleibt innerhalb der Panel-Breite", async ({ page }
     expect(headerBox?.width ?? 0).toBeLessThanOrEqual((panelBox?.width ?? 0) + 2);
     expect(headerBox?.x ?? 0).toBeGreaterThanOrEqual((panelBox?.x ?? 0) - 2);
   }
+});
+
+// ─── PANEL_GAP, Kollisionsprävention & Browser-Resize ────────────────────────
+
+test("FL 25 – Nach Reset halten Panels 8 px Mindestabstand ein", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await enterEditMode(page);
+  await page.getByTestId("layout-reset-btn").click();
+
+  // Horizontal gap: flavors right edge ↔ cart left edge
+  const flavorsBox = await page.locator('[data-panel="flavors"]').boundingBox();
+  const cartBox    = await page.locator('[data-panel="cart"]').boundingBox();
+  const hGap = (cartBox?.x ?? 0) - ((flavorsBox?.x ?? 0) + (flavorsBox?.width ?? 0));
+  expect(hGap).toBeGreaterThanOrEqual(4); // PANEL_GAP, allowing 4 px for subpixel rounding
+
+  // Vertical gap: flavors bottom ↔ sizes top
+  const sizesBox = await page.locator('[data-panel="sizes"]').boundingBox();
+  const vGap = (sizesBox?.y ?? 0) - ((flavorsBox?.y ?? 0) + (flavorsBox?.height ?? 0));
+  expect(vGap).toBeGreaterThanOrEqual(4);
+});
+
+test("FL 26 – Drag stoppt am PANEL_GAP-Rand (Kollisionsprävention)", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  // Cart far right – 272 px gap to flavors, so a 1000 px drag is clearly blocked
+  await seedFreeLayout(page, {
+    flavors: { x: 8,   y: 8,   w: 520, h: 360 },
+    sizes:   { x: 8,   y: 376, w: 520, h: 100 },
+    payment: { x: 8,   y: 484, w: 520, h: 220 },
+    cart:    { x: 900, y: 8,   w: 340, h: 580 },
+  });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await enterEditMode(page);
+  // Drag cart 1000 px left – collision prevention must stop it before it enters flavors
+  await drag(page, '[data-testid="fl-drag-cart"]', -1000, 0);
+
+  const flavorsBox = await page.locator('[data-panel="flavors"]').boundingBox();
+  const cartBox    = await page.locator('[data-panel="cart"]').boundingBox();
+
+  // Gap must be maintained (≥ 4 px to allow subpixel)
+  const gap = (cartBox?.x ?? 0) - ((flavorsBox?.x ?? 0) + (flavorsBox?.width ?? 0));
+  expect(gap).toBeGreaterThanOrEqual(4);
+
+  // No overlap indicator must appear
+  await expect(page.locator('[data-overlap="true"]')).toHaveCount(0);
+});
+
+test("FL 27 – Browser-Resize auf 1366×1024 schiebt außenliegende Panels rein", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  // Cart placed beyond 1366 px – normalizeLayout must clamp it after resize
+  await seedFreeLayout(page, {
+    flavors: { x: 8,    y: 8,   w: 520, h: 400 },
+    sizes:   { x: 8,    y: 416, w: 520, h: 100 },
+    payment: { x: 8,    y: 524, w: 520, h: 250 },
+    cart:    { x: 1400, y: 8,   w: 340, h: 750 },
+  });
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await page.setViewportSize({ width: 1366, height: 1024 });
+  await page.waitForTimeout(300); // wait for debounced normalizeLayout
+
+  await expect(page.locator('[data-overlap="true"]')).toHaveCount(0);
+  const cartBox = await page.locator('[data-panel="cart"]').boundingBox();
+  expect((cartBox?.x ?? 0) + (cartBox?.width ?? 0)).toBeLessThanOrEqual(1366 + 4);
+});
+
+test("FL 28 – Browser-Resize auf 1194×834 schiebt außenliegende Panels rein", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await seedFreeLayout(page, {
+    flavors: { x: 8,    y: 8,   w: 520, h: 400 },
+    sizes:   { x: 8,    y: 416, w: 520, h: 100 },
+    payment: { x: 8,    y: 524, w: 520, h: 250 },
+    cart:    { x: 1300, y: 8,   w: 340, h: 650 },
+  });
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await page.setViewportSize({ width: 1194, height: 834 });
+  await page.waitForTimeout(300);
+
+  await expect(page.locator('[data-overlap="true"]')).toHaveCount(0);
+  const cartBox = await page.locator('[data-panel="cart"]').boundingBox();
+  expect((cartBox?.x ?? 0) + (cartBox?.width ?? 0)).toBeLessThanOrEqual(1194 + 4);
+});
+
+test("FL 29 – Browser-Resize auf 1024×768 lädt valides Layout", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await seedFreeLayout(page, {
+    flavors: { x: 8,    y: 8,   w: 520, h: 400 },
+    sizes:   { x: 8,    y: 416, w: 520, h: 100 },
+    payment: { x: 8,    y: 524, w: 520, h: 250 },
+    cart:    { x: 1200, y: 8,   w: 340, h: 580 },
+  });
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.waitForTimeout(300);
+
+  await expect(page.locator('[data-overlap="true"]')).toHaveCount(0);
+  await expect(page.locator('[data-panel="flavors"]')).toBeVisible();
+  await expect(page.locator('[data-panel="cart"]')).toBeVisible();
+  const cartBox = await page.locator('[data-panel="cart"]').boundingBox();
+  expect((cartBox?.x ?? 0) + (cartBox?.width ?? 0)).toBeLessThanOrEqual(1024 + 4);
+});
+
+// ─── Resize-Kollisionsprävention (neu: gilt jetzt wie beim Drag) ────────────
+
+test("FL 30 – Resize (W-Kante) stoppt am PANEL_GAP-Rand statt zu überlappen", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  // Cart's left edge is 172px from flavors' right edge — plenty to attempt
+  // a 1000px leftward grow, which collision-prevention must stop at the gap.
+  await seedFreeLayout(page, {
+    flavors: { x: 8,   y: 8,   w: 520, h: 360 },
+    sizes:   { x: 8,   y: 376, w: 520, h: 100 },
+    payment: { x: 8,   y: 484, w: 520, h: 220 },
+    cart:    { x: 700, y: 8,   w: 340, h: 580 },
+  });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await enterEditMode(page);
+  // Resize cart's W-handle 1000px left — would deeply overlap flavors if unclamped.
+  await drag(page, '[data-testid="fl-resize-w-cart"]', -1000, 0);
+
+  const flavorsBox = await page.locator('[data-panel="flavors"]').boundingBox();
+  const cartBox    = await page.locator('[data-panel="cart"]').boundingBox();
+  const gap = (cartBox?.x ?? 0) - ((flavorsBox?.x ?? 0) + (flavorsBox?.width ?? 0));
+  expect(gap).toBeGreaterThanOrEqual(4);
+
+  await expect(page.locator('[data-overlap="true"]')).toHaveCount(0);
+});
+
+test("FL 31 – Resize (S-Kante) stoppt am PANEL_GAP-Rand statt zu überlappen", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  // "sizes" bottom edge is 8px above "payment" top edge — growing sizes
+  // downward by 1000px must stop right at the gap, never overlapping payment.
+  await seedFreeLayout(page, {
+    flavors: { x: 8,   y: 8,   w: 520, h: 360 },
+    sizes:   { x: 8,   y: 376, w: 520, h: 100 },
+    payment: { x: 8,   y: 484, w: 520, h: 220 },
+    cart:    { x: 900, y: 8,   w: 340, h: 580 },
+  });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await enterEditMode(page);
+  await drag(page, '[data-testid="fl-resize-s-sizes"]', 0, 1000);
+
+  const sizesBox   = await page.locator('[data-panel="sizes"]').boundingBox();
+  const paymentBox = await page.locator('[data-panel="payment"]').boundingBox();
+  const gap = (paymentBox?.y ?? 0) - ((sizesBox?.y ?? 0) + (sizesBox?.height ?? 0));
+  expect(gap).toBeGreaterThanOrEqual(4);
+
+  await expect(page.locator('[data-overlap="true"]')).toHaveCount(0);
 });
