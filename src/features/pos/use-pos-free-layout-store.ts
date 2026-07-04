@@ -202,13 +202,42 @@ function getWindowDims(): { vw: number; vh: number } {
   return { vw: window.innerWidth, vh: window.innerHeight };
 }
 
+const PANEL_IDS: PanelId[] = ["flavors", "sizes", "payment", "cart"];
+
+function isValidPanelRect(r: unknown): r is PanelRect {
+  if (!r || typeof r !== "object") return false;
+  const rect = r as Record<string, unknown>;
+  return (["x", "y", "w", "h"] as const).every(
+    (k) => typeof rect[k] === "number" && Number.isFinite(rect[k])
+  );
+}
+
+/** A saved layout must have every panel, each with finite numeric x/y/w/h. */
+function isValidLayout(panels: unknown): panels is Record<PanelId, PanelRect> {
+  if (!panels || typeof panels !== "object") return false;
+  const p = panels as Record<string, unknown>;
+  return PANEL_IDS.every((id) => isValidPanelRect(p[id]));
+}
+
+/**
+ * Loads the saved layout, if any. A corrupted or structurally invalid entry
+ * (bad JSON, missing panel, NaN coordinates — e.g. from an older/incompatible
+ * version) is never handed to the caller: it's deleted on the spot and
+ * treated as "no saved layout", so a broken localStorage entry can never
+ * reach the sales screen, in edit mode or otherwise.
+ */
 function loadFromLS(): Record<PanelId, PanelRect> | null {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as FreeLayout;
-    return parsed?.panels ?? null;
+    if (!isValidLayout(parsed?.panels)) {
+      localStorage.removeItem(LS_KEY);
+      return null;
+    }
+    return parsed.panels;
   } catch {
+    try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
     return null;
   }
 }

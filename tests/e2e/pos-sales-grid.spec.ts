@@ -17,6 +17,9 @@
  * GRID 7 – Admin kann Panel verschieben; Layout wird in localStorage gespeichert
  * GRID 8 – Resize über die Ecke ändert Breite und Höhe eines Panels
  * GRID 9 – Reset im Bearbeitungsmodus stellt das feste Standard-Grid wieder her
+ * GRID 10 – Verkäufer sieht IMMER das Standard-Grid, selbst mit gespeichertem Free-Layout
+ * GRID 11 – Admin außerhalb des Bearbeitungsmodus sieht Standard-Grid, selbst mit gespeichertem Layout
+ * GRID 12 – Kaputtes/ungültiges localStorage-Layout wird ignoriert und gelöscht – /verkauf bleibt stabil
  */
 
 import { expect, test } from "@playwright/test";
@@ -227,4 +230,69 @@ test("GRID 9 – Reset im Bearbeitungsmodus stellt das feste Standard-Grid wiede
   await expect(page.locator('[data-testid="fl-container"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="layout-edit-panel"]')).toHaveCount(0);
   await expect(page.getByTestId("sales-grid")).toBeVisible();
+});
+
+// ── Regression: a saved/corrupted free-layout must never reach the seller ───
+
+test("GRID 10 – Verkäufer sieht IMMER das Standard-Grid, selbst mit gespeichertem Free-Layout", async ({ page }) => {
+  await blockSupabase(page);
+  // A layout was saved by an admin on this device at some point in the past —
+  // but this session is NOT admin (a regular seller opening the register).
+  await seedFreeLayout(page, spaciousLayout);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await expect(page.locator('[data-testid="layout-edit-toggle"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="fl-container"]')).toHaveCount(0);
+  await expect(page.locator('[data-panel]')).toHaveCount(0);
+  await expect(page.getByTestId("sales-grid")).toBeVisible();
+
+  // All core areas must be there and usable — Sorten, Größe, Zahlung, Warenkorb.
+  await expect(page.getByTestId("flavor-zone")).toBeVisible();
+  await expect(page.getByTestId("size-zone")).toBeVisible();
+  await expect(page.getByTestId("payment-zone")).toBeVisible();
+  await expect(page.getByTestId("cart-zone")).toBeVisible();
+});
+
+test("GRID 11 – Admin außerhalb des Bearbeitungsmodus sieht Standard-Grid, selbst mit gespeichertem Layout", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await seedFreeLayout(page, spaciousLayout);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  // Admin sees the edit entry point, but WITHOUT clicking it the saved
+  // free-layout must stay dormant — the fixed grid is what's shown.
+  await expect(page.getByTestId("layout-edit-toggle")).toBeVisible();
+  await expect(page.locator('[data-testid="fl-container"]')).toHaveCount(0);
+  await expect(page.locator('[data-panel]')).toHaveCount(0);
+  await expect(page.getByTestId("sales-grid")).toBeVisible();
+});
+
+test("GRID 12 – Kaputtes/ungültiges localStorage-Layout wird ignoriert und gelöscht – /verkauf bleibt stabil", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+  // Structurally invalid: missing panels, NaN-ish/non-numeric coordinates —
+  // simulates a stale or hand-edited/corrupted localStorage entry.
+  await page.addInitScript((key) => {
+    localStorage.setItem(key, JSON.stringify({
+      panels: { flavors: { x: "broken", y: null, w: 520 } }, // missing h, missing other 3 panels
+    }));
+  }, LS_FREE_KEY);
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await expect(page.getByTestId("sales-grid")).toBeVisible();
+  await expect(page.locator('[data-testid="fl-container"]')).toHaveCount(0);
+  await expect(page.getByTestId("flavor-zone")).toBeVisible();
+  await expect(page.getByTestId("cart-zone")).toBeVisible();
+
+  // The corrupted entry must have been actively removed, not just ignored.
+  const lsAfter = await page.evaluate((key) => localStorage.getItem(key), LS_FREE_KEY);
+  expect(lsAfter).toBeNull();
+
+  // Entering edit mode afterwards must still work cleanly (fresh valid default).
+  await enterEditMode(page);
+  await expect(page.locator('[data-testid="fl-container"]')).toBeVisible();
+  await expect(page.locator('[data-panel="cart"]')).toBeVisible();
 });

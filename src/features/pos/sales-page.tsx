@@ -1822,7 +1822,9 @@ export function SalesPage() {
 
   // Reset clears the saved custom layout and exits edit mode — the page falls
   // straight back to the stable fixed grid (never re-enters free-layout on its
-  // own; only an explicit admin edit click does that again).
+  // own; only an explicit admin edit click does that again). Also clears the
+  // older, already-orphaned device-layout key so no leftover legacy data can
+  // resurface either.
   const handleReset = useCallback(() => {
     const ctr = containerRef.current;
     if (ctr && ctr.clientWidth > 0 && ctr.clientHeight > 0) {
@@ -1830,6 +1832,7 @@ export function SalesPage() {
     } else {
       resetPanels();
     }
+    try { localStorage.removeItem("primaq-pos-device-layout-v1"); } catch { /* ignore */ }
     setOverlapSet(new Set());
     setEditMode(false);
     setSavedSnack(true);
@@ -1934,11 +1937,12 @@ export function SalesPage() {
     );
   }
 
-  // The stable fixed grid is what normal sales operation always shows. It
-  // only switches to the free (draggable/resizable) panel system once the
-  // admin actively opts in — either mid-edit, or after a custom layout has
-  // been saved from a previous edit session on this device.
-  const showFreeLayout = editMode || hasSavedLayout;
+  // The stable fixed grid is what normal sales operation ALWAYS shows — a
+  // saved free-layout is never applied outside of an active admin edit
+  // session, no matter what (or how stale/corrupted) is in localStorage. A
+  // seller must never be able to see a broken register because of a saved or
+  // leftover layout from a previous edit session.
+  const showFreeLayout = editMode;
 
   return (
     <FlavorsCtx.Provider value={allFlavors}>
