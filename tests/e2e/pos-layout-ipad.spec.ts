@@ -58,6 +58,15 @@ function noVertOverlap(
   return a.bottom <= b.top + 4 || b.bottom <= a.top + 4;
 }
 
+/** True when A ends before B starts (no horizontal overlap). Tolerance: 4px. */
+function noHorizOverlap(
+  a: { left: number; right: number } | null,
+  b: { left: number; right: number } | null
+): boolean {
+  if (!a || !b) return false;
+  return a.right <= b.left + 4 || b.right <= a.left + 4;
+}
+
 const VIEWPORTS = [
   { label: "1366×1024", width: 1366, height: 1024 },
   { label: "1194×834",  width: 1194, height: 834  },
@@ -92,6 +101,7 @@ for (const vp of VIEWPORTS) {
 }
 
 // ── LAY 4: Sortenbereich und Größenbereich schneiden sich nicht ───────────────
+// Größe sitzt im festen Standardlayout rechts neben Sorten (nicht mehr darunter).
 
 test("LAY 4: Sortenbereich und Größenbereich schneiden sich nicht (1024×768)", async ({ page }) => {
   await freshDb(page, "lay4");
@@ -102,7 +112,7 @@ test("LAY 4: Sortenbereich und Größenbereich schneiden sich nicht (1024×768)"
 
   const flavorR = await rect(page, "flavor-zone");
   const sizeR   = await rect(page, "size-zone");
-  expect(noVertOverlap(flavorR, sizeR)).toBe(true);
+  expect(noHorizOverlap(flavorR, sizeR)).toBe(true);
 });
 
 // ── LAY 5: Größenbereich und Zahlungsbereich schneiden sich nicht ─────────────

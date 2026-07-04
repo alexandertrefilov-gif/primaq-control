@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef, createContext, useContext } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, createContext, useContext } from "react";
 import { Banknote, CreditCard, Eye, Minus, Plus, QrCode, ShoppingCart, Trash2, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
@@ -9,17 +9,6 @@ import { usePosFlavorStore } from "./use-pos-flavor-store";
 import { usePosLayoutStore } from "./use-pos-layout-store";
 import { useGuidedModeStore } from "./use-guided-mode-store";
 import { useAdmin } from "./admin-context";
-import {
-  usePosFreePanelStore,
-  FL_PANEL_MINS,
-  PANEL_GAP,
-  normalizeLayout,
-  defaultPanels,
-  defaultPanelsForWorkspace,
-  type PanelId,
-  type PanelRect,
-  type ResizeMode,
-} from "./use-pos-free-layout-store";
 import type { CartFontSize, PaymentConfig, TextColorMode } from "./use-pos-layout-store";
 import { computeTextColor } from "./use-pos-layout-store";
 import {
@@ -581,20 +570,19 @@ function SizeRow({
       data-testid="size-zone"
       data-guided-active={guidedMode && guidedActive ? "true" : undefined}
       className={cn(
-        // h-full: fills the FreeDashboardPanel body; overflow-auto: internal scroll if panel too small
-        "h-full flex flex-col justify-center rounded-2xl pos-section overflow-auto px-3 py-2 transition-all",
+        // h-full: fills its grid cell; vertical column of size cards next to Sorten
+        "h-full flex flex-col gap-2 rounded-2xl pos-section overflow-auto p-2 transition-all",
         guidedMode && guidedActive && "guided-ring-pulse"
       )}
     >
       {guidedMode && guidedActive && (
-        <div className="mb-2 flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <span className="rounded-full bg-[#00D6A3]/15 px-2.5 py-0.5 text-xs font-black uppercase tracking-widest text-[#00D6A3]">
             Schritt 2 von 4
           </span>
-          <span className="text-xs font-semibold text-[#00D6A3]">Größe auswählen</span>
         </div>
       )}
-      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest pos-text-label">
+      <p className="text-[11px] font-bold uppercase tracking-widest pos-text-label">
         Größe wählen
       </p>
       {effectiveSizes.length === 0 ? (
@@ -602,10 +590,7 @@ function SizeRow({
           Keine Größe aktiv – bitte in Einstellungen aktivieren.
         </p>
       ) : (
-        <div
-          className="grid gap-2"
-          style={{ gridTemplateColumns: `repeat(${Math.min(effectiveSizes.length, 3)}, 1fr)` }}
-        >
+        <div className="flex flex-1 min-h-0 flex-col gap-2">
           {effectiveSizes.map((size) => {
             const isActive = active;
             const bgColor = isActive ? (size.backgroundColor === "#ffffff" ? "#D9B15D" : size.backgroundColor) : size.backgroundColor;
@@ -616,8 +601,7 @@ function SizeRow({
                 data-testid={`size-btn-${size.id}`}
                 onClick={() => { if (isActive) onSizePick(size.id, size.priceCents); }}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all duration-200 select-none",
-                  "min-h-[72px] px-2 py-2",
+                  "flex flex-1 min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl transition-all duration-200 select-none",
                   isActive
                     ? "shadow-md hover:brightness-110 active:scale-[0.97]"
                     : "opacity-35 cursor-not-allowed"
@@ -628,7 +612,7 @@ function SizeRow({
                 <span className="text-xl font-black leading-tight text-center" style={{ color: textColor }}>
                   {size.name}
                 </span>
-                <span className="text-base font-black tabular-nums leading-none" style={{ color: textColor, opacity: isActive ? 0.82 : 1 }}>
+                <span className="text-lg font-black tabular-nums leading-none" style={{ color: textColor, opacity: isActive ? 0.82 : 1 }}>
                   {fmt(size.priceCents)}
                 </span>
               </button>
@@ -870,7 +854,7 @@ function PaymentBlock({
                 value={cashInput}
                 onChange={(e) => onCashInput(e.target.value)}
                 placeholder="0,00"
-                className="min-h-[56px] flex-1 rounded-xl border-2 px-3 text-center text-4xl font-black tabular-nums outline-none transition-all pos-input focus:ring-4 focus:ring-green-500/20"
+                className="min-h-[56px] min-w-0 flex-1 rounded-xl border-2 px-3 text-center text-4xl font-black tabular-nums outline-none transition-all pos-input focus:ring-4 focus:ring-green-500/20"
               />
               <button
                 data-testid="cash-plus"
@@ -1390,253 +1374,6 @@ function SalesStatusBar({
   );
 }
 
-// ── Free-panel drag/resize helpers ───────────────────────────────────────────
-
-function FreeDashboardPanel({
-  panelId,
-  rect,
-  editMode,
-  isOverlapping,
-  label,
-  children,
-  onDragStart,
-  onResizeStart,
-}: {
-  panelId: PanelId;
-  rect: PanelRect;
-  editMode: boolean;
-  isOverlapping: boolean;
-  label: string;
-  children: React.ReactNode;
-  onDragStart: (panelId: PanelId, e: React.PointerEvent) => void;
-  onResizeStart: (panelId: PanelId, mode: Exclude<ResizeMode, "move">, e: React.PointerEvent) => void;
-}) {
-  return (
-    // Panel = single unit: position + dimensions from store; flex column so header + body fill exactly
-    <div
-      data-panel={panelId}
-      data-overlap={isOverlapping ? "true" : undefined}
-      style={{ position: "absolute", left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
-      className={cn(
-        "flex flex-col overflow-hidden rounded-2xl",
-        editMode && !isOverlapping && "ring-2 ring-primaq-400/60",
-        editMode && isOverlapping  && "ring-2 ring-red-500/80",
-      )}
-    >
-      {/* Drag handle – flex-none so it doesn't steal height from body */}
-      {editMode && (
-        <div
-          data-testid={`fl-drag-${panelId}`}
-          className="flex-none h-7 z-10 cursor-move flex items-center justify-between px-2 bg-primaq-500/30 hover:bg-primaq-500/45 touch-none select-none backdrop-blur-sm"
-          onPointerDown={(e) => onDragStart(panelId, e)}
-        >
-          <span className="text-[9px] font-black uppercase tracking-widest text-white/90 truncate">{label}</span>
-          <span className="text-white/50 text-sm leading-none">⠿</span>
-        </div>
-      )}
-
-      {/* Body – takes remaining height; children fill this via h-full */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {children}
-      </div>
-
-      {/* Resize handles – absolute within the panel. Edges: 16px hitbox + 4px stripe. Corners: 24px. */}
-      {editMode && (
-        <>
-          {/* Edges – z-20; inner div shows visual stripe at the edge, outer div is the full hitbox */}
-          <div data-testid={`fl-resize-n-${panelId}`}
-            className="absolute inset-x-0 top-0 h-3 z-20 cursor-ns-resize touch-none select-none group"
-            onPointerDown={(e) => onResizeStart(panelId, "n", e)}>
-            <div className="absolute inset-x-0 top-0 h-1 bg-primaq-400/30 group-hover:bg-primaq-400/75 transition-colors" />
-          </div>
-          <div data-testid={`fl-resize-s-${panelId}`}
-            className="absolute inset-x-0 bottom-0 h-3 z-20 cursor-ns-resize touch-none select-none group"
-            onPointerDown={(e) => onResizeStart(panelId, "s", e)}>
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-primaq-400/30 group-hover:bg-primaq-400/75 transition-colors" />
-          </div>
-          <div data-testid={`fl-resize-e-${panelId}`}
-            className="absolute inset-y-0 right-0 w-4 z-20 cursor-ew-resize touch-none select-none group"
-            onPointerDown={(e) => onResizeStart(panelId, "e", e)}>
-            <div className="absolute inset-y-0 right-0 w-1 bg-primaq-400/30 group-hover:bg-primaq-400/75 transition-colors" />
-          </div>
-          <div data-testid={`fl-resize-w-${panelId}`}
-            className="absolute inset-y-0 left-0 w-4 z-20 cursor-ew-resize touch-none select-none group"
-            onPointerDown={(e) => onResizeStart(panelId, "w", e)}>
-            <div className="absolute inset-y-0 left-0 w-1 bg-primaq-400/30 group-hover:bg-primaq-400/75 transition-colors" />
-          </div>
-          {/* Corners – z-30; override edge hitboxes at intersection areas */}
-          <div data-testid={`fl-resize-nw-${panelId}`}
-            className="absolute top-0 left-0 w-6 h-6 z-30 cursor-nw-resize touch-none select-none"
-            onPointerDown={(e) => onResizeStart(panelId, "nw", e)} />
-          <div data-testid={`fl-resize-ne-${panelId}`}
-            className="absolute top-0 right-0 w-6 h-6 z-30 cursor-ne-resize touch-none select-none"
-            onPointerDown={(e) => onResizeStart(panelId, "ne", e)} />
-          <div data-testid={`fl-resize-sw-${panelId}`}
-            className="absolute bottom-0 left-0 w-6 h-6 z-30 cursor-sw-resize touch-none select-none"
-            onPointerDown={(e) => onResizeStart(panelId, "sw", e)} />
-          <div data-testid={`fl-resize-se-${panelId}`}
-            className="absolute bottom-0 right-0 w-6 h-6 z-30 cursor-se-resize touch-none select-none flex items-end justify-end p-1.5"
-            onPointerDown={(e) => onResizeStart(panelId, "se", e)}>
-            <div className="w-3 h-3 border-b-2 border-r-2 border-primaq-400/80 rounded-br-sm" />
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-/** True if two rects share any area. */
-function rectsOverlap(a: PanelRect, b: PanelRect): boolean {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
-
-/**
- * Clamps a drag-move delta so the panel stops at PANEL_GAP from any other panel.
- * Uses the start position to determine which side of each obstacle we're approaching.
- * If panels already overlap at the start (e.g. stale layout), clamping is skipped so
- * the user can drag them apart.
- */
-function clampMoveAgainstOthers(
-  startRect: PanelRect,
-  dx: number,
-  dy: number,
-  others: PanelRect[],
-  gap: number,
-): { dx: number; dy: number } {
-  let cdx = dx;
-  let cdy = dy;
-
-  for (const O of others) {
-    const P = startRect;
-    const nx = P.x + cdx;
-    const ny = P.y + cdy;
-
-    // Would the proposed position collide with O (including gap zone)?
-    const colX = nx < O.x + O.w + gap && nx + P.w > O.x - gap;
-    const colY = ny < O.y + O.h + gap && ny + P.h > O.y - gap;
-    if (!colX || !colY) continue;
-
-    // Horizontal constraint: clamp based on original relative position
-    if (P.x + P.w <= O.x) {
-      // P was to the left of O – prevent right entry
-      cdx = Math.min(cdx, O.x - gap - P.x - P.w);
-    } else if (P.x >= O.x + O.w) {
-      // P was to the right of O – prevent left entry
-      cdx = Math.max(cdx, O.x + O.w + gap - P.x);
-    }
-    // Vertical constraint: clamp based on original relative position
-    if (P.y + P.h <= O.y) {
-      // P was above O – prevent downward entry
-      cdy = Math.min(cdy, O.y - gap - P.y - P.h);
-    } else if (P.y >= O.y + O.h) {
-      // P was below O – prevent upward entry
-      cdy = Math.max(cdy, O.y + O.h + gap - P.y);
-    }
-  }
-
-  return { dx: cdx, dy: cdy };
-}
-
-/**
- * Clamps a resize's candidate rect so the edge(s) being dragged stop at
- * PANEL_GAP from any neighbour they're growing toward — the same
- * collision-prevention `clampMoveAgainstOthers` gives drag, applied to
- * resize. Only edges that actually moved from `startRect` are checked (an
- * edge that didn't move can't create a new overlap), and only against
- * neighbours that were on that side already (an already-overlapping stale
- * layout can still be pulled apart, matching the move-drag behaviour).
- */
-function clampResizeAgainstOthers(
-  startRect: PanelRect,
-  rawRect: PanelRect,
-  others: PanelRect[],
-  gap: number,
-  mn: { w: number; h: number },
-): PanelRect {
-  let { x, y, w, h } = rawRect;
-
-  const growingRight = x + w > startRect.x + startRect.w;
-  const growingLeft  = x < startRect.x;
-  const growingDown  = y + h > startRect.y + startRect.h;
-  const growingUp    = y < startRect.y;
-
-  for (const O of others) {
-    // Perpendicular-axis overlap decides whether a neighbour is even in the way.
-    const vOverlap = y < O.y + O.h && y + h > O.y;
-    const hOverlap = x < O.x + O.w && x + w > O.x;
-
-    if (growingRight && vOverlap && O.x >= startRect.x + startRect.w) {
-      const maxRight = O.x - gap;
-      if (x + w > maxRight) w = Math.max(mn.w, maxRight - x);
-    }
-    if (growingLeft && vOverlap && O.x + O.w <= startRect.x) {
-      const minLeft = O.x + O.w + gap;
-      if (x < minLeft) { w = Math.max(mn.w, x + w - minLeft); x = minLeft; }
-    }
-    if (growingDown && hOverlap && O.y >= startRect.y + startRect.h) {
-      const maxBottom = O.y - gap;
-      if (y + h > maxBottom) h = Math.max(mn.h, maxBottom - y);
-    }
-    if (growingUp && hOverlap && O.y + O.h <= startRect.y) {
-      const minTop = O.y + O.h + gap;
-      if (y < minTop) { h = Math.max(mn.h, y + h - minTop); y = minTop; }
-    }
-  }
-
-  return { x, y, w, h };
-}
-
-/** Returns the set of panel IDs that are part of any overlapping pair. */
-function findOverlappingPanels(panels: Record<PanelId, PanelRect>): Set<PanelId> {
-  const ids = Object.keys(panels) as PanelId[];
-  const result = new Set<PanelId>();
-  for (let i = 0; i < ids.length; i++) {
-    for (let j = i + 1; j < ids.length; j++) {
-      if (rectsOverlap(panels[ids[i]], panels[ids[j]])) {
-        result.add(ids[i]);
-        result.add(ids[j]);
-      }
-    }
-  }
-  return result;
-}
-
-/** Clamp panel to workspace bounds with PANEL_GAP margin; adjusts dimension when position hits an edge. */
-function clampToWorkspace(r: PanelRect, wsW: number, wsH: number, mn: { w: number; h: number }): PanelRect {
-  const G = PANEL_GAP;
-  let { x, y, w, h } = r;
-  w = Math.max(mn.w, Math.min(w, wsW - 2 * G));
-  h = Math.max(mn.h, Math.min(h, wsH - 2 * G));
-  if (x < G) { w = Math.max(mn.w, w + x - G); x = G; }
-  if (y < G) { h = Math.max(mn.h, h + y - G); y = G; }
-  x = Math.min(x, wsW - w - G);
-  y = Math.min(y, wsH - h - G);
-  return { x, y, w, h };
-}
-
-/** Pure helper: derive new rect from start rect + pointer delta for any resize mode. */
-function computePanelRect(
-  mode: ResizeMode,
-  r: PanelRect,
-  dx: number,
-  dy: number,
-  mn: { w: number; h: number }
-): PanelRect {
-  const cw = (v: number) => Math.max(mn.w, v);
-  const ch = (v: number) => Math.max(mn.h, v);
-  switch (mode) {
-    case "move": return { x: r.x + dx, y: r.y + dy, w: r.w, h: r.h };
-    case "n":  { const h = ch(r.h - dy); return { x: r.x, y: r.y + r.h - h, w: r.w, h }; }
-    case "s":  return { x: r.x, y: r.y, w: r.w, h: ch(r.h + dy) };
-    case "e":  return { x: r.x, y: r.y, w: cw(r.w + dx), h: r.h };
-    case "w":  { const w = cw(r.w - dx); return { x: r.x + r.w - w, y: r.y, w, h: r.h }; }
-    case "nw": { const w = cw(r.w - dx); const h = ch(r.h - dy); return { x: r.x + r.w - w, y: r.y + r.h - h, w, h }; }
-    case "ne": { const h = ch(r.h - dy); return { x: r.x, y: r.y + r.h - h, w: cw(r.w + dx), h }; }
-    case "sw": { const w = cw(r.w - dx); return { x: r.x + r.w - w, y: r.y, w, h: ch(r.h + dy) }; }
-    case "se": return { x: r.x, y: r.y, w: cw(r.w + dx), h: ch(r.h + dy) };
-  }
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function SalesPage() {
@@ -1657,186 +1394,6 @@ export function SalesPage() {
   const { active: layout, hydrated: layoutHydrated } = usePosLayoutStore();
   const { isAdmin } = useAdmin();
   const { guidedMode } = useGuidedModeStore();
-
-  // Free-panel layout – device-local, NOT synced to Supabase
-  const {
-    panels, panelsRef, hydrated: panelsHydrated, hasSavedLayout,
-    save: savePanels, updateState, reset: resetPanels,
-  } = usePosFreePanelStore();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [editMode, setEditMode] = useState(false);
-  const [savedSnack, setSavedSnack] = useState(false);
-  const [overlapSet, setOverlapSet] = useState<Set<PanelId>>(new Set());
-  const [overlapSnack, setOverlapSnack] = useState(false);
-
-  // Free-panel drag state – mutated in place during drag (no React re-renders)
-  const freeDragRef = useRef<{
-    panelId: PanelId;
-    mode: ResizeMode;
-    startX: number;
-    startY: number;
-    startRect: PanelRect;
-  } | null>(null);
-
-  // Exit edit mode when admin logs out
-  useEffect(() => { if (!isAdmin) setEditMode(false); }, [isAdmin]);
-
-  // Keep overlap indicators in sync with panel state (catches initial load with bad layout too)
-  useEffect(() => {
-    if (!panels) { setOverlapSet(new Set()); return; }
-    setOverlapSet(findOverlappingPanels(panels));
-  }, [panels]);
-
-  // Pointer listeners for free-panel drag/resize – direct DOM updates, no React re-renders
-  useEffect(() => {
-    let rafId = 0;
-    const onMove = (e: PointerEvent) => {
-      const d = freeDragRef.current;
-      if (!d) return;
-      const ctr = containerRef.current;
-      if (!ctr) return;
-      const el = ctr.querySelector<HTMLElement>(`[data-panel="${d.panelId}"]`);
-      if (!el) return;
-      const dx = e.clientX - d.startX;
-      const dy = e.clientY - d.startY;
-      const r  = d.startRect;
-      const mn = FL_PANEL_MINS[d.panelId];
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        const others = (Object.entries(panelsRef.current!) as [PanelId, PanelRect][])
-          .filter(([id]) => id !== d.panelId)
-          .map(([, rect]) => rect);
-        let raw: PanelRect;
-        if (d.mode === "move") {
-          // Collision prevention: clamp delta so panel stops at PANEL_GAP from others
-          const { dx: cdx, dy: cdy } = clampMoveAgainstOthers(r, dx, dy, others, PANEL_GAP);
-          raw = computePanelRect("move", r, cdx, cdy, mn);
-        } else {
-          // Same collision prevention for resize: the growing edge(s) stop at
-          // PANEL_GAP from any neighbour instead of overlapping it.
-          const candidate = computePanelRect(d.mode, r, dx, dy, mn);
-          raw = clampResizeAgainstOthers(r, candidate, others, PANEL_GAP, mn);
-        }
-        const nr = clampToWorkspace(raw, ctr.clientWidth, ctr.clientHeight, mn);
-        el.style.left   = `${nr.x}px`;
-        el.style.top    = `${nr.y}px`;
-        el.style.width  = `${nr.w}px`;
-        el.style.height = `${nr.h}px`;
-      });
-    };
-    const onUp = () => {
-      const d = freeDragRef.current;
-      if (!d) return;
-      cancelAnimationFrame(rafId);
-      freeDragRef.current = null;
-      const ctr = containerRef.current;
-      if (!ctr) return;
-      const el = ctr.querySelector<HTMLElement>(`[data-panel="${d.panelId}"]`);
-      if (!el) return;
-      el.style.zIndex = ""; // restore stacking order after drag/resize
-      const newRect: PanelRect = {
-        x: parseFloat(el.style.left)   || d.startRect.x,
-        y: parseFloat(el.style.top)    || d.startRect.y,
-        w: parseFloat(el.style.width)  || d.startRect.w,
-        h: parseFloat(el.style.height) || d.startRect.h,
-      };
-      const updated = { ...panelsRef.current!, [d.panelId]: newRect };
-      const overlapping = findOverlappingPanels(updated);
-      if (overlapping.size > 0) {
-        updateState(updated); // persist position in-memory but NOT to localStorage
-        setOverlapSnack(true);
-        setTimeout(() => setOverlapSnack(false), 4000);
-      } else {
-        savePanels(updated);
-        setSavedSnack(true);
-        setTimeout(() => setSavedSnack(false), 2500);
-      }
-    };
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", onUp);
-    return () => {
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerup", onUp);
-      cancelAnimationFrame(rafId);
-    };
-  }, [savePanels, updateState, panelsRef]);
-
-  // Correct the store's initial window-based size estimate against the REAL
-  // workspace box as soon as it's measurable. The estimate (used before this
-  // container exists) can't know the exact header/guided-bar/status-bar
-  // chrome height, so without this pass a freshly-generated default layout
-  // could be sized for a slightly taller box than actually exists — leaving
-  // zero margin at the workspace's true bottom edge. Runs once per mount.
-  const didMeasureRef = useRef(false);
-  useLayoutEffect(() => {
-    if (didMeasureRef.current || !panelsHydrated || !panels) return;
-    const ctr = containerRef.current;
-    if (!ctr || ctr.clientWidth === 0 || ctr.clientHeight === 0) return;
-    didMeasureRef.current = true;
-    if (hasSavedLayout) {
-      savePanels(normalizeLayout(panels, ctr.clientWidth, ctr.clientHeight));
-    } else {
-      updateState(defaultPanelsForWorkspace(ctr.clientWidth, ctr.clientHeight));
-    }
-    // The container only exists once every store has hydrated (an earlier
-    // "Laden…" placeholder renders in its place until then) — re-run this
-    // effect whenever any of those flags change too, so it doesn't miss the
-    // moment the real DOM node (and thus containerRef) first appears.
-  }, [panelsHydrated, panels, hasSavedLayout, savePanels, updateState, hydrated, flavorsHydrated, layoutHydrated]);
-
-  // Normalise layout on browser resize (debounced 150 ms)
-  useEffect(() => {
-    let timer = 0;
-    const handleResize = () => {
-      clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        const ctr = containerRef.current;
-        const pnls = panelsRef.current;
-        if (!ctr || !pnls) return;
-        savePanels(normalizeLayout(pnls, ctr.clientWidth, ctr.clientHeight));
-      }, 150);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [savePanels, panelsRef]);
-
-  const startPanelDrag = useCallback((panelId: PanelId, e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = panelsRef.current?.[panelId];
-    if (!rect) return;
-    freeDragRef.current = { panelId, mode: "move", startX: e.clientX, startY: e.clientY, startRect: { ...rect } };
-    // Bring active panel above all others during drag
-    const el = containerRef.current?.querySelector<HTMLElement>(`[data-panel="${panelId}"]`);
-    if (el) el.style.zIndex = "40";
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }, [panelsRef]);
-
-  const startPanelResize = useCallback((panelId: PanelId, mode: Exclude<ResizeMode, "move">, e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = panelsRef.current?.[panelId];
-    if (!rect) return;
-    freeDragRef.current = { panelId, mode, startX: e.clientX, startY: e.clientY, startRect: { ...rect } };
-    const el = containerRef.current?.querySelector<HTMLElement>(`[data-panel="${panelId}"]`);
-    if (el) el.style.zIndex = "40";
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }, [panelsRef]);
-
-  const handleReset = useCallback(() => {
-    const ctr = containerRef.current;
-    if (ctr && ctr.clientWidth > 0 && ctr.clientHeight > 0) {
-      resetPanels(ctr.clientWidth, ctr.clientHeight);
-    } else {
-      resetPanels();
-    }
-    setOverlapSet(new Set());
-    setSavedSnack(true);
-    setTimeout(() => setSavedSnack(false), 2500);
-  }, [resetPanels]);
 
   const [pendingFlavor, setPendingFlavor] = useState<FlavorConfig | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("bar");
@@ -1930,7 +1487,7 @@ export function SalesPage() {
     setPaymentConfirmed(false);
   }, [bookOrder]);
 
-  if (!hydrated || !flavorsHydrated || !layoutHydrated || !panelsHydrated) {
+  if (!hydrated || !flavorsHydrated || !layoutHydrated) {
     return (
       <div className="flex h-full items-center justify-center pos-text-muted">Laden…</div>
     );
@@ -1941,19 +1498,20 @@ export function SalesPage() {
     <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
       {guidedMode && <GuidedStepsBar step={guidedStep} />}
 
-      {/* Free-panel container – each panel is absolutely positioned inside */}
-      <div ref={containerRef} data-testid="fl-container" className="flex-1 min-h-0 relative overflow-hidden">
-        {panels && (
-          <>
-            <FreeDashboardPanel
-              panelId="flavors"
-              rect={panels.flavors}
-              editMode={editMode}
-              isOverlapping={overlapSet.has("flavors")}
-              label="Sorten"
-              onDragStart={startPanelDrag}
-              onResizeStart={startPanelResize}
-            >
+      {/*
+        Stable responsive sales grid — replaces the free (absolutely
+        positioned) panel system for normal sales operation. Fixed structure:
+          [ Sorten | Größen ]  [ Warenkorb ]
+          [    Zahlung       ]  [           ]
+          [        Letzte Buchung (footer)   ]
+        No x/y/w/h panels, no drag/resize — every gap is a real flex/grid gap
+        so areas can never touch or overlap.
+      */}
+      <div data-testid="sales-grid" className="flex flex-1 min-h-0 gap-2.5 overflow-hidden">
+        {/* Left: Sorten+Größen row, then Zahlung below */}
+        <div className="flex flex-1 min-w-0 flex-col gap-2.5">
+          <div className="flex min-h-0 gap-2.5" style={{ flex: "3 1 0%" }}>
+            <div className="min-w-0 flex-1">
               <FlavorColumn
                 onFlavorClick={handleFlavorClick}
                 cardSize={layout.flavorCardSize}
@@ -1961,17 +1519,8 @@ export function SalesPage() {
                 guidedMode={guidedMode}
                 guidedActive={guidedStep === 1}
               />
-            </FreeDashboardPanel>
-
-            <FreeDashboardPanel
-              panelId="sizes"
-              rect={panels.sizes}
-              editMode={editMode}
-              isOverlapping={overlapSet.has("sizes")}
-              label="Größen"
-              onDragStart={startPanelDrag}
-              onResizeStart={startPanelResize}
-            >
+            </div>
+            <div className="w-[180px] shrink-0">
               <SizeRow
                 effectiveSizes={effectiveSizes}
                 pendingFlavor={pendingFlavor}
@@ -1979,61 +1528,45 @@ export function SalesPage() {
                 guidedMode={guidedMode}
                 guidedActive={guidedStep === 2}
               />
-            </FreeDashboardPanel>
+            </div>
+          </div>
+          <div className="min-h-0" style={{ flex: "2 1 0%" }}>
+            <PaymentBlock
+              showPayment={showPayment}
+              paymentMethod={payment}
+              cashInput={cashInput}
+              cashCents={cashCents}
+              cartTotal={cartTotal}
+              change={change}
+              canBook={canBook}
+              onPaymentChange={handlePaymentChange}
+              onCashInput={setCashInput}
+              onBook={handleBook}
+              effectiveSizes={effectiveSizes}
+              paymentConfig={layout.payment}
+              guidedMode={guidedMode}
+              guidedStep={guidedStep === 3 ? 3 : guidedStep === 4 ? 4 : null}
+            />
+          </div>
+        </div>
 
-            <FreeDashboardPanel
-              panelId="payment"
-              rect={panels.payment}
-              editMode={editMode}
-              isOverlapping={overlapSet.has("payment")}
-              label="Zahlung"
-              onDragStart={startPanelDrag}
-              onResizeStart={startPanelResize}
-            >
-              <PaymentBlock
-                showPayment={showPayment}
-                paymentMethod={payment}
-                cashInput={cashInput}
-                cashCents={cashCents}
-                cartTotal={cartTotal}
-                change={change}
-                canBook={canBook}
-                onPaymentChange={handlePaymentChange}
-                onCashInput={setCashInput}
-                onBook={handleBook}
-                effectiveSizes={effectiveSizes}
-                paymentConfig={layout.payment}
-                guidedMode={guidedMode}
-                guidedStep={guidedStep === 3 ? 3 : guidedStep === 4 ? 4 : null}
-              />
-            </FreeDashboardPanel>
-
-            <FreeDashboardPanel
-              panelId="cart"
-              rect={panels.cart}
-              editMode={editMode}
-              isOverlapping={overlapSet.has("cart")}
-              label="Warenkorb"
-              onDragStart={startPanelDrag}
-              onResizeStart={startPanelResize}
-            >
-              <CartColumn
-                widthPx={panels.cart.w}
-                qtyBtnSize={layout.qtyButtonSize}
-                cartFontSize={layout.cartFontSize}
-                cart={cart}
-                cartTotal={cartTotal}
-                onChangeQty={changeQty}
-                onRemove={removeFromCart}
-                onClear={clearCart}
-                effectiveSizes={effectiveSizes}
-              />
-            </FreeDashboardPanel>
-          </>
-        )}
+        {/* Right: Warenkorb – fixed responsive column, spans full height */}
+        <div className="min-h-0 shrink-0" style={{ width: "clamp(360px, 30vw, 440px)" }}>
+          <CartColumn
+            widthPx={380}
+            qtyBtnSize={layout.qtyButtonSize}
+            cartFontSize={layout.cartFontSize}
+            cart={cart}
+            cartTotal={cartTotal}
+            onChangeQty={changeQty}
+            onRemove={removeFromCart}
+            onClear={clearCart}
+            effectiveSizes={effectiveSizes}
+          />
+        </div>
       </div>
 
-      {/* Status bar – stays outside the free-panel container so its modal isn't clipped */}
+      {/* Footer: Letzte Buchung / Tagesstatistik */}
       {layout.toggles["letzte-bestellung"] && (
         <SalesStatusBar
           daily={daily}
@@ -2041,56 +1574,6 @@ export function SalesPage() {
           showLastBooking={layout.toggles["live-monitor"]}
           showStats={layout.toggles["verkaufszaehler"]}
         />
-      )}
-
-      {/* Admin: layout edit toggle */}
-      {isAdmin && (
-        <button
-          data-testid="layout-edit-toggle"
-          onClick={() => setEditMode((v) => !v)}
-          className={cn(
-            "fixed bottom-4 left-4 z-40 rounded-full px-3 py-1.5 text-xs font-bold shadow-md transition-all",
-            editMode
-              ? "bg-primaq-500 text-white shadow-primaq-500/30"
-              : "bg-black/25 text-white/60 hover:bg-black/40 backdrop-blur-sm"
-          )}
-        >
-          {editMode ? "✓ Fertig" : "✏ Layout"}
-        </button>
-      )}
-
-      {/* Edit-mode floating panel */}
-      {editMode && (
-        <div
-          data-testid="layout-edit-panel"
-          className="fixed top-16 right-4 z-40 w-52 rounded-2xl pos-surface shadow-2xl border pos-border-c p-3 space-y-2"
-        >
-          <p className="text-[10px] font-black uppercase tracking-widest pos-text-label">Freies Layout</p>
-          <p className="text-[11px] pos-text-muted leading-snug">Leiste ziehen = verschieben · Ecken/Kanten = skalieren</p>
-          <div className="border-t pos-border-c pt-2">
-            <button
-              data-testid="layout-reset-btn"
-              onClick={handleReset}
-              className="w-full rounded-lg px-3 py-1.5 text-xs font-semibold text-red-400 pos-overlay hover:bg-red-500/10 transition-colors"
-            >
-              ↺ Layout zurücksetzen
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Saved snackbar */}
-      {savedSnack && (
-        <div className="fixed bottom-14 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-primaq-500 px-4 py-2 text-sm font-bold text-white shadow-lg pointer-events-none">
-          Layout für dieses Gerät gespeichert
-        </div>
-      )}
-
-      {/* Overlap warning – shown when panels collide; layout NOT saved to localStorage */}
-      {overlapSnack && (
-        <div className="fixed bottom-14 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white shadow-lg pointer-events-none">
-          Überlappung – bitte Layout korrigieren
-        </div>
       )}
 
       {/* QR overlay */}
