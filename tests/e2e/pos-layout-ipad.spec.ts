@@ -93,10 +93,11 @@ for (const vp of VIEWPORTS) {
     await expect(page.getByTestId("size-btn-klein")).toBeVisible();
     await expect(page.getByTestId("payment-tab-bar")).toBeVisible();
 
-    // Zahlungsbereich und Sortenbereich überlappen sich nicht
+    // Zahlungsbereich (mittlere Spalte) und Sortenbereich (linke Spalte)
+    // stehen nebeneinander, nicht übereinander – kein horizontaler Überlapp.
     const flavorR = await rect(page, "flavor-zone");
     const paymentR = await rect(page, "payment-zone");
-    expect(noVertOverlap(flavorR, paymentR)).toBe(true);
+    expect(noHorizOverlap(flavorR, paymentR)).toBe(true);
   });
 }
 
@@ -146,9 +147,9 @@ test("LAY 6: Warenkorb ist rechts von Sorten-/Zahlungsbereich (1194×834)", asyn
   expect(cartR!.left).toBeGreaterThan(flavorR!.right - 4);
 });
 
-// ── LAY 7: Schnellbeträge sichtbar + in einer Zeile mit Bestellung buchen ────
+// ── LAY 7: Schnellbeträge über Bestellung buchen, gemeinsame rechte Spalte ──
 
-test("LAY 7: Schnellbeträge und Bestellung buchen in gemeinsamer Zeile (1024×768)", async ({ page }) => {
+test("LAY 7: Schnellbeträge und Bestellung buchen gestapelt, keine Überlappung (1024×768)", async ({ page }) => {
   await freshDb(page, "lay7");
   await blockSupabase(page);
   await page.setViewportSize({ width: 1024, height: 768 });
@@ -160,15 +161,14 @@ test("LAY 7: Schnellbeträge und Bestellung buchen in gemeinsamer Zeile (1024×7
   await expect(page.getByTestId("quick-amounts-row")).toBeVisible();
   await expect(page.getByTestId("book-button")).toBeVisible();
 
-  // Schnellbeträge und Bestellung buchen überlappen vertikal (gleiche Zeile)
+  // Schnellbeträge und Bestellung buchen stehen in derselben Spalte (rechts im
+  // Betrag-Bereich) übereinander – Buchen-Button liegt unterhalb, kein Überlapp.
   const quickR  = await rect(page, "quick-amounts-row");
   const bookR   = await rect(page, "book-button");
   expect(quickR).not.toBeNull();
   expect(bookR).not.toBeNull();
-  // Gleiche Zeile = vertikale Überlappung vorhanden (center-to-center ≤ 20px)
-  const quickCenter = (quickR!.top + quickR!.bottom) / 2;
-  const bookCenter  = (bookR!.top  + bookR!.bottom)  / 2;
-  expect(Math.abs(quickCenter - bookCenter)).toBeLessThan(20);
+  expect(noVertOverlap(quickR, bookR)).toBe(true);
+  expect(Math.abs(bookR!.left - quickR!.left)).toBeLessThan(8);
 });
 
 // ── LAY 8: Bestellung buchen sichtbar ────────────────────────────────────────

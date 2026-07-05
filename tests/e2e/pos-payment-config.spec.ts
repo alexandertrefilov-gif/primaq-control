@@ -35,6 +35,12 @@ async function waitLoaded(page: import("@playwright/test").Page) {
   await page.waitForFunction(() => !document.body.textContent?.includes("Laden…"));
 }
 
+// Zahlungsmittel-Bereich ist erst nach einer Warenkorb-Position aktiv
+async function addKleinVanille(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "Vanille", exact: true }).click();
+  await page.getByRole("button", { name: /^Klein/ }).click();
+}
+
 /** Write layout directly to IDB after page load (reliable, no race condition). */
 async function writeLayout(
   page: import("@playwright/test").Page,
@@ -90,6 +96,7 @@ test("CFG 1: + Button erhöht Gegeben um 1 €, − Button verringert", async ({
   await page.goto("/verkauf");
   await waitLoaded(page);
 
+  await addKleinVanille(page);
   await page.getByTestId("payment-tab-bar").click();
 
   // Start with 5 €
@@ -114,6 +121,7 @@ test("CFG 2: C-Button leert das Gegeben-Feld", async ({ page }) => {
   await page.goto("/verkauf");
   await waitLoaded(page);
 
+  await addKleinVanille(page);
   await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-500").click();
   const input = page.locator('input[type="number"]');
@@ -142,6 +150,7 @@ test("CFG 3: showAsQuickAmount=false für Klein entfernt 2,50 € Button", async
   await page.reload();
   await waitLoaded(page);
 
+  await addKleinVanille(page);
   await page.getByTestId("payment-tab-bar").click();
 
   // Klein (250ct) must NOT appear: showAsQuickAmount=false AND 250 not in bills
@@ -164,6 +173,7 @@ test("CFG 4: Eigener Schnellbetrag 1500ct erscheint als 15,00 € Button", async
   await page.reload();
   await waitLoaded(page);
 
+  await addKleinVanille(page);
   await page.getByTestId("payment-tab-bar").click();
   await expect(page.getByTestId("quick-amount-1500")).toBeVisible();
 
@@ -186,6 +196,7 @@ test("CFG 5: 10 € Schein deaktiviert entfernt quick-amount-1000", async ({ pag
   await page.reload();
   await waitLoaded(page);
 
+  await addKleinVanille(page);
   await page.getByTestId("payment-tab-bar").click();
 
   // 1000 not in bills AND no size has priceCents=1000 → must not appear
@@ -202,6 +213,7 @@ test("CFG 6: Groß=5,00 € und Schein 5 € ergeben nur einen Button", async ({
   await page.goto("/verkauf");
   await waitLoaded(page);
 
+  await addKleinVanille(page);
   await page.getByTestId("payment-tab-bar").click();
   // Default: Groß=500ct, bills includes 500 → only one quick-amount-500
   await expect(page.getByTestId("quick-amount-500")).toHaveCount(1);
