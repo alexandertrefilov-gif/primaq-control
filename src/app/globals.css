@@ -104,7 +104,7 @@ a {
 
 /* Borders & Dividers */
 .pos-border-c { border-color: var(--pos-border); }
-.pos-divider  { background-color: color-mix(in srgb, var(--pos-text) 7%, transparent); }
+.pos-divider  { background-color: color-mix(in srgb, var(--pos-text) 12%, transparent); }
 
 /* Header */
 .pos-header { background-color: var(--header-bg); border-color: var(--header-border); }

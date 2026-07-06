@@ -506,6 +506,24 @@ function SizePickerModal({
   );
 }
 
+// ── Shared section header: title + thin divider, consistent across all 4
+//    Hauptbereiche (Sorte/Größe/Betrag/Zahlungsmittel). Warenkorb keeps its
+//    own header (title + Ausgabe/Leeren on one row) but uses the same
+//    border-b/border-t divider convention already.
+function SectionHeader({ title, accentActive = false }: { title: string; accentActive?: boolean }) {
+  return (
+    <div className="flex-none">
+      <p className={cn(
+        "text-[11px] font-bold uppercase tracking-widest transition-colors",
+        accentActive ? "text-[#00D6A3]" : "pos-text-label"
+      )}>
+        {title}
+      </p>
+      <div className="mt-2 mb-3.5 h-px pos-divider" />
+    </div>
+  );
+}
+
 // ── Middle column – flavors only (sizes live in SizeRow below) ───────────────
 
 function FlavorColumn({
@@ -532,13 +550,8 @@ function FlavorColumn({
         guidedMode && guidedActive && "ring-2 ring-[#00D6A3]/50"
       )}
     >
-      <div className="flex-none px-3 pt-2 pb-1.5">
-        <p className={cn(
-          "text-[11px] font-bold uppercase tracking-widest transition-colors",
-          guidedMode && guidedActive ? "text-[#00D6A3]" : "pos-text-label"
-        )}>
-          1. Sorte wählen
-        </p>
+      <div className="flex-none px-3 pt-2">
+        <SectionHeader title="1. Sorte wählen" accentActive={guidedMode && guidedActive} />
       </div>
       {/* Scrollable flavor list – flex-1 fills remaining panel height */}
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-2 space-y-2">
@@ -593,9 +606,7 @@ function SizeRow({
           </span>
         </div>
       )}
-      <p className="text-[11px] font-bold uppercase tracking-widest pos-text-label">
-        2. Größe wählen
-      </p>
+      <SectionHeader title="2. Größe wählen" />
       {effectiveSizes.length === 0 ? (
         <p className="py-2 text-center text-sm pos-text-dim">
           Keine Größe aktiv – bitte in Einstellungen aktivieren.
@@ -772,9 +783,7 @@ function AmountBlock({
         !active && "opacity-40 pointer-events-none"
       )}
     >
-      <p className="text-[11px] font-bold uppercase tracking-widest pos-text-label">
-        3. Betrag eingeben
-      </p>
+      <SectionHeader title="3. Betrag eingeben" />
 
       <div className="flex items-stretch gap-2">
         <button
@@ -868,9 +877,7 @@ function PaymentBuchenBlock({
         !active && "opacity-40 pointer-events-none"
       )}
     >
-      <p className="text-[11px] font-bold uppercase tracking-widest pos-text-label">
-        4. Zahlungsmittel wählen &amp; Buchen
-      </p>
+      <SectionHeader title="4. Zahlungsmittel wählen & Buchen" />
 
       {showPayment && (
         <>
