@@ -910,14 +910,15 @@ function PaymentBuchenBlock({
         </>
       )}
 
-      {/* Bestellung buchen – volle Breite */}
+      {/* Bestellung buchen – volle Breite, mindestens doppelt so breit wie
+          ein Zahlungsbutton und deutlich größer/ergonomischer als dieser */}
       <button
         data-testid="book-button"
         data-guided-ready={guidedMode && guidedActive && canBook ? "true" : undefined}
         onClick={onBook}
         disabled={!canBook}
         className={cn(
-          "mt-auto flex w-full items-center justify-center gap-2 rounded-2xl min-h-[60px] font-black transition-all select-none text-base px-3",
+          "mt-auto flex w-full items-center justify-center gap-2.5 rounded-2xl min-h-[72px] font-black transition-all select-none text-xl px-3",
           canBook
             ? "text-white shadow-lg hover:brightness-110 active:scale-[0.98]"
             : "pos-overlay pos-text-dim cursor-not-allowed",
@@ -925,7 +926,7 @@ function PaymentBuchenBlock({
         )}
         style={canBook ? { backgroundColor: bookColor } : undefined}
       >
-        <ShoppingCart className="h-5 w-5 shrink-0" aria-hidden />
+        <ShoppingCart className="h-7 w-7 shrink-0" aria-hidden />
         <span className="leading-tight text-center uppercase tracking-wide">
           {showPayment && paymentMethod === "qr" ? "QR anzeigen" : "Bestellung buchen"}
         </span>
