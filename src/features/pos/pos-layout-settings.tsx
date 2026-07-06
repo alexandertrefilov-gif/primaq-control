@@ -10,14 +10,12 @@ import {
   SIZE_LABELS,
   TOGGLE_LABELS,
   CART_FONT_LABELS,
-  CARD_SIZE_LABELS,
   PRESETS,
   DEFAULT_LAYOUT,
   DEFAULT_PAYMENT,
   panelSizeToPixels,
 } from "./use-pos-layout-store";
 import type {
-  CardSizePreset,
   CartFontSize,
   LayoutConfig,
   PanelConfig,
@@ -171,6 +169,53 @@ function SliderControl({
         <span>{min}{unit}</span>
         <span>{max}{unit}</span>
       </div>
+    </div>
+  );
+}
+
+function StepperControl({
+  value,
+  min,
+  max,
+  step,
+  unit = "px",
+  onChange,
+  disabled,
+  testId,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit?: string;
+  onChange: (v: number) => void;
+  disabled: boolean;
+  testId?: string;
+}) {
+  return (
+    <div
+      data-testid={testId}
+      className={cn("flex items-center gap-3 transition-opacity", disabled && "opacity-40 pointer-events-none")}
+    >
+      <button
+        onClick={() => onChange(Math.max(min, value - step))}
+        disabled={value <= min}
+        aria-label="verringern"
+        className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-black/5 text-2xl font-bold text-ink transition-colors hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 select-none"
+      >
+        −
+      </button>
+      <span className="flex-1 text-center text-xl font-black tabular-nums text-ink">
+        {value}{unit}
+      </span>
+      <button
+        onClick={() => onChange(Math.min(max, value + step))}
+        disabled={value >= max}
+        aria-label="erhöhen"
+        className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-black/5 text-2xl font-bold text-ink transition-colors hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 select-none"
+      >
+        +
+      </button>
     </div>
   );
 }
@@ -788,11 +833,6 @@ export function PosLayoutSettings() {
     { id: "gross", label: CART_FONT_LABELS.gross },
     { id: "xl", label: CART_FONT_LABELS.xl },
   ];
-  const cardSizeOptions: { id: CardSizePreset; label: string }[] = [
-    { id: "klein", label: CARD_SIZE_LABELS.klein },
-    { id: "mittel", label: CARD_SIZE_LABELS.mittel },
-    { id: "gross", label: CARD_SIZE_LABELS.gross },
-  ];
 
   return (
     <div className="max-w-xl space-y-4">
@@ -859,20 +899,40 @@ export function PosLayoutSettings() {
         })}
       </div>
 
-      {/* ── Kartengröße (Sorten- und Größenkarten) ──────────────── */}
-      <div className="rounded-2xl bg-white p-4 shadow" data-testid="card-size-setting">
-        <div className="mb-4 border-b border-black/5 pb-3">
+      {/* ── Kartengröße: Sorten- und Größenkarten getrennt einstellbar ──── */}
+      <div className="overflow-hidden rounded-2xl bg-white shadow" data-testid="card-size-setting">
+        <div className="border-b border-black/5 px-4 py-3">
           <p className="text-xs font-bold uppercase tracking-widest text-black/40">Kartengröße</p>
           <p className="mt-0.5 text-xs text-black/40">
-            Sorten- und Größenkarten (Bereich 1 + 2) skalieren gemeinsam
+            Sortenkarten und Größenkarten unabhängig voneinander skalieren
           </p>
         </div>
-        <SegmentControl
-          value={active.cardSizePreset}
-          options={cardSizeOptions}
-          onChange={(v) => update({ ...active, cardSizePreset: v })}
-          disabled={!editMode}
-        />
+        <div className="divide-y divide-black/5">
+          <div className="px-4 py-4 space-y-3">
+            <p className="text-sm font-semibold text-ink">Sortenkarten</p>
+            <StepperControl
+              testId="product-card-size-stepper"
+              value={active.productCardSizePx}
+              min={120}
+              max={240}
+              step={10}
+              onChange={(v) => update({ ...active, productCardSizePx: v })}
+              disabled={!editMode}
+            />
+          </div>
+          <div className="px-4 py-4 space-y-3">
+            <p className="text-sm font-semibold text-ink">Größenkarten</p>
+            <StepperControl
+              testId="size-card-size-stepper"
+              value={active.sizeCardSizePx}
+              min={120}
+              max={240}
+              step={10}
+              onChange={(v) => update({ ...active, sizeCardSizePx: v })}
+              disabled={!editMode}
+            />
+          </div>
+        </div>
       </div>
 
       {/* ── Verkaufsmodus presets ───────────────────────────────── */}
@@ -884,7 +944,8 @@ export function PosLayoutSettings() {
         <div className="grid grid-cols-2 gap-2 p-3">
           {(Object.entries(PRESETS) as [PresetId, typeof PRESETS[PresetId]][]).map(([id, preset]) => {
             const isActive =
-              active.cardSizePreset === preset.config.cardSizePreset &&
+              active.productCardSizePx === preset.config.productCardSizePx &&
+              active.sizeCardSizePx === preset.config.sizeCardSizePx &&
               active.cartFontSize === preset.config.cartFontSize &&
               active.cartWidth === preset.config.cartWidth &&
               active.qtyButtonSize === preset.config.qtyButtonSize;

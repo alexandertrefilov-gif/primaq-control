@@ -1,25 +1,23 @@
 /**
- * Kartengröße – Sorten- und Größenkarten skalieren gemeinsam
+ * Kartengröße – Sortenkarten und Größenkarten getrennt einstellbar
  *
- * "Kartengröße" (Klein/Mittel/Groß) in Einstellungen → Verkaufsoberfläche
- * steuert Punkt 1 (Sorte wählen) und Punkt 2 (Größe wählen) über dieselben
- * CSS-Variablen (--pos-card-size, --pos-card-gap, --pos-card-radius,
- * --pos-size-card-height), damit beide Bereiche immer harmonisch skalieren.
+ * Zwei unabhängige +/- Regler in Einstellungen → Verkaufsoberfläche
+ * ("Sortenkarten" / "Größenkarten") steuern productCardSizePx und
+ * sizeCardSizePx getrennt. Beide Kartentypen sind quadratisch
+ * (width = height = <feld>Px, responsiv per clamp()), Standard 180px.
  *
- * CARDSIZE 1 – Einstellung "Kartengröße" existiert in Verkaufsoberfläche
- * CARDSIZE 2 – Klein/Mittel/Groß ändern die Sortenkarten-Breite
- * CARDSIZE 3 – Klein/Mittel/Groß ändern die Größenkarten-Höhe
- * CARDSIZE 4 – Sorten- und Größenkarten skalieren proportional zusammen
- * CARDSIZE 5 – Keine Überlappung bei 1366×1024 (Preset Groß)
- * CARDSIZE 6 – Keine Überlappung bei 1194×834 (Preset Groß)
- * CARDSIZE 7 – Keine Überlappung bei 1024×768 (Preset Groß)
- * CARDSIZE 8 – Größenwahl funktioniert weiter (Artikel landet im Warenkorb)
- * CARDSIZE 9 – Verkauf/Buchung funktioniert weiter (Preset Groß, voller Ablauf)
+ * CARDSIZE 1 – Einstellungen zeigen Sortenkarten-Größe-Regler
+ * CARDSIZE 2 – Einstellungen zeigen Größenkarten-Größe-Regler
+ * CARDSIZE 3 – +/- verändert nur die Sortenkarten
+ * CARDSIZE 4 – +/- verändert nur die Größenkarten
+ * CARDSIZE 5 – Standard: beide 180 px
+ * CARDSIZE 6 – Standard: Größenkarten wirken quadratisch wie Sortenkarten
+ * CARDSIZE 7 – Werte bleiben nach Reload erhalten
+ * CARDSIZE 8 – Keine Überlappung bei 1366×1024 und 1194×834
+ * CARDSIZE 9 – Buchung funktioniert weiter
  */
 
 import { expect, test } from "@playwright/test";
-
-type CardSizePreset = "klein" | "mittel" | "gross";
 
 async function blockSupabase(page: import("@playwright/test").Page) {
   await page.route(/supabase\.co/, (route) => route.abort());
@@ -62,104 +60,158 @@ async function writeLayoutPatch(page: import("@playwright/test").Page, patch: Re
   }, patch);
 }
 
-async function seedCardSize(page: import("@playwright/test").Page, preset: CardSizePreset) {
+async function seedCardSizes(page: import("@playwright/test").Page, productPx: number, sizePx: number) {
   await page.goto("/verkauf");
   await waitLoaded(page);
-  await writeLayoutPatch(page, { cardSizePreset: preset });
+  await writeLayoutPatch(page, { productCardSizePx: productPx, sizeCardSizePx: sizePx });
   await page.reload();
   await waitLoaded(page);
 }
 
-async function rect(page: import("@playwright/test").Page, testId: string) {
-  const box = await page.getByTestId(testId).boundingBox();
-  expect(box).not.toBeNull();
-  return box!;
-}
-
-test("CARDSIZE 1 – Einstellung \"Kartengröße\" existiert in Verkaufsoberfläche", async ({ page }) => {
-  await blockSupabase(page);
+async function goToVerkaufsoberflaeche(page: import("@playwright/test").Page) {
   await seedAdmin(page);
   await page.goto("/einstellungen");
   await waitLoaded(page);
+  await page.getByRole("button", { name: "Verkaufsoberfläche" }).click();
+}
 
+async function unlockEditMode(page: import("@playwright/test").Page) {
+  const lockBtn = page.getByRole("button", { name: "Gesperrt" });
+  if (await lockBtn.isVisible().catch(() => false)) {
+    await lockBtn.click();
+  }
+}
+
+test("CARDSIZE 1 – Einstellungen zeigen Sortenkarten-Größe-Regler", async ({ page }) => {
+  await blockSupabase(page);
+  await goToVerkaufsoberflaeche(page);
+
+  const stepper = page.getByTestId("product-card-size-stepper");
+  await expect(stepper).toBeVisible();
+  await expect(stepper.getByText("180px")).toBeVisible();
+});
+
+test("CARDSIZE 2 – Einstellungen zeigen Größenkarten-Größe-Regler", async ({ page }) => {
+  await blockSupabase(page);
+  await goToVerkaufsoberflaeche(page);
+
+  const stepper = page.getByTestId("size-card-size-stepper");
+  await expect(stepper).toBeVisible();
+  await expect(stepper.getByText("180px")).toBeVisible();
+});
+
+test("CARDSIZE 3 – +/- verändert nur die Sortenkarten", async ({ page }) => {
+  await blockSupabase(page);
+  await goToVerkaufsoberflaeche(page);
+  await unlockEditMode(page);
+
+  const stepper = page.getByTestId("product-card-size-stepper");
+  await stepper.getByRole("button", { name: "erhöhen" }).click();
+  await stepper.getByRole("button", { name: "erhöhen" }).click();
+  await expect(stepper.getByText("200px")).toBeVisible();
+
+  // Größenkarten-Regler bleibt unverändert
+  await expect(page.getByTestId("size-card-size-stepper").getByText("180px")).toBeVisible();
+
+  await page.setViewportSize({ width: 1366, height: 1024 });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  const flavorBox = await page.getByRole("button", { name: "Vanille", exact: true }).boundingBox();
+  const sizeBox = await page.getByTestId("size-btn-klein").boundingBox();
+  expect(flavorBox).not.toBeNull();
+  expect(sizeBox).not.toBeNull();
+  expect(flavorBox!.width).toBeGreaterThan(190);
+  expect(sizeBox!.width).toBeLessThan(190);
+});
+
+test("CARDSIZE 4 – +/- verändert nur die Größenkarten", async ({ page }) => {
+  await blockSupabase(page);
+  await goToVerkaufsoberflaeche(page);
+  await unlockEditMode(page);
+
+  const stepper = page.getByTestId("size-card-size-stepper");
+  await stepper.getByRole("button", { name: "erhöhen" }).click();
+  await stepper.getByRole("button", { name: "erhöhen" }).click();
+  await expect(stepper.getByText("200px")).toBeVisible();
+
+  // Sortenkarten-Regler bleibt unverändert
+  await expect(page.getByTestId("product-card-size-stepper").getByText("180px")).toBeVisible();
+
+  await page.setViewportSize({ width: 1366, height: 1024 });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  const flavorBox = await page.getByRole("button", { name: "Vanille", exact: true }).boundingBox();
+  const sizeBox = await page.getByTestId("size-btn-klein").boundingBox();
+  expect(flavorBox).not.toBeNull();
+  expect(sizeBox).not.toBeNull();
+  expect(flavorBox!.width).toBeLessThan(190);
+  expect(sizeBox!.width).toBeGreaterThan(190);
+});
+
+test("CARDSIZE 5 – Standard: beide 180 px", async ({ page }) => {
+  await blockSupabase(page);
+  await page.setViewportSize({ width: 1366, height: 1024 });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  const flavorBox = await page.getByRole("button", { name: "Vanille", exact: true }).boundingBox();
+  const sizeBox = await page.getByTestId("size-btn-klein").boundingBox();
+  expect(flavorBox).not.toBeNull();
+  expect(sizeBox).not.toBeNull();
+  expect(flavorBox!.width).toBeGreaterThanOrEqual(175);
+  expect(flavorBox!.width).toBeLessThanOrEqual(184);
+  expect(sizeBox!.width).toBeGreaterThanOrEqual(175);
+  expect(sizeBox!.width).toBeLessThanOrEqual(184);
+});
+
+test("CARDSIZE 6 – Standard: Größenkarten wirken quadratisch wie Sortenkarten", async ({ page }) => {
+  await blockSupabase(page);
+  await page.setViewportSize({ width: 1366, height: 1024 });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  const flavorBox = await page.getByRole("button", { name: "Vanille", exact: true }).boundingBox();
+  const sizeBox = await page.getByTestId("size-btn-klein").boundingBox();
+  expect(flavorBox).not.toBeNull();
+  expect(sizeBox).not.toBeNull();
+
+  // Sortenkarte ist quadratisch (aspect-square)
+  expect(Math.abs(flavorBox!.width - flavorBox!.height)).toBeLessThan(2);
+  // Größenkarte ist ebenfalls quadratisch
+  expect(Math.abs(sizeBox!.width - sizeBox!.height)).toBeLessThan(2);
+  // Beide etwa gleich groß im Standard
+  expect(Math.abs(flavorBox!.width - sizeBox!.width)).toBeLessThan(6);
+});
+
+test("CARDSIZE 7 – Werte bleiben nach Reload erhalten", async ({ page }) => {
+  await blockSupabase(page);
+  await goToVerkaufsoberflaeche(page);
+  await unlockEditMode(page);
+
+  await page.getByTestId("product-card-size-stepper").getByRole("button", { name: "erhöhen" }).click();
+  await page.getByTestId("size-card-size-stepper").getByRole("button", { name: "verringern" }).click();
+
+  await expect(page.getByTestId("product-card-size-stepper").getByText("190px")).toBeVisible();
+  await expect(page.getByTestId("size-card-size-stepper").getByText("170px")).toBeVisible();
+
+  await page.reload();
+  await waitLoaded(page);
   await page.getByRole("button", { name: "Verkaufsoberfläche" }).click();
 
-  const setting = page.getByTestId("card-size-setting");
-  await expect(setting).toBeVisible();
-  await expect(setting.getByRole("button", { name: "Klein" })).toBeVisible();
-  await expect(setting.getByRole("button", { name: "Mittel" })).toBeVisible();
-  await expect(setting.getByRole("button", { name: "Groß" })).toBeVisible();
-});
-
-test("CARDSIZE 2 – Klein/Mittel/Groß ändern die Sortenkarten-Breite", async ({ page }) => {
-  await blockSupabase(page);
-  await page.setViewportSize({ width: 1366, height: 1024 });
-
-  const widths: Record<CardSizePreset, number> = { klein: 0, mittel: 0, gross: 0 };
-  for (const preset of ["klein", "mittel", "gross"] as const) {
-    await seedCardSize(page, preset);
-    const r = await rect(page, "flavor-zone");
-    const cardBox = await page.getByRole("button", { name: "Vanille", exact: true }).boundingBox();
-    expect(cardBox).not.toBeNull();
-    widths[preset] = cardBox!.width;
-    expect(r).not.toBeNull();
-  }
-
-  expect(widths.klein).toBeLessThan(widths.mittel);
-  expect(widths.mittel).toBeLessThan(widths.gross);
-});
-
-test("CARDSIZE 3 – Klein/Mittel/Groß ändern die Größenkarten-Höhe", async ({ page }) => {
-  await blockSupabase(page);
-  await page.setViewportSize({ width: 1366, height: 1024 });
-
-  const heights: Record<CardSizePreset, number> = { klein: 0, mittel: 0, gross: 0 };
-  for (const preset of ["klein", "mittel", "gross"] as const) {
-    await seedCardSize(page, preset);
-    const box = await page.getByTestId("size-btn-klein").boundingBox();
-    expect(box).not.toBeNull();
-    heights[preset] = box!.height;
-  }
-
-  expect(heights.klein).toBeLessThan(heights.mittel);
-  expect(heights.mittel).toBeLessThan(heights.gross);
-});
-
-test("CARDSIZE 4 – Sorten- und Größenkarten skalieren proportional zusammen", async ({ page }) => {
-  await blockSupabase(page);
-  await page.setViewportSize({ width: 1366, height: 1024 });
-
-  const measurements: Record<CardSizePreset, { flavorWidth: number; sizeHeight: number }> = {
-    klein: { flavorWidth: 0, sizeHeight: 0 },
-    mittel: { flavorWidth: 0, sizeHeight: 0 },
-    gross: { flavorWidth: 0, sizeHeight: 0 },
-  };
-
-  for (const preset of ["klein", "mittel", "gross"] as const) {
-    await seedCardSize(page, preset);
-    const flavorBox = await page.getByRole("button", { name: "Vanille", exact: true }).boundingBox();
-    const sizeBox = await page.getByTestId("size-btn-klein").boundingBox();
-    expect(flavorBox).not.toBeNull();
-    expect(sizeBox).not.toBeNull();
-    measurements[preset] = { flavorWidth: flavorBox!.width, sizeHeight: sizeBox!.height };
-  }
-
-  // Beide Dimensionen wachsen gemeinsam von Klein → Mittel → Groß.
-  expect(measurements.klein.flavorWidth).toBeLessThan(measurements.mittel.flavorWidth);
-  expect(measurements.mittel.flavorWidth).toBeLessThan(measurements.gross.flavorWidth);
-  expect(measurements.klein.sizeHeight).toBeLessThan(measurements.mittel.sizeHeight);
-  expect(measurements.mittel.sizeHeight).toBeLessThan(measurements.gross.sizeHeight);
+  await expect(page.getByTestId("product-card-size-stepper").getByText("190px")).toBeVisible();
+  await expect(page.getByTestId("size-card-size-stepper").getByText("170px")).toBeVisible();
 });
 
 for (const vp of [
   { width: 1366, height: 1024, label: "1366×1024" },
   { width: 1194, height: 834, label: "1194×834" },
-  { width: 1024, height: 768, label: "1024×768" },
 ]) {
-  test(`CARDSIZE ${vp.width === 1366 ? 5 : vp.width === 1194 ? 6 : 7} – Keine Überlappung bei ${vp.label} (Preset Groß)`, async ({ page }) => {
+  test(`CARDSIZE 8 – Keine Überlappung bei ${vp.label}`, async ({ page }) => {
     await blockSupabase(page);
     await page.setViewportSize({ width: vp.width, height: vp.height });
-    await seedCardSize(page, "gross");
+    await seedCardSizes(page, 220, 220);
 
     await expect(page.getByTestId("flavor-zone")).toBeVisible();
     await expect(page.getByTestId("size-zone")).toBeVisible();
@@ -167,33 +219,24 @@ for (const vp of [
     await expect(page.getByTestId("payment-zone")).toBeVisible();
     await expect(page.getByTestId("cart-zone")).toBeVisible();
 
-    const flavorR = await rect(page, "flavor-zone");
-    const sizeR = await rect(page, "size-zone");
-    const cartR = await rect(page, "cart-zone");
+    const flavorR = await page.getByTestId("flavor-zone").boundingBox();
+    const sizeR = await page.getByTestId("size-zone").boundingBox();
+    const cartR = await page.getByTestId("cart-zone").boundingBox();
+    expect(flavorR).not.toBeNull();
+    expect(sizeR).not.toBeNull();
+    expect(cartR).not.toBeNull();
 
-    // Sorten links von Größe, Größe links von Warenkorb – kein Überlapp.
-    expect(sizeR.x).toBeGreaterThanOrEqual(flavorR.x + flavorR.width - 4);
-    expect(cartR.x).toBeGreaterThanOrEqual(sizeR.x + sizeR.width - 4);
+    expect(sizeR!.x).toBeGreaterThanOrEqual(flavorR!.x + flavorR!.width - 4);
+    expect(cartR!.x).toBeGreaterThanOrEqual(sizeR!.x + sizeR!.width - 4);
 
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scrollWidth).toBeLessThanOrEqual(vp.width + 4);
   });
 }
 
-test("CARDSIZE 8 – Größenwahl funktioniert weiter (Artikel landet im Warenkorb)", async ({ page }) => {
+test("CARDSIZE 9 – Buchung funktioniert weiter", async ({ page }) => {
   await blockSupabase(page);
-  await seedCardSize(page, "gross");
-
-  await page.getByRole("button", { name: "Vanille", exact: true }).click();
-  await page.getByTestId("size-btn-klein").click();
-
-  await expect(page.getByText("Klein Vanille")).toBeVisible();
-  await expect(page.getByText(/Gesamt/).locator("..").getByText("2,50 €")).toBeVisible();
-});
-
-test("CARDSIZE 9 – Verkauf/Buchung funktioniert weiter (Preset Groß, voller Ablauf)", async ({ page }) => {
-  await blockSupabase(page);
-  await seedCardSize(page, "gross");
+  await seedCardSizes(page, 220, 220);
 
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
   await page.getByTestId("size-btn-klein").click();

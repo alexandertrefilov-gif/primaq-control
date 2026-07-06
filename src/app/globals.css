@@ -15,11 +15,11 @@
   --pos-sizes-height:   116px;
   --pos-payment-height: 240px;
 
-  /* ── Sorten-/Größenkarten (Bereich 1+2) – "Kartengröße" Einstellung, Default Mittel ── */
-  --pos-card-size:        clamp(150px, 13vw, 180px);
-  --pos-card-gap:         10px;
-  --pos-card-radius:      16px;
-  --pos-size-card-height: clamp(100px, 11vh, 120px);
+  /* ── Sorten-/Größenkarten (Bereich 1+2) – unabhängig einstellbar, Default 180px, quadratisch ── */
+  --pos-card-size:      clamp(140px, 13.18vw, 180px);
+  --pos-size-card-size: clamp(140px, 13.18vw, 180px);
+  --pos-card-gap:       12px;
+  --pos-card-radius:    16px;
   --pos-surface:   #44474E;
   --pos-section:   #4C505A;
   --pos-border:    #585C67;

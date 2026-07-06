@@ -9,7 +9,6 @@ export type PanelSize = "klein" | "mittel" | "gross" | "xl";
 export type ToggleId = "zahlung" | "live-monitor" | "verkaufszaehler" | "letzte-bestellung";
 export type CartFontSize = "normal" | "gross" | "xl";
 export type PresetId = "standard" | "ipad" | "rush_hour" | "grossanzeige";
-export type CardSizePreset = "klein" | "mittel" | "gross";
 
 export const PANEL_LABELS: Record<PanelId, string> = {
   groessen: "Größenbereich",
@@ -37,40 +36,16 @@ export const CART_FONT_LABELS: Record<CartFontSize, string> = {
   xl: "Extra Groß",
 };
 
-export const CARD_SIZE_LABELS: Record<CardSizePreset, string> = {
-  klein: "Klein",
-  mittel: "Mittel",
-  gross: "Groß",
-};
-
-// Shared CSS custom properties for Sorten- (Punkt 1) und Größenkarten (Punkt 2) —
-// beide Bereiche lesen dieselben Variablen, damit sie immer gemeinsam skalieren.
-// clamp() hält die Werte responsiv zwischen iPad- und Desktop-Breiten.
-export const CARD_SIZE_VARS: Record<CardSizePreset, {
-  cardSize: string;
-  cardGap: string;
-  cardRadius: string;
-  sizeCardHeight: string;
-}> = {
-  klein: {
-    cardSize: "clamp(120px, 11vw, 150px)",
-    cardGap: "8px",
-    cardRadius: "14px",
-    sizeCardHeight: "clamp(80px, 9vh, 96px)",
-  },
-  mittel: {
-    cardSize: "clamp(150px, 13vw, 180px)",
-    cardGap: "10px",
-    cardRadius: "16px",
-    sizeCardHeight: "clamp(100px, 11vh, 120px)",
-  },
-  gross: {
-    cardSize: "clamp(180px, 15vw, 210px)",
-    cardGap: "12px",
-    cardRadius: "20px",
-    sizeCardHeight: "clamp(120px, 13vh, 145px)",
-  },
-};
+// Sorten- (Bereich 1) und Größenkarten (Bereich 2) sind unabhängig
+// einstellbar, aber beide quadratisch (width = height = <field>Px).
+// clamp() lässt sie auf schmaleren Viewports schrumpfen, ohne den
+// gewählten Wert je zu überschreiten und ohne das 1:1-Verhältnis zu
+// verlieren — Referenzbreite 1366px (Standard-iPad-Querformat).
+export function cardSizeClamp(px: number): string {
+  const floor = Math.max(100, px - 40);
+  const preferredVw = ((px / 1366) * 100).toFixed(2);
+  return `clamp(${floor}px, ${preferredVw}vw, ${px}px)`;
+}
 
 export type PanelConfig = {
   id: PanelId;
@@ -130,7 +105,8 @@ export type LayoutConfig = {
   salesSizes: Record<string, SalesSizeOverride>; // label/price overrides per size
   // Fine-grained size controls
   flavorCardSize: number;    // 110–240 px, default 140 — legacy, no longer drives rendering
-  cardSizePreset: CardSizePreset; // Klein/Mittel/Groß — skaliert Sorten- und Größenkarten gemeinsam
+  productCardSizePx: number; // 120–240 px, step 10, default 180 — Sortenkarten (quadratisch)
+  sizeCardSizePx: number;    // 120–240 px, step 10, default 180 — Größenkarten (quadratisch)
   sizeColumnWidth: number;   // 120–240 px, default 176  (= w-44)
   qtyButtonSize: number;     // 40–80 px,  default 44
   cartFontSize: CartFontSize;
@@ -165,7 +141,8 @@ export const DEFAULT_LAYOUT: LayoutConfig = {
     gross:  { label: "Groß",  priceCents: 500, order: 3, backgroundColor: "#F4C96D", textColorMode: "auto", imageDataUrl: null, imageScale: 100, showAsQuickAmount: true },
   },
   flavorCardSize: 180,
-  cardSizePreset: "mittel",
+  productCardSizePx: 180,
+  sizeCardSizePx: 180,
   sizeColumnWidth: 176,
   qtyButtonSize: 44,
   cartFontSize: "normal",
@@ -185,7 +162,8 @@ export const PRESETS: Record<PresetId, { label: string; description: string; con
     config: {
       ...DEFAULT_LAYOUT,
       flavorCardSize: 150,
-      cardSizePreset: "klein",
+      productCardSizePx: 160,
+      sizeCardSizePx: 160,
       sizeColumnWidth: 176,
       qtyButtonSize: 52,
       cartFontSize: "normal",
@@ -198,7 +176,8 @@ export const PRESETS: Record<PresetId, { label: string; description: string; con
     config: {
       ...DEFAULT_LAYOUT,
       flavorCardSize: 130,
-      cardSizePreset: "klein",
+      productCardSizePx: 140,
+      sizeCardSizePx: 140,
       sizeColumnWidth: 160,
       qtyButtonSize: 56,
       cartFontSize: "gross",
@@ -211,7 +190,8 @@ export const PRESETS: Record<PresetId, { label: string; description: string; con
     config: {
       ...DEFAULT_LAYOUT,
       flavorCardSize: 160,
-      cardSizePreset: "gross",
+      productCardSizePx: 220,
+      sizeCardSizePx: 220,
       sizeColumnWidth: 200,
       qtyButtonSize: 64,
       cartFontSize: "xl",

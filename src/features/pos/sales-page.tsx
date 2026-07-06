@@ -10,7 +10,7 @@ import { usePosLayoutStore } from "./use-pos-layout-store";
 import { useGuidedModeStore } from "./use-guided-mode-store";
 import { useAdmin } from "./admin-context";
 import type { CartFontSize, PaymentConfig, TextColorMode } from "./use-pos-layout-store";
-import { computeTextColor, CARD_SIZE_VARS } from "./use-pos-layout-store";
+import { computeTextColor, cardSizeClamp } from "./use-pos-layout-store";
 import {
   FLAVORS,
   MACHINE_GROUP_LABELS,
@@ -592,7 +592,10 @@ function SizeRow({
           Keine Größe aktiv – bitte in Einstellungen aktivieren.
         </p>
       ) : (
-        <div className="flex min-h-0 flex-col" style={{ gap: "var(--pos-card-gap)" }}>
+        <div
+          className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto"
+          style={{ gap: "var(--pos-card-gap)" }}
+        >
           {effectiveSizes.map((size) => {
             const isActive = active;
             const bgColor = isActive ? (size.backgroundColor === "#ffffff" ? "#D9B15D" : size.backgroundColor) : size.backgroundColor;
@@ -610,7 +613,8 @@ function SizeRow({
                 )}
                 style={{
                   backgroundColor: bgColor,
-                  height: "var(--pos-size-card-height)",
+                  width: "var(--pos-size-card-size)",
+                  height: "var(--pos-size-card-size)",
                   borderRadius: "var(--pos-card-radius)",
                 }}
                 aria-disabled={!isActive}
@@ -1441,9 +1445,11 @@ export function SalesPage() {
   const change = cashCents - cartTotal;
   const showPayment = layout.toggles.zahlung;
 
-  // Sorten- und Größenkarten (Bereich 1 + 2) skalieren gemeinsam über dieselben
-  // CSS-Variablen, gesteuert durch die "Kartengröße"-Einstellung.
-  const cardVars = CARD_SIZE_VARS[layout.cardSizePreset];
+  // Sorten- (Bereich 1) und Größenkarten (Bereich 2) sind unabhängig
+  // einstellbar, aber beide quadratisch — jede liest ihre eigene
+  // CSS-Variable, responsiv per clamp() begrenzt auf den gewählten Wert.
+  const productCardSize = cardSizeClamp(layout.productCardSizePx);
+  const sizeCardSize = cardSizeClamp(layout.sizeCardSizePx);
 
   // Effective sizes: merge static defaults with salesSizes overrides, filter by visibility
   const effectiveSizes = useMemo<EffectiveSizeConfig[]>(() => {
@@ -1548,10 +1554,10 @@ export function SalesPage() {
     <div
       className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden"
       style={{
-        "--pos-card-size": cardVars.cardSize,
-        "--pos-card-gap": cardVars.cardGap,
-        "--pos-card-radius": cardVars.cardRadius,
-        "--pos-size-card-height": cardVars.sizeCardHeight,
+        "--pos-card-size": productCardSize,
+        "--pos-size-card-size": sizeCardSize,
+        "--pos-card-gap": "12px",
+        "--pos-card-radius": "16px",
       } as React.CSSProperties}
     >
       {guidedMode && <GuidedStepsBar step={guidedStep} />}
