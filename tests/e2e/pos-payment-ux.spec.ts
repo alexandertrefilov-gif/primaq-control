@@ -9,6 +9,10 @@
  * 6  – Klick auf 5,00 € setzt Gegeben-Feld auf 5
  * 7  – Rückgeld wird korrekt berechnet
  * 8  – Karte-Tab zeigt Kartenzahlung-Indikator
+ *
+ * Reihenfolge seit der 4-Quadranten-Umstellung: Betrag eingeben (Bereich 3)
+ * ist bereits direkt nach der Größenwahl aktiv; Zahlungsmittel (Bereich 4)
+ * wird erst aktiv, nachdem ein Betrag > 0 eingegeben wurde.
  */
 
 import { expect, test } from "@playwright/test";
@@ -41,7 +45,7 @@ async function gotoVerkauf(page: import("@playwright/test").Page) {
   await waitLoaded(page);
 }
 
-// Add one item to the cart so the payment block becomes interactive
+// Add one item to the cart so the Betrag-Bereich becomes interactive
 async function addKleinVanille(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
   await page.getByRole("button", { name: /Klein/ }).click();
@@ -78,10 +82,8 @@ test("PAY 3: Größenpreise Klein (2,50 €) und Mittel (3,50 €) erscheinen al
   await blockSupabase(page);
   await gotoVerkauf(page);
 
-  // Zahlungsmittel-Bereich ist erst nach einer Warenkorb-Position aktiv
+  // Betrag-Bereich ist erst nach einer Warenkorb-Position aktiv
   await addKleinVanille(page);
-  // Bar tab muss aktiv sein (Standard)
-  await page.getByTestId("payment-tab-bar").click();
 
   await expect(page.getByTestId("quick-amount-250")).toBeVisible();
   await expect(page.getByTestId("quick-amount-350")).toBeVisible();
@@ -95,7 +97,6 @@ test("PAY 4: Groß-Preis 5,00 € und Schein 5 € erscheinen nur als ein Button
   await gotoVerkauf(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
 
   // Exactly one quick-amount button for 500ct
   await expect(page.getByTestId("quick-amount-500")).toHaveCount(1);
@@ -109,7 +110,6 @@ test("PAY 5: Klick auf 3,50 € addiert zu 3,50 (von 0)", async ({ page }) => {
   await gotoVerkauf(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-350").click();
 
   const input = page.locator('input[type="number"]');
@@ -124,7 +124,6 @@ test("PAY 6: Klick auf 5,00 € addiert zu 5,00 (von 0)", async ({ page }) => {
   await gotoVerkauf(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-500").click();
 
   const input = page.locator('input[type="number"]');
@@ -141,8 +140,6 @@ test("PAY 7: Rückgeld korrekt nach Schnellgeld-Klick", async ({ page }) => {
 
   // Add Klein Vanille (2,50 €), then give 5 € → Rückgeld 2,50 €
   await addKleinVanille(page);
-
-  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-500").click();
 
   const changeRow = page.locator("div").filter({ hasText: /^Rückgeld/ }).last();
@@ -158,11 +155,11 @@ test("PAY 8: Karte-Tab zeigt Kartenzahlung-Indikator", async ({ page }) => {
   await gotoVerkauf(page);
 
   await addKleinVanille(page);
+  // Betrag eingeben ist Pflicht (>0), bevor Zahlungsmittel gewählt wird
+  await page.getByTestId("quick-amount-250").click();
   await page.getByTestId("payment-tab-karte").click();
 
   await expect(page.getByText("Kartenzahlung gewählt")).toBeVisible();
-  // Cash input should not be visible
-  await expect(page.locator('input[type="number"]')).not.toBeVisible();
 });
 
 // ── Kalkulator-Tests: Addieren, +/−, Clear ───────────────────────────────────
@@ -173,7 +170,6 @@ test("PAY 9: Zweiter Klick 3,50 € addiert → 7,00 €", async ({ page }) => {
   await gotoVerkauf(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-350").click();
   await page.getByTestId("quick-amount-350").click();
 
@@ -187,7 +183,6 @@ test("PAY 10: Schnellbetrag 5,00 € addiert sich zu bestehendem Betrag", async 
   await gotoVerkauf(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-350").click(); // 3,50
   await page.getByTestId("quick-amount-500").click(); // + 5,00 = 8,50
 
@@ -201,7 +196,6 @@ test("PAY 11: Plus-Button erhöht um 0,50 €", async ({ page }) => {
   await gotoVerkauf(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-350").click(); // 3,50
 
   await page.getByTestId("cash-plus").click(); // 4,00
@@ -218,7 +212,6 @@ test("PAY 12: Minus-Button reduziert um 0,50 €", async ({ page }) => {
   await gotoVerkauf(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-500").click(); // 5,00
 
   await page.getByTestId("cash-minus").click(); // 4,50
@@ -232,7 +225,6 @@ test("PAY 13: Minus unter 0 € bleibt bei 0,00 €", async ({ page }) => {
   await gotoVerkauf(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
   // Start at 0, press minus several times
   await page.getByTestId("cash-minus").click();
   await page.getByTestId("cash-minus").click();
@@ -247,7 +239,6 @@ test("PAY 14: Clear setzt Gegeben auf 0,00 €", async ({ page }) => {
   await gotoVerkauf(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-500").click(); // 5,00
   await page.getByTestId("cash-clear").click();
 
@@ -262,8 +253,8 @@ test("PAY 15: Bestellung buchen funktioniert nach Kalkulator-Nutzung", async ({ 
 
   await addKleinVanille(page); // 2,50 €
 
-  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-250").click(); // exakt 2,50 €
+  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("book-button").click();
 
   // Cart should be empty after booking

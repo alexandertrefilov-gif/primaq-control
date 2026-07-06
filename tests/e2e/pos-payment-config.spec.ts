@@ -97,7 +97,6 @@ test("CFG 1: + Button erhöht Gegeben um 1 €, − Button verringert", async ({
   await waitLoaded(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
 
   // Start with 5 €
   await page.getByTestId("quick-amount-500").click();
@@ -122,7 +121,6 @@ test("CFG 2: C-Button leert das Gegeben-Feld", async ({ page }) => {
   await waitLoaded(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-500").click();
   const input = page.locator('input[type="number"]');
   await expect(input).toHaveValue("5");
@@ -151,7 +149,6 @@ test("CFG 3: showAsQuickAmount=false für Klein entfernt 2,50 € Button", async
   await waitLoaded(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
 
   // Klein (250ct) must NOT appear: showAsQuickAmount=false AND 250 not in bills
   await expect(page.getByTestId("quick-amount-250")).not.toBeAttached();
@@ -174,7 +171,6 @@ test("CFG 4: Eigener Schnellbetrag 1500ct erscheint als 15,00 € Button", async
   await waitLoaded(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
   await expect(page.getByTestId("quick-amount-1500")).toBeVisible();
 
   // Click it – sets input to 15
@@ -197,7 +193,6 @@ test("CFG 5: 10 € Schein deaktiviert entfernt quick-amount-1000", async ({ pag
   await waitLoaded(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
 
   // 1000 not in bills AND no size has priceCents=1000 → must not appear
   await expect(page.getByTestId("quick-amount-1000")).not.toBeAttached();
@@ -214,14 +209,13 @@ test("CFG 6: Groß=5,00 € und Schein 5 € ergeben nur einen Button", async ({
   await waitLoaded(page);
 
   await addKleinVanille(page);
-  await page.getByTestId("payment-tab-bar").click();
   // Default: Groß=500ct, bills includes 500 → only one quick-amount-500
   await expect(page.getByTestId("quick-amount-500")).toHaveCount(1);
 });
 
 // ── Test 7: Buchungslogik unverändert ─────────────────────────────
 
-test("CFG 7: Nach Redesign bucht Karte korrekt ohne Gegeben-Eingabe", async ({ page }) => {
+test("CFG 7: Karte bucht korrekt – Betrag eingeben, dann Zahlungsmittel wählen", async ({ page }) => {
   await freshDb(page, "cfg7");
   await seedAdmin(page);
   await blockSupabase(page);
@@ -231,6 +225,9 @@ test("CFG 7: Nach Redesign bucht Karte korrekt ohne Gegeben-Eingabe", async ({ p
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
   await page.getByRole("button", { name: /^Klein/ }).click();
 
+  // Betrag eingeben ist Pflicht (>0), bevor Zahlungsmittel gewählt wird –
+  // bei Karte ist der genaue Betrag irrelevant für die Buchung.
+  await page.getByTestId("quick-amount-250").click();
   await page.getByTestId("payment-tab-karte").click();
   await page.getByTestId("book-button").click();
 

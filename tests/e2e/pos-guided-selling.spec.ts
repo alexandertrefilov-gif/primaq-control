@@ -5,8 +5,8 @@
  * GUIDED 2 – Schritt 1 aktiv beim Start (Sorte wählen)
  * GUIDED 3 – FlavorColumn hat teal-Ring in Schritt 1
  * GUIDED 4 – Nach Sorte wählen → Schritt 2 aktiv (Größe wählen)
- * GUIDED 5 – Nach Größe wählen (Artikel im Warenkorb) → Schritt 3 (Zahlung)
- * GUIDED 6 – Nach Zahlungsart wählen → Schritt 4 (Betrag/Buchen)
+ * GUIDED 5 – Nach Größe wählen (Artikel im Warenkorb) → Schritt 3 (Betrag)
+ * GUIDED 6 – Nach Betrag eingeben → Schritt 4 (Zahlungsmittel/Buchen)
  * GUIDED 7 – GuidedStepsBar verschwindet nach Abschalten des Modus
  * GUIDED 8 – Toggle in Einstellungen → Oberfläche vorhanden
  */
@@ -110,7 +110,7 @@ test("GUIDED 4 – Nach Sorte wählen wechselt zu Schritt 2", async ({ page }) =
   await expect(step2).toHaveAttribute("data-state", "active");
 });
 
-test("GUIDED 5 – Nach Größe wählen wechselt zu Schritt 3 (Zahlung)", async ({ page }) => {
+test("GUIDED 5 – Nach Größe wählen wechselt zu Schritt 3 (Betrag)", async ({ page }) => {
   await seedEmpty(page, "g5");
   await blockSupabase(page);
   await seedAdmin(page);
@@ -131,7 +131,7 @@ test("GUIDED 5 – Nach Größe wählen wechselt zu Schritt 3 (Zahlung)", async 
   await expect(bar).toHaveAttribute("data-active-step", "3");
 });
 
-test("GUIDED 6 – Nach Zahlungsart wählen wechselt zu Schritt 4", async ({ page }) => {
+test("GUIDED 6 – Nach Betrag eingeben wechselt zu Schritt 4", async ({ page }) => {
   await seedEmpty(page, "g6");
   await blockSupabase(page);
   await seedAdmin(page);
@@ -148,19 +148,15 @@ test("GUIDED 6 – Nach Zahlungsart wählen wechselt zu Schritt 4", async ({ pag
   await expect(sizeBtn).toBeVisible();
   await sizeBtn.click();
 
-  // Wait for step 3
+  // Wait for step 3 (Betrag eingeben)
   const bar = page.getByTestId("guided-steps-bar");
   await expect(bar).toHaveAttribute("data-active-step", "3");
 
-  // Click a payment tab (Karte or Bar)
-  const paymentTab = page.locator("[data-testid*='payment-tab-']").first();
-  if (await paymentTab.isVisible()) {
-    await paymentTab.click();
-    await expect(bar).toHaveAttribute("data-active-step", "4");
-  } else {
-    // Payment section may not show — at minimum step 3 reached, skip step 4 assertion
-    test.skip();
-  }
+  // Betrag eingeben (Schnellbetrag) → Schritt 4 (Zahlungsmittel + Buchen)
+  const quickAmount = page.locator("[data-testid*='quick-amount-']").first();
+  await expect(quickAmount).toBeVisible();
+  await quickAmount.click();
+  await expect(bar).toHaveAttribute("data-active-step", "4");
 });
 
 test("GUIDED 7 – GuidedStepsBar unsichtbar wenn guidedMode deaktiviert", async ({ page }) => {

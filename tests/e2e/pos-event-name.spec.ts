@@ -232,6 +232,8 @@ test("EVT 8 – Verkauf bleibt nach Eingabe des Einsatznamens funktionsfähig", 
   } else {
     await page.getByRole("button", { name: /Klein/ }).first().click();
   }
+  await page.getByTestId("quick-amount-250").click();
+  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("book-button").click();
   await expect(page.getByTestId("last-booking-bar")).toContainText("#0001");
 });

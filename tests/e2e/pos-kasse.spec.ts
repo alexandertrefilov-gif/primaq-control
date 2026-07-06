@@ -118,9 +118,6 @@ test("3: Barzahlung addiert Schnellbeträge – Rückgeld korrekt", async ({ pag
   await clickSize(page, "Groß");
   // 5,00 €
 
-  // Zahlungsmittel (Bar) explizit wählen, um die Betrag-Eingabe zu aktivieren
-  await page.getByTestId("payment-tab-bar").click();
-
   // Schnellbutton 10 € → Gegeben 10 €, Rückgeld 5 €
   await page.getByTestId("quick-amount-1000").click();
   await expect(page.getByText("Rückgeld")).toBeVisible();
@@ -142,8 +139,9 @@ test("4: Bestellung buchen → Warenkorb leer, Tagesumsatz korrekt", async ({ pa
   await clickFlavor(page, "Erdbeere");
   await clickSize(page, "Klein");
 
-  await page.getByTestId("payment-tab-bar").click();
+  // Reihenfolge: erst Betrag eingeben, dann Zahlungsmittel wählen
   await page.getByTestId("quick-amount-500").click();
+  await page.getByTestId("payment-tab-bar").click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   // Warenkorb ist leer
@@ -168,6 +166,9 @@ test("5: Kartenzahlung buchen → cardCents korrekt", async ({ page }) => {
   await clickFlavor(page, "Vanille");
   await clickSize(page, "Mittel");
 
+  // Betrag eingeben ist Pflicht (>0), bevor Zahlungsmittel gewählt wird –
+  // bei Karte/QR ist der genaue Wert irrelevant für die Buchung.
+  await page.getByTestId("quick-amount-350").click();
   await page.getByRole("button", { name: "Karte" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
@@ -188,6 +189,7 @@ test("6: QR-Popup öffnen und Zahlung bestätigen", async ({ page }) => {
   await clickFlavor(page, "Mix Cheesecake/Erdbeere");
   await clickSize(page, "Groß");
 
+  await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "QR" }).click();
   await page.getByRole("button", { name: "QR anzeigen" }).click();
 
@@ -213,19 +215,21 @@ test("7: Drei Buchungen – Gesamtumsatz korrekt summiert", async ({ page }) => 
   // Bar: 2,50
   await clickFlavor(page, "Vanille");
   await clickSize(page, "Klein");
-  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-500").click();
+  await page.getByTestId("payment-tab-bar").click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   // Karte: 3,50
   await clickFlavor(page, "Schokolade");
   await clickSize(page, "Mittel");
+  await page.getByTestId("quick-amount-350").click();
   await page.getByRole("button", { name: "Karte" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
   // Karte: 5,00
   await clickFlavor(page, "Cheesecake");
   await clickSize(page, "Groß");
+  await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "Karte" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
@@ -247,6 +251,7 @@ test("8: Tagesabschluss zeigt Umsatz aus /verkauf", async ({ page }) => {
 
   await clickFlavor(page, "Vanille");
   await clickSize(page, "Groß");
+  await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "Karte" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
@@ -267,6 +272,7 @@ test("9: Reload – Tagesumsatz bleibt erhalten", async ({ page }) => {
 
   await clickFlavor(page, "Erdbeere");
   await clickSize(page, "Mittel");
+  await page.getByTestId("quick-amount-350").click();
   await page.getByRole("button", { name: "Karte" }).click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 

@@ -227,7 +227,9 @@ test("Sales 1: bookOrder via UI erzeugt pos_sales_state-Queue-Eintrag", async ({
   await expect(page.getByRole("button", { name: /Klein/i }).first()).toBeVisible({ timeout: 3000 });
   await page.getByRole("button", { name: /Klein/i }).first().click();
 
-  // Switch payment to Karte (so canBook is satisfied without cash entry)
+  // Betrag eingeben ist Pflicht (>0), bevor Zahlungsmittel gewählt wird
+  await page.getByTestId("quick-amount-250").click();
+  // Switch payment to Karte (bei Karte ist der genaue Betrag irrelevant)
   await page.getByRole("button", { name: "Karte" }).first().click();
 
   // Book the order
@@ -505,10 +507,11 @@ test("Sales 8: bookOrder löst Auto-Flush nach Buchung aus", async ({ page }) =>
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  // Book an order via UI (Vanille → Klein → Karte → Buchen)
+  // Book an order via UI (Vanille → Klein → Betrag → Karte → Buchen)
   await page.getByRole("button", { name: "Vanille" }).first().click();
   await expect(page.getByRole("button", { name: /Klein/i }).first()).toBeVisible({ timeout: 3000 });
   await page.getByRole("button", { name: /Klein/i }).first().click();
+  await page.getByTestId("quick-amount-250").click();
   await page.getByRole("button", { name: "Karte" }).first().click();
   await expect(page.getByTestId("book-button")).toBeEnabled({ timeout: 2000 });
   await page.getByTestId("book-button").click();

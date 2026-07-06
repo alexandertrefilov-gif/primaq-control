@@ -83,10 +83,11 @@ for (const vp of VIEWPORTS) {
     await page.goto("/verkauf");
     await waitLoaded(page);
 
-    // Alle vier Zonen müssen sichtbar sein
+    // Alle vier Quadranten + Warenkorb müssen sichtbar sein
     await expect(page.getByTestId("flavor-zone")).toBeVisible();
     await expect(page.getByTestId("size-zone")).toBeVisible();
     await expect(page.getByTestId("amount-zone")).toBeVisible();
+    await expect(page.getByTestId("payment-zone")).toBeVisible();
     await expect(page.getByTestId("cart-zone")).toBeVisible();
 
     // Größen-Buttons sichtbar
@@ -116,18 +117,20 @@ test("LAY 4: Sortenbereich und Größenbereich schneiden sich nicht (1024×768)"
   expect(noHorizOverlap(flavorR, sizeR)).toBe(true);
 });
 
-// ── LAY 5: Größenbereich und Bezahlkarte schneiden sich nicht ────────────────
+// ── LAY 5: Größenbereich und Zahlungsbereich schneiden sich nicht ───────────
+// Zahlung (Bereich 4) sitzt im festen Standardlayout direkt unter Größe
+// (Bereich 2), in derselben mittleren Spalte.
 
-test("LAY 5: Größenbereich und Bezahlkarte schneiden sich nicht (1024×768)", async ({ page }) => {
+test("LAY 5: Größenbereich und Zahlungsbereich schneiden sich nicht (1024×768)", async ({ page }) => {
   await freshDb(page, "lay5");
   await blockSupabase(page);
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  const sizeR   = await rect(page, "size-zone");
-  const amountR = await rect(page, "amount-zone");
-  expect(noVertOverlap(sizeR, amountR)).toBe(true);
+  const sizeR    = await rect(page, "size-zone");
+  const paymentR = await rect(page, "payment-zone");
+  expect(noVertOverlap(sizeR, paymentR)).toBe(true);
 });
 
 // ── LAY 6: Warenkorb bleibt rechts ───────────────────────────────────────────
@@ -147,28 +150,28 @@ test("LAY 6: Warenkorb ist rechts von Sorten-/Zahlungsbereich (1194×834)", asyn
   expect(cartR!.left).toBeGreaterThan(flavorR!.right - 4);
 });
 
-// ── LAY 7: Schnellbeträge über Bestellung buchen, gemeinsame rechte Spalte ──
+// ── LAY 7: Schnellbeträge (Bereich 3) und Bestellung buchen (Bereich 4) ─────
+// liegen jetzt in getrennten Quadranten nebeneinander, nicht mehr gestapelt.
 
-test("LAY 7: Schnellbeträge und Bestellung buchen gestapelt, keine Überlappung (1024×768)", async ({ page }) => {
+test("LAY 7: Schnellbeträge und Bestellung buchen in getrennten Quadranten, keine Überlappung (1024×768)", async ({ page }) => {
   await freshDb(page, "lay7");
   await blockSupabase(page);
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  // Bar ist Standardmodus – Schnellbeträge direkt sichtbar
+  // Schnellbeträge sind direkt nach Größenwahl sichtbar (Betrag-Bereich)
+  await page.getByRole("button", { name: "Vanille", exact: true }).click();
+  await page.getByTestId("size-btn-klein").click();
   await expect(page.getByTestId("quick-amount-250")).toBeVisible();
   await expect(page.getByTestId("quick-amounts-row")).toBeVisible();
   await expect(page.getByTestId("book-button")).toBeVisible();
 
-  // Schnellbeträge und Bestellung buchen stehen in derselben Spalte (rechts im
-  // Betrag-Bereich) übereinander – Buchen-Button liegt unterhalb, kein Überlapp.
-  const quickR  = await rect(page, "quick-amounts-row");
-  const bookR   = await rect(page, "book-button");
-  expect(quickR).not.toBeNull();
-  expect(bookR).not.toBeNull();
-  expect(noVertOverlap(quickR, bookR)).toBe(true);
-  expect(Math.abs(bookR!.left - quickR!.left)).toBeLessThan(8);
+  // Schnellbeträge (Betrag-Quadrant) und Bestellung buchen (Zahlung-Quadrant)
+  // stehen nebeneinander, nicht übereinander – kein horizontaler Überlapp.
+  const quickR = await rect(page, "quick-amounts-row");
+  const bookR  = await rect(page, "book-button");
+  expect(noHorizOverlap(quickR, bookR)).toBe(true);
 });
 
 // ── LAY 8: Bestellung buchen sichtbar ────────────────────────────────────────
@@ -231,6 +234,7 @@ test("LAY 11: Sorte + Größe → Buchung möglich (1194×834)", async ({ page }
   await page.getByTestId("size-btn-klein").click();
   await expect(page.getByText("KLEIN VANILLE")).toBeVisible({ timeout: 5000 });
 
+  await page.getByTestId("quick-amount-250").click();
   await page.getByTestId("payment-tab-karte").click();
   await page.getByTestId("book-button").click();
 

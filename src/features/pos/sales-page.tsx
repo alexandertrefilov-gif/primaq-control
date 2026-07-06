@@ -525,7 +525,7 @@ function FlavorColumn({
           "text-[11px] font-bold uppercase tracking-widest transition-colors",
           guidedMode && guidedActive ? "text-[#00D6A3]" : "pos-text-label"
         )}>
-          Sorte wählen
+          1. Sorte wählen
         </p>
       </div>
       {/* Scrollable flavor list – flex-1 fills remaining panel height */}
@@ -583,7 +583,7 @@ function SizeRow({
         </div>
       )}
       <p className="text-[11px] font-bold uppercase tracking-widest pos-text-label">
-        Größe wählen
+        2. Größe wählen
       </p>
       {effectiveSizes.length === 0 ? (
         <p className="py-2 text-center text-sm pos-text-dim">
@@ -629,7 +629,7 @@ function SizeRow({
 const GUIDED_STEPS = [
   { n: 1, label: "Sorte" },
   { n: 2, label: "Größe" },
-  { n: 3, label: "Zahlung" },
+  { n: 3, label: "Betrag" },
   { n: 4, label: "Buchen" },
 ] as const;
 
@@ -687,50 +687,28 @@ const PAYMENT_ICONS: Record<PaymentMethod, React.ReactNode> = {
   qr:    <QrCode className="h-7 w-7" aria-hidden />,
 };
 
-// ── Betrag eingeben & Bestellung buchen – EINE Karte: Zahlungsmittel wählen,
-// Betrag eingeben, feste Beträge, Bestellung buchen ─────────────────────────
+// ── Bereich 3: Betrag eingeben – Eingabezeile + feste Beträge ────────────────
 
-function CheckoutBlock({
-  showPayment,
-  paymentMethod,
+function AmountBlock({
   cashInput,
   cashCents,
-  canBook,
-  cardActive,
-  amountActive,
-  onPaymentChange,
+  active,
   onCashInput,
-  onBook,
   effectiveSizes,
   paymentConfig,
   guidedMode = false,
-  guidedStep = null,
+  guidedActive = false,
 }: {
-  showPayment: boolean;
-  paymentMethod: PaymentMethod;
   cashInput: string;
   cashCents: number;
-  canBook: boolean;
-  /** Whole card active (a size has been picked / cart has an item). */
-  cardActive: boolean;
-  /** Betrag/Festbeträge active (a payment method has been explicitly chosen). */
-  amountActive: boolean;
-  onPaymentChange: (m: PaymentMethod) => void;
+  /** Active once a size has been picked (cart has an item). */
+  active: boolean;
   onCashInput: (v: string) => void;
-  onBook: () => void;
   effectiveSizes: EffectiveSizeConfig[];
   paymentConfig: PaymentConfig;
   guidedMode?: boolean;
-  guidedStep?: 3 | 4 | null;
+  guidedActive?: boolean;
 }) {
-  const barColor   = paymentConfig.barColor   ?? "#16a34a";
-  const karteColor = paymentConfig.karteColor ?? "#2563eb";
-  const qrColor    = paymentConfig.qrColor    ?? "#7c3aed";
-  const bookColor  = paymentConfig.bookColor  ?? "#16a34a";
-  const methodColor: Record<PaymentMethod, string> = { bar: barColor, karte: karteColor, qr: qrColor };
-  // Cash entry + quick amounts only apply in Bar mode (or when payment step is disabled entirely)
-  const isBar = !showPayment || paymentMethod === "bar";
-
   // Build colored quick-amount items: sizes get their own color, bills/custom use configured colors
   const quickItems = useMemo(() => {
     const bills = paymentConfig.bills ?? DEFAULT_PAYMENT_BILLS;
@@ -768,151 +746,171 @@ function CheckoutBlock({
   return (
     <div
       data-testid="amount-zone"
+      data-guided-active={guidedMode && guidedActive ? "true" : undefined}
       className={cn(
-        "rounded-2xl pos-section p-2 transition-all",
-        !cardActive && "opacity-40 pointer-events-none"
+        "h-full flex flex-col gap-2 rounded-2xl pos-section p-2 transition-all",
+        guidedMode && guidedActive && "guided-ring-pulse ring-2 ring-[#00D6A3]/50",
+        !active && "opacity-40 pointer-events-none"
       )}
     >
-      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest pos-text-label">
-        Betrag eingeben &amp; Bestellung buchen
+      <p className="text-[11px] font-bold uppercase tracking-widest pos-text-label">
+        3. Betrag eingeben
       </p>
 
-      <div className={cn("grid gap-2", isBar ? "grid-cols-2" : "grid-cols-1")}>
-        {/* Linke Spalte: 1. Zahlungsmittel wählen, 2. Betrag Eingabe */}
-        <div className="flex flex-col gap-2">
-          {showPayment && (
-            <div
-              data-testid="payment-method-group"
-              data-guided-active={guidedMode && guidedStep === 3 ? "true" : undefined}
-              className={cn(
-                "flex flex-col gap-1.5 rounded-2xl transition-all",
-                guidedMode && guidedStep === 3 && "guided-ring-pulse ring-2 ring-[#00D6A3]/50"
-              )}
-            >
-              <p className="text-[11px] font-bold uppercase tracking-widest pos-text-label">
-                Zahlungsmittel wählen
-              </p>
-              <div className="flex gap-2">
-                {(["bar", "karte", "qr"] as PaymentMethod[]).map((m) => {
-                  const color = methodColor[m];
-                  const isActive = paymentMethod === m;
-                  return (
-                    <button
-                      key={m}
-                      data-testid={`payment-tab-${m}`}
-                      onClick={() => { if (cardActive) onPaymentChange(m); }}
-                      aria-disabled={!cardActive}
-                      className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl transition-all duration-200 active:scale-[0.97] select-none"
-                      style={{
-                        minHeight: 64,
-                        backgroundColor: isActive ? color : `${color}22`,
-                        color: isActive ? "#ffffff" : color,
-                        boxShadow: isActive
-                          ? `0 0 0 3px ${color}50, 0 6px 20px ${color}35`
-                          : undefined,
-                      }}
-                    >
-                      {PAYMENT_ICONS[m]}
-                      <span className="text-base font-black leading-none">{PAYMENT_LABELS[m]}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {paymentMethod === "karte" && (
-                <div className="flex items-center justify-center gap-2 rounded-xl px-4 py-2"
-                  style={{ backgroundColor: `${karteColor}20` }}>
-                  <CreditCard className="h-5 w-5" style={{ color: karteColor }} aria-hidden />
-                  <span className="text-sm font-semibold" style={{ color: karteColor }}>Kartenzahlung gewählt</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {isBar && (
-            <div
-              data-guided-active={guidedMode && guidedStep === 4 ? "true" : undefined}
-              className={cn(
-                "flex items-stretch gap-2 rounded-2xl transition-all",
-                guidedMode && guidedStep === 4 && "guided-ring-pulse",
-                !amountActive && "opacity-40 pointer-events-none"
-              )}
-            >
-              <button
-                data-testid="cash-minus"
-                onClick={() => { if (amountActive) onCashInput((Math.max(0, cashCents - 50) / 100).toFixed(2)); }}
-                className="h-14 w-14 shrink-0 grid place-items-center rounded-xl bg-red-500/20 text-red-400 text-2xl font-black transition-all hover:bg-red-500/30 active:scale-95 select-none"
-              >−</button>
-              <input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0"
-                value={cashInput}
-                onChange={(e) => onCashInput(e.target.value)}
-                placeholder="0,00"
-                disabled={!amountActive}
-                className="min-h-[56px] min-w-0 flex-1 rounded-xl border-2 px-3 text-center text-4xl font-black tabular-nums outline-none transition-all pos-input focus:ring-4 focus:ring-green-500/20"
-              />
-              <button
-                data-testid="cash-plus"
-                onClick={() => { if (amountActive) onCashInput(((cashCents + 50) / 100).toFixed(2)); }}
-                className="h-14 w-14 shrink-0 grid place-items-center rounded-xl bg-green-500/20 text-green-400 text-2xl font-black transition-all hover:bg-green-500/30 active:scale-95 select-none"
-              >+</button>
-              <button
-                data-testid="cash-clear"
-                onClick={() => { if (amountActive) onCashInput(""); }}
-                className="h-14 w-14 shrink-0 grid place-items-center rounded-xl bg-orange-500/20 text-orange-400 text-xl font-black transition-all hover:bg-orange-500/30 active:scale-95 select-none"
-              >C</button>
-            </div>
-          )}
-        </div>
-
-        {/* Rechte Spalte: 1. Feste Beträge, 2. Bestellung buchen */}
-        <div className="flex min-h-0 flex-col gap-2">
-          {isBar && (
-            <div
-              data-testid="quick-amounts-row"
-              className={cn(
-                "flex flex-1 min-h-0 flex-wrap content-start gap-2 overflow-y-auto transition-all",
-                !amountActive && "opacity-40 pointer-events-none"
-              )}
-            >
-              {quickItems.map(({ cents, bgColor, textColor }) => (
-                <button
-                  key={cents}
-                  data-testid={`quick-amount-${cents}`}
-                  onClick={() => { if (amountActive) onCashInput(((cashCents + cents) / 100).toFixed(2)); }}
-                  className="w-[calc(50%-4px)] shrink-0 rounded-xl min-h-[56px] flex flex-col items-center justify-center px-1 text-lg font-black leading-tight tracking-tight transition-all active:scale-95 select-none hover:brightness-110"
-                  style={{ backgroundColor: bgColor, color: textColor }}
-                >
-                  {fmt(cents)}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Bestellung buchen */}
-          <button
-            data-testid="book-button"
-            data-guided-ready={guidedMode && guidedStep === 4 && canBook ? "true" : undefined}
-            onClick={onBook}
-            disabled={!canBook}
-            className={cn(
-              "shrink-0 flex items-center justify-center gap-2 rounded-2xl min-h-[60px] font-black transition-all select-none text-base px-3",
-              canBook
-                ? "text-white shadow-lg hover:brightness-110 active:scale-[0.98]"
-                : "pos-overlay pos-text-dim cursor-not-allowed",
-              guidedMode && guidedStep === 4 && canBook && "guided-book-pulse"
-            )}
-            style={canBook ? { backgroundColor: bookColor } : undefined}
-          >
-            <ShoppingCart className="h-5 w-5 shrink-0" aria-hidden />
-            <span className="leading-tight text-center uppercase tracking-wide">
-              {showPayment && paymentMethod === "qr" ? "QR anzeigen" : "Bestellung buchen"}
-            </span>
-          </button>
-        </div>
+      <div className="flex items-stretch gap-2">
+        <button
+          data-testid="cash-minus"
+          onClick={() => { if (active) onCashInput((Math.max(0, cashCents - 50) / 100).toFixed(2)); }}
+          className="h-14 w-14 shrink-0 grid place-items-center rounded-xl bg-red-500/20 text-red-400 text-2xl font-black transition-all hover:bg-red-500/30 active:scale-95 select-none"
+        >−</button>
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          value={cashInput}
+          onChange={(e) => onCashInput(e.target.value)}
+          placeholder="0,00"
+          disabled={!active}
+          className="min-h-[56px] min-w-0 flex-1 rounded-xl border-2 px-3 text-center text-4xl font-black tabular-nums outline-none transition-all pos-input focus:ring-4 focus:ring-green-500/20"
+        />
+        <button
+          data-testid="cash-plus"
+          onClick={() => { if (active) onCashInput(((cashCents + 50) / 100).toFixed(2)); }}
+          className="h-14 w-14 shrink-0 grid place-items-center rounded-xl bg-green-500/20 text-green-400 text-2xl font-black transition-all hover:bg-green-500/30 active:scale-95 select-none"
+        >+</button>
+        <button
+          data-testid="cash-clear"
+          onClick={() => { if (active) onCashInput(""); }}
+          className="h-14 w-14 shrink-0 grid place-items-center rounded-xl bg-orange-500/20 text-orange-400 text-xl font-black transition-all hover:bg-orange-500/30 active:scale-95 select-none"
+        >C</button>
       </div>
+
+      <p className="text-[11px] font-bold uppercase tracking-widest pos-text-label">
+        Feste Beträge
+      </p>
+      <div
+        data-testid="quick-amounts-row"
+        className="flex flex-1 min-h-0 flex-wrap content-start gap-2 overflow-y-auto"
+      >
+        {quickItems.map(({ cents, bgColor, textColor }) => (
+          <button
+            key={cents}
+            data-testid={`quick-amount-${cents}`}
+            onClick={() => { if (active) onCashInput(((cashCents + cents) / 100).toFixed(2)); }}
+            className="w-[calc(33.333%-6px)] shrink-0 rounded-xl min-h-[56px] flex flex-col items-center justify-center px-1 text-lg font-black leading-tight tracking-tight transition-all active:scale-95 select-none hover:brightness-110"
+            style={{ backgroundColor: bgColor, color: textColor }}
+          >
+            {fmt(cents)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Bereich 4: Zahlungsmittel wählen & Bestellung buchen ─────────────────────
+
+function PaymentBuchenBlock({
+  showPayment,
+  paymentMethod,
+  canBook,
+  active,
+  onPaymentChange,
+  onBook,
+  paymentConfig,
+  guidedMode = false,
+  guidedActive = false,
+}: {
+  showPayment: boolean;
+  paymentMethod: PaymentMethod;
+  canBook: boolean;
+  /** Active once Betrag eingeben has a value > 0. */
+  active: boolean;
+  onPaymentChange: (m: PaymentMethod) => void;
+  onBook: () => void;
+  paymentConfig: PaymentConfig;
+  guidedMode?: boolean;
+  guidedActive?: boolean;
+}) {
+  const barColor   = paymentConfig.barColor   ?? "#16a34a";
+  const karteColor = paymentConfig.karteColor ?? "#2563eb";
+  const qrColor    = paymentConfig.qrColor    ?? "#7c3aed";
+  const bookColor  = paymentConfig.bookColor  ?? "#16a34a";
+  const methodColor: Record<PaymentMethod, string> = { bar: barColor, karte: karteColor, qr: qrColor };
+
+  return (
+    <div
+      data-testid="payment-zone"
+      data-guided-active={guidedMode && guidedActive ? "true" : undefined}
+      className={cn(
+        "h-full flex flex-col gap-2 rounded-2xl pos-section p-2 transition-all",
+        guidedMode && guidedActive && "guided-ring-pulse ring-2 ring-green-400/40",
+        !active && "opacity-40 pointer-events-none"
+      )}
+    >
+      <p className="text-[11px] font-bold uppercase tracking-widest pos-text-label">
+        4. Zahlungsmittel wählen &amp; Buchen
+      </p>
+
+      {showPayment && (
+        <>
+          <div className="flex gap-2">
+            {(["bar", "karte", "qr"] as PaymentMethod[]).map((m) => {
+              const color = methodColor[m];
+              const isActive = paymentMethod === m;
+              return (
+                <button
+                  key={m}
+                  data-testid={`payment-tab-${m}`}
+                  onClick={() => { if (active) onPaymentChange(m); }}
+                  aria-disabled={!active}
+                  className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl transition-all duration-200 active:scale-[0.97] select-none"
+                  style={{
+                    minHeight: 64,
+                    backgroundColor: isActive ? color : `${color}22`,
+                    color: isActive ? "#ffffff" : color,
+                    boxShadow: isActive
+                      ? `0 0 0 3px ${color}50, 0 6px 20px ${color}35`
+                      : undefined,
+                  }}
+                >
+                  {PAYMENT_ICONS[m]}
+                  <span className="text-base font-black leading-none">{PAYMENT_LABELS[m]}</span>
+                </button>
+              );
+            })}
+          </div>
+          {paymentMethod === "karte" && (
+            <div className="flex items-center justify-center gap-2 rounded-xl px-4 py-2"
+              style={{ backgroundColor: `${karteColor}20` }}>
+              <CreditCard className="h-5 w-5" style={{ color: karteColor }} aria-hidden />
+              <span className="text-sm font-semibold" style={{ color: karteColor }}>Kartenzahlung gewählt</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Bestellung buchen – volle Breite */}
+      <button
+        data-testid="book-button"
+        data-guided-ready={guidedMode && guidedActive && canBook ? "true" : undefined}
+        onClick={onBook}
+        disabled={!canBook}
+        className={cn(
+          "mt-auto flex w-full items-center justify-center gap-2 rounded-2xl min-h-[60px] font-black transition-all select-none text-base px-3",
+          canBook
+            ? "text-white shadow-lg hover:brightness-110 active:scale-[0.98]"
+            : "pos-overlay pos-text-dim cursor-not-allowed",
+          guidedMode && guidedActive && canBook && "guided-book-pulse"
+        )}
+        style={canBook ? { backgroundColor: bookColor } : undefined}
+      >
+        <ShoppingCart className="h-5 w-5 shrink-0" aria-hidden />
+        <span className="leading-tight text-center uppercase tracking-wide">
+          {showPayment && paymentMethod === "qr" ? "QR anzeigen" : "Bestellung buchen"}
+        </span>
+      </button>
     </div>
   );
 }
@@ -935,8 +933,6 @@ function CartColumn({
   qtyBtnSize,
   cartFontSize,
   effectiveSizes,
-  showPayment,
-  paymentMethod,
   cashCents,
   change,
 }: {
@@ -949,8 +945,6 @@ function CartColumn({
   qtyBtnSize: number;
   cartFontSize: CartFontSize;
   effectiveSizes: EffectiveSizeConfig[];
-  showPayment: boolean;
-  paymentMethod: PaymentMethod;
   cashCents: number;
   change: number;
 }) {
@@ -1098,16 +1092,28 @@ function CartColumn({
             <span className="text-sm font-semibold pos-text-muted">Gesamt</span>
             <span className="text-3xl font-black pos-text tabular-nums">{fmt(cartTotal)}</span>
           </div>
-          {showPayment && paymentMethod === "bar" && cashCents >= cartTotal && cartTotal > 0 && (
-            <div className="flex items-center justify-between rounded-xl bg-green-500/15 px-3 py-1.5">
-              <span className="text-sm font-bold uppercase tracking-wide text-green-400">Rückgeld</span>
-              <span className="text-3xl font-black tabular-nums text-green-400">{fmt(change)}</span>
+          {cashCents >= cartTotal && cashCents > 0 && cartTotal > 0 && (
+            <div data-testid="cart-change-row" className="rounded-xl bg-green-500/15 px-3 py-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold uppercase tracking-wide text-green-400">Rückgeld</span>
+                <span className="text-3xl font-black tabular-nums text-green-400">{fmt(change)}</span>
+              </div>
+              <div className="mt-0.5 flex items-center justify-between">
+                <span className="text-xs pos-text-muted">Gegeben</span>
+                <span className="text-sm font-semibold pos-text-muted tabular-nums">{fmt(cashCents)}</span>
+              </div>
             </div>
           )}
-          {showPayment && paymentMethod === "bar" && cashCents > 0 && cashCents < cartTotal && cartTotal > 0 && (
-            <div className="flex items-center justify-between rounded-xl bg-orange-500/15 px-3 py-1.5">
-              <span className="text-sm font-bold uppercase tracking-wide text-orange-400">Noch offen</span>
-              <span className="text-3xl font-black tabular-nums text-orange-400">{fmt(cartTotal - cashCents)}</span>
+          {cashCents > 0 && cashCents < cartTotal && cartTotal > 0 && (
+            <div data-testid="cart-open-row" className="rounded-xl bg-orange-500/15 px-3 py-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold uppercase tracking-wide text-orange-400">Noch offen</span>
+                <span className="text-3xl font-black tabular-nums text-orange-400">{fmt(cartTotal - cashCents)}</span>
+              </div>
+              <div className="mt-0.5 flex items-center justify-between">
+                <span className="text-xs pos-text-muted">Gegeben</span>
+                <span className="text-sm font-semibold pos-text-muted tabular-nums">{fmt(cashCents)}</span>
+              </div>
             </div>
           )}
         </div>
@@ -1448,24 +1454,31 @@ export function SalesPage() {
       .filter((s) => layout.sizeVisibility[s.id] !== false);
   }, [layout]);
 
-  const canBook = cart.length > 0 && (showPayment ? (payment !== "bar" || cashCents >= cartTotal) : true);
+  // Buchen erfordert: Warenkorb nicht leer, Betrag eingegeben (>0), und bei
+  // aktivem Zahlungsbereich ein explizit gewähltes Zahlungsmittel — bei Bar
+  // zusätzlich einen ausreichenden Betrag.
+  const canBook = cart.length > 0 && cashCents > 0 && (
+    showPayment
+      ? (paymentConfirmed && (payment !== "bar" || cashCents >= cartTotal))
+      : true
+  );
 
-  // Derived guided step — pure function of existing state, no new store needed
+  // Derived guided step — pure function of existing state, no new store needed.
+  // Reihenfolge: 1 Sorte, 2 Größe, 3 Betrag eingeben, 4 Zahlungsmittel + Buchen.
   const guidedStep: 1 | 2 | 3 | 4 =
     pendingFlavor !== null ? 2 :
     cart.length === 0 ? 1 :
-    (!paymentConfirmed && showPayment) ? 3 :
+    cashCents === 0 ? 3 :
     4;
 
   // Always-on step gating (independent of the guidedMode visual toggle): a
   // locked area stays visible but dimmed, with no pointer-events and no
   // onClick effect, until the previous step is actually completed.
-  // cardActive: whole checkout card unlocks once a size has been picked.
-  // amountActive: Betrag/Festbeträge/Buchen unlock only after a payment
-  // method has been explicitly chosen this cycle (Zahlungsmittel tabs
-  // themselves are already usable as soon as the card is active).
-  const cardActive = cart.length > 0;
-  const amountActive = cardActive && (!showPayment || paymentConfirmed);
+  // betragActive: Bereich 3 (Betrag eingeben) unlocks once a size has been
+  // picked. zahlungActive: Bereich 4 (Zahlungsmittel + Buchen) unlocks only
+  // once an amount > 0 has actually been entered.
+  const betragActive = cart.length > 0;
+  const zahlungActive = betragActive && cashCents > 0;
 
   // Reset paymentConfirmed when cart empties (booking or manual removal)
   useEffect(() => {
@@ -1488,8 +1501,9 @@ export function SalesPage() {
   }, [pendingFlavor, addToCart, effectiveSizes]);
 
   const handlePaymentChange = useCallback((method: PaymentMethod) => {
+    // Betrag eingeben kommt VOR Zahlungsmittel wählen — der bereits
+    // eingegebene Betrag bleibt beim Wechsel des Zahlungsmittels erhalten.
     setPayment(method);
-    setCashInput("");
     setPaymentConfirmed(true);
   }, []);
 
@@ -1529,20 +1543,20 @@ export function SalesPage() {
         panel system in sales operation anymore — no drag, no resize, no
         localStorage-driven x/y/w/h panels, for anyone, admin included.
 
-        Topology: Sorten (links) | Größe (Mitte) | Warenkorb (rechts, volle
-        Höhe). Die Bezahlkarte ("Betrag eingeben & Bestellung buchen") läuft
-        unten unter Sorten+Mitte, aber nicht unter dem Warenkorb, und enthält
-        Zahlungsmittel, Betrag-Eingabe, feste Beträge und den Buchen-Button
-        als eine Einheit — keine separate Zahlungskarte mehr.
+        4-Quadranten-Layout: 1. Sorte (oben links) | 2. Größe (oben Mitte) |
+        3. Betrag eingeben (unten links) | 4. Zahlungsmittel + Buchen (unten
+        Mitte) | Warenkorb (rechts, volle Höhe über beide Zeilen). Betrag
+        kommt VOR Zahlungsmittel — die neue Reihenfolge ist Sorte → Größe →
+        Betrag → Zahlungsmittel/Buchen.
       */}
       <div
         data-testid="sales-grid"
-        className="flex-1 min-h-0 overflow-hidden"
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr minmax(320px, 380px) minmax(360px, 440px)",
-          gridTemplateRows: "minmax(0, 1fr) auto",
-          gridTemplateAreas: `"flavors size cart" "amount amount cart"`,
+          gridTemplateColumns: "minmax(520px, 1fr) minmax(280px, 360px) minmax(360px, 440px)",
+          gridTemplateRows: "minmax(380px, 1fr) minmax(200px, auto)",
+          gridTemplateAreas: `"flavors size cart" "amount payment cart"`,
           gap: "12px",
         }}
       >
@@ -1566,22 +1580,30 @@ export function SalesPage() {
           />
         </div>
 
-        <div className="min-w-0" style={{ gridArea: "amount" }}>
-          <CheckoutBlock
-            showPayment={showPayment}
-            paymentMethod={payment}
+        <div className="min-h-0 min-w-0" style={{ gridArea: "amount" }}>
+          <AmountBlock
             cashInput={cashInput}
             cashCents={cashCents}
-            canBook={canBook}
-            cardActive={cardActive}
-            amountActive={amountActive}
-            onPaymentChange={handlePaymentChange}
+            active={betragActive}
             onCashInput={setCashInput}
-            onBook={handleBook}
             effectiveSizes={effectiveSizes}
             paymentConfig={layout.payment}
             guidedMode={guidedMode}
-            guidedStep={guidedStep === 3 ? 3 : guidedStep === 4 ? 4 : null}
+            guidedActive={guidedStep === 3}
+          />
+        </div>
+
+        <div className="min-h-0 min-w-0" style={{ gridArea: "payment" }}>
+          <PaymentBuchenBlock
+            showPayment={showPayment}
+            paymentMethod={payment}
+            canBook={canBook}
+            active={zahlungActive}
+            onPaymentChange={handlePaymentChange}
+            onBook={handleBook}
+            paymentConfig={layout.payment}
+            guidedMode={guidedMode}
+            guidedActive={guidedStep === 4}
           />
         </div>
 
@@ -1597,8 +1619,6 @@ export function SalesPage() {
             onRemove={removeFromCart}
             onClear={clearCart}
             effectiveSizes={effectiveSizes}
-            showPayment={showPayment}
-            paymentMethod={payment}
             cashCents={cashCents}
             change={change}
           />
