@@ -11,7 +11,6 @@ import { PosFlavorSettings } from "./pos-flavor-settings";
 import { PosLayoutSettings } from "./pos-layout-settings";
 import { useGuidedModeStore } from "./use-guided-mode-store";
 import { usePosThemeStore, COLOR_VARS, COLOR_LABELS, type ColorVar } from "./use-pos-theme-store";
-import { usePosDeviceLayoutStore, DL_PRESETS, type DLPresetId } from "./use-pos-device-layout-store";
 import { SyncPanel } from "@/components/sync/sync-panel";
 
 // Settings: Sorten, Bilder, Farben, Preise, Größen, Jahresdaten.
@@ -467,20 +466,6 @@ export function EinstellungenTabs({ legacySettings }: { legacySettings: React.Re
   const [tab, setTab] = useState<Tab>("sorten");
   const { guidedMode, setGuidedMode } = useGuidedModeStore();
   const { theme, setTheme, custom, resolvedColors, setCustomColor, resetCustomColor, resetAllCustomColors } = usePosThemeStore();
-  const { applyPreset: applyDLPreset, reset: resetDL } = usePosDeviceLayoutStore();
-  const [dlSaved, setDlSaved] = useState(false);
-
-  const handleDLPreset = useCallback((id: DLPresetId) => {
-    applyDLPreset(id);
-    setDlSaved(true);
-    setTimeout(() => setDlSaved(false), 2500);
-  }, [applyDLPreset]);
-
-  const handleDLReset = useCallback(() => {
-    resetDL();
-    setDlSaved(true);
-    setTimeout(() => setDlSaved(false), 2500);
-  }, [resetDL]);
 
   return (
     <div>
@@ -577,36 +562,15 @@ export function EinstellungenTabs({ legacySettings }: { legacySettings: React.Re
                 />
               ))}
             </div>
-            {/* Geräte-Layout Presets */}
-            <div className="border-t border-black/8 pt-3 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-ink">Geräte-Layout</p>
-                  <p className="text-xs text-black/45">Schnellauswahl für dieses Gerät – wird lokal gespeichert, nicht synchronisiert.</p>
-                </div>
-                {dlSaved && (
-                  <span className="text-xs font-bold text-primaq-600">✓ Gespeichert</span>
-                )}
-              </div>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(Object.entries(DL_PRESETS) as [DLPresetId, (typeof DL_PRESETS)[DLPresetId]][]).map(([id, { label }]) => (
-                  <button
-                    key={id}
-                    data-testid={`settings-preset-${id}`}
-                    onClick={() => handleDLPreset(id)}
-                    className="rounded-xl border border-black/10 bg-white px-2 py-2 text-[11px] font-semibold text-black/60 hover:border-primaq-400/60 hover:text-primaq-700 hover:bg-primaq-50 transition-colors text-center"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <button
-                data-testid="settings-layout-reset"
-                onClick={handleDLReset}
-                className="text-xs text-black/35 hover:text-red-500 transition-colors"
-              >
-                Layout auf Standard zurücksetzen
-              </button>
+            {/* Hinweis: Bereichsgrößen jetzt direkt auf der Verkaufsseite */}
+            <div
+              data-testid="device-layout-resize-hint"
+              className="flex items-start gap-2.5 rounded-2xl border border-primaq-100 bg-primaq-50 p-3 text-xs text-primaq-700"
+            >
+              <p>
+                Die Größen der Kassenbereiche werden jetzt direkt auf der Verkaufsseite
+                eingestellt: Admin → <strong>„Layout anpassen“</strong> auf /verkauf.
+              </p>
             </div>
             {/* Geführter Verkaufsmodus */}
             <div className="flex items-center justify-between gap-4 border-t border-black/8 pt-3">
