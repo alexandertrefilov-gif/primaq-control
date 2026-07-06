@@ -6,61 +6,36 @@ import { useCallback, useEffect, useState } from "react";
 // This is deliberately plain localStorage (not Dexie/dbSet, not synced via
 // enqueueSettingsSync) — every device keeps its own resize, never synced to
 // Supabase and never shared between devices.
+//
+// Only RASTER (shared grid-line) values are stored — never per-panel
+// rectangles. Sorte (Bereich 1) and Betrag (Bereich 3) always share column A;
+// Größe (Bereich 2) and Zahlungsmittel (Bereich 4) always share column B;
+// Warenkorb is column C, spanning both rows. Moving a splitter always moves
+// a shared grid line, so both panels on either side of it resize together —
+// no panel can ever grow or shrink independently of the raster.
 
 export type PosGridLayout = {
-  columns: {
-    /** Placeholder weight for the flexible Sorte column — with Größe fixed
-     *  at middlePx, Sorte is the sole flex-grow consumer, so its rendered
-     *  width is always "whatever remains" regardless of this value's
-     *  magnitude. Kept for schema completeness / potential future use. */
-    flavorsFr: number;
-    middlePx: number; // Größe-Spalte (oben)
-    cartPx: number;   // Warenkorb-Spalte
-  };
-  rows: {
-    topPx: number;    // Sorte/Größe-Zeile
-    bottomPx: number; // Betrag/Zahlungsmittel-Zeile
-  };
-  /** Independent flex-grow weights splitting the bottom row between Betrag
-   *  and Zahlungsmittel. Sentinel {0, 0} ("never customized") means: mirror
-   *  the top row's Sorte/Größe split exactly, so Größe and Zahlungsmittel
-   *  stay visually aligned in the same column by default. The moment
-   *  Splitter E is dragged, real positive pixel weights are stored and the
-   *  bottom row permanently decouples from the top row from then on. After
-   *  clampGridLayout, non-sentinel values hold the actual current pixel
-   *  widths (valid directly as flex-grow weights with flex-basis 0). */
-  bottomSplit: {
-    amountFr: number;
-    paymentFr: number;
-  };
+  /** Fractions of the available grid width; colA + colB + colC === 1. */
+  colA: number;
+  colB: number;
+  colC: number;
+  /** Fractions of the available grid height; topRow + bottomRow === 1. */
+  topRow: number;
+  bottomRow: number;
   updatedAt: string;
 };
 
 export const GRID_GUTTER_PX = 12;
 
-export const GRID_MIN = {
-  flavorsWidth: 460,
-  flavorsHeight: 360,
-  sizeWidth: 260,
-  sizeHeight: 300,
-  amountWidth: 420,
-  amountHeight: 220,
-  paymentWidth: 300,
-  paymentHeight: 220,
-  cartWidth: 340,
-} as const;
-
-export const TOP_ROW_MIN = Math.max(GRID_MIN.flavorsHeight, GRID_MIN.sizeHeight);
-export const BOTTOM_ROW_MIN = Math.max(GRID_MIN.amountHeight, GRID_MIN.paymentHeight);
-export const LEFT_AREA_MIN_WIDTH = Math.max(
-  GRID_MIN.flavorsWidth + GRID_GUTTER_PX + GRID_MIN.sizeWidth,
-  GRID_MIN.amountWidth + GRID_GUTTER_PX + GRID_MIN.paymentWidth
-);
+export const COL_MIN = { a: 480, b: 300, c: 340 } as const;
+export const ROW_MIN = { top: 380, bottom: 260 } as const;
 
 export const DEFAULT_GRID_LAYOUT: PosGridLayout = {
-  columns: { flavorsFr: 1, middlePx: 340, cartPx: 420 },
-  rows: { topPx: 560, bottomPx: 300 },
-  bottomSplit: { amountFr: 0, paymentFr: 0 },
+  colA: 0.47,
+  colB: 0.25,
+  colC: 0.28,
+  topRow: 0.58,
+  bottomRow: 0.42,
   updatedAt: "",
 };
 
@@ -70,49 +45,49 @@ const LS_KEY = "primaq-pos-grid-layout-v1";
 const LEGACY_KEYS = ["primaq-pos-free-layout-v1", "primaq-pos-device-layout-v1"];
 
 function num(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+/** Scales a, b, c proportionally so they sum to exactly 1. */
+function normalize3(a: number, b: number, c: number): [number, number, number] {
+  const sum = a + b + c;
+  if (!(sum > 0)) return [DEFAULT_GRID_LAYOUT.colA, DEFAULT_GRID_LAYOUT.colB, DEFAULT_GRID_LAYOUT.colC];
+  return [a / sum, b / sum, c / sum];
+}
+
+function normalize2(a: number, b: number): [number, number] {
+  const sum = a + b;
+  if (!(sum > 0)) return [DEFAULT_GRID_LAYOUT.topRow, DEFAULT_GRID_LAYOUT.bottomRow];
+  return [a / sum, b / sum];
 }
 
 function readFromStorage(): PosGridLayout {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return DEFAULT_GRID_LAYOUT;
-    const parsed = JSON.parse(raw) as Partial<{
-      columns: Partial<PosGridLayout["columns"]>;
-      rows: Partial<PosGridLayout["rows"]>;
-      bottomSplit: Partial<PosGridLayout["bottomSplit"]>;
-      updatedAt: string;
-    }>;
+    const parsed = JSON.parse(raw) as Partial<PosGridLayout>;
     if (typeof parsed !== "object" || parsed === null) return DEFAULT_GRID_LAYOUT;
-    const columns = parsed.columns ?? {};
-    const rows = parsed.rows ?? {};
-    const bottomSplit = parsed.bottomSplit ?? {};
+    const [colA, colB, colC] = normalize3(
+      num(parsed.colA, DEFAULT_GRID_LAYOUT.colA),
+      num(parsed.colB, DEFAULT_GRID_LAYOUT.colB),
+      num(parsed.colC, DEFAULT_GRID_LAYOUT.colC)
+    );
+    const [topRow, bottomRow] = normalize2(
+      num(parsed.topRow, DEFAULT_GRID_LAYOUT.topRow),
+      num(parsed.bottomRow, DEFAULT_GRID_LAYOUT.bottomRow)
+    );
     return {
-      columns: {
-        flavorsFr: num(columns.flavorsFr, DEFAULT_GRID_LAYOUT.columns.flavorsFr),
-        middlePx: num(columns.middlePx, DEFAULT_GRID_LAYOUT.columns.middlePx),
-        cartPx: num(columns.cartPx, DEFAULT_GRID_LAYOUT.columns.cartPx),
-      },
-      rows: {
-        topPx: num(rows.topPx, DEFAULT_GRID_LAYOUT.rows.topPx),
-        bottomPx: num(rows.bottomPx, DEFAULT_GRID_LAYOUT.rows.bottomPx),
-      },
-      bottomSplit: {
-        amountFr: num(bottomSplit.amountFr, DEFAULT_GRID_LAYOUT.bottomSplit.amountFr),
-        paymentFr: num(bottomSplit.paymentFr, DEFAULT_GRID_LAYOUT.bottomSplit.paymentFr),
-      },
+      colA,
+      colB,
+      colC,
+      topRow,
+      bottomRow,
       updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : "",
     };
   } catch {
     return DEFAULT_GRID_LAYOUT;
   }
 }
-
-type GridLayoutPatch = {
-  columns?: Partial<PosGridLayout["columns"]>;
-  rows?: Partial<PosGridLayout["rows"]>;
-  bottomSplit?: Partial<PosGridLayout["bottomSplit"]>;
-};
 
 export function usePosGridLayoutStore() {
   const [layout, setLayout] = useState<PosGridLayout>(DEFAULT_GRID_LAYOUT);
@@ -123,14 +98,12 @@ export function usePosGridLayoutStore() {
     setHydrated(true);
   }, []);
 
-  const update = useCallback((patch: GridLayoutPatch) => {
+  const update = useCallback((patch: Partial<Omit<PosGridLayout, "updatedAt">>) => {
     setLayout((prev) => {
-      const next: PosGridLayout = {
-        columns: { ...prev.columns, ...patch.columns },
-        rows: { ...prev.rows, ...patch.rows },
-        bottomSplit: { ...prev.bottomSplit, ...patch.bottomSplit },
-        updatedAt: new Date().toISOString(),
-      };
+      const merged = { ...prev, ...patch };
+      const [colA, colB, colC] = normalize3(merged.colA, merged.colB, merged.colC);
+      const [topRow, bottomRow] = normalize2(merged.topRow, merged.bottomRow);
+      const next: PosGridLayout = { colA, colB, colC, topRow, bottomRow, updatedAt: new Date().toISOString() };
       try {
         localStorage.setItem(LS_KEY, JSON.stringify(next));
       } catch { /* ignore quota errors */ }
@@ -153,82 +126,66 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));
 }
 
+export type ClampedGridPx = {
+  colAPx: number;
+  colBPx: number;
+  colCPx: number;
+  topRowPx: number;
+  bottomRowPx: number;
+};
+
 /**
- * Clamps stored track sizes against the grid container's live pixel size so
- * a saved layout from a wider/taller device never causes overlap or a
- * horizontal scrollbar. Every track is floored at its GRID_MIN — even on a
- * viewport too small to fit all minimums at once, since GRID_MIN is already
- * the smallest legal configuration; the container's own overflow-y-auto
- * handles any residual vertical overflow, and the flexible Sorte column
- * absorbs width instead of ever overflowing horizontally.
- *
- * The bottom row's amount/payment split is independent of the top row's
- * Sorte/Größe split: both are flex-grow based, so they always exactly fill
- * the shared left-area width with no separate overflow risk — clamping here
- * only keeps the *ratio* from pushing either side below its own minimum.
+ * Converts stored fractions into concrete pixel track sizes for the current
+ * container size, flooring every track at its GRID_MIN — even on a viewport
+ * too small to fit all minimums at once, since that floor is already the
+ * smallest legal configuration; the container's own overflow-y-auto handles
+ * any residual vertical overflow. Never returns fractions directly — the
+ * caller feeds these px values straight into CSS custom properties, so a
+ * `minmax(min-px, var(--col-a))` grid-template can never overlap or clip a
+ * panel below its floor.
  */
 export function clampGridLayout(
   raw: PosGridLayout,
   containerWidth: number,
   containerHeight: number
-): PosGridLayout {
-  let { middlePx, cartPx } = raw.columns;
-  let { topPx, bottomPx } = raw.rows;
-  let { amountFr, paymentFr } = raw.bottomSplit;
-
-  if (containerWidth > 0) {
-    const cartMax = containerWidth - LEFT_AREA_MIN_WIDTH - GRID_GUTTER_PX;
-    cartPx = clamp(cartPx, GRID_MIN.cartWidth, Math.max(GRID_MIN.cartWidth, cartMax));
-
-    const leftAreaWidth = containerWidth - cartPx - GRID_GUTTER_PX;
-    const middleMax = leftAreaWidth - GRID_MIN.flavorsWidth - GRID_GUTTER_PX;
-    middlePx = clamp(middlePx, GRID_MIN.sizeWidth, Math.max(GRID_MIN.sizeWidth, middleMax));
-
-    const bottomAvail = Math.max(leftAreaWidth - GRID_GUTTER_PX, 0);
-    const notCustomized = amountFr <= 0 && paymentFr <= 0;
-    // Sentinel: mirror the top row's Sorte/Größe split so Größe (oben) and
-    // Zahlungsmittel (unten) stay in the same column until the user
-    // explicitly drags Splitter E.
-    const flavorsWidth = Math.max(leftAreaWidth - middlePx - GRID_GUTTER_PX, 0);
-    const desiredAmountPx = notCustomized ? flavorsWidth : bottomAvail * (amountFr / (amountFr + paymentFr));
-    let amountPx = clamp(
-      desiredAmountPx,
-      GRID_MIN.amountWidth,
-      Math.max(GRID_MIN.amountWidth, bottomAvail - GRID_MIN.paymentWidth)
-    );
-    amountFr = amountPx;
-    paymentFr = Math.max(bottomAvail - amountPx, 0);
-  } else {
-    cartPx = Math.max(cartPx, GRID_MIN.cartWidth);
-    middlePx = Math.max(middlePx, GRID_MIN.sizeWidth);
-    // No live measurement yet (container not attached/observed at all) —
-    // fall back to an even split rather than the {0,0} sentinel, which
-    // would render both bottom-row areas at zero width.
-    if (amountFr <= 0 && paymentFr <= 0) {
-      amountFr = 1;
-      paymentFr = 1;
-    }
+): ClampedGridPx {
+  if (containerWidth <= 0 || containerHeight <= 0) {
+    return {
+      colAPx: COL_MIN.a,
+      colBPx: COL_MIN.b,
+      colCPx: COL_MIN.c,
+      topRowPx: ROW_MIN.top,
+      bottomRowPx: ROW_MIN.bottom,
+    };
   }
 
-  if (containerHeight > 0) {
-    const bottomMax = containerHeight - TOP_ROW_MIN - GRID_GUTTER_PX;
-    bottomPx = clamp(bottomPx, BOTTOM_ROW_MIN, Math.max(BOTTOM_ROW_MIN, bottomMax));
-
-    const topMax = containerHeight - bottomPx - GRID_GUTTER_PX;
-    topPx = clamp(topPx, TOP_ROW_MIN, Math.max(TOP_ROW_MIN, topMax));
+  const availWidth = Math.max(containerWidth - GRID_GUTTER_PX * 2, 0);
+  const colMinSum = COL_MIN.a + COL_MIN.b + COL_MIN.c;
+  let colAPx: number, colBPx: number, colCPx: number;
+  if (colMinSum > availWidth) {
+    // Viewport too narrow to honor every column's floor at once — scale all
+    // three floors down proportionally so they still sum to availWidth
+    // exactly (never overflow/cut off a main area, per spec).
+    colAPx = (availWidth * COL_MIN.a) / colMinSum;
+    colBPx = (availWidth * COL_MIN.b) / colMinSum;
+    colCPx = availWidth - colAPx - colBPx;
   } else {
-    topPx = Math.max(topPx, TOP_ROW_MIN);
-    bottomPx = Math.max(bottomPx, BOTTOM_ROW_MIN);
+    colAPx = clamp(raw.colA * availWidth, COL_MIN.a, Math.max(COL_MIN.a, availWidth - COL_MIN.b - COL_MIN.c));
+    colBPx = clamp(raw.colB * availWidth, COL_MIN.b, Math.max(COL_MIN.b, availWidth - colAPx - COL_MIN.c));
+    colCPx = Math.max(availWidth - colAPx - colBPx, COL_MIN.c);
   }
 
-  return {
-    columns: {
-      flavorsFr: raw.columns.flavorsFr > 0 ? raw.columns.flavorsFr : DEFAULT_GRID_LAYOUT.columns.flavorsFr,
-      middlePx,
-      cartPx,
-    },
-    rows: { topPx, bottomPx },
-    bottomSplit: { amountFr, paymentFr },
-    updatedAt: raw.updatedAt,
-  };
+  const availHeight = Math.max(containerHeight - GRID_GUTTER_PX, 0);
+  const rowMinSum = ROW_MIN.top + ROW_MIN.bottom;
+  let topRowPx: number, bottomRowPx: number;
+  if (rowMinSum > availHeight) {
+    // Same proportional-reduction fallback for rows.
+    topRowPx = (availHeight * ROW_MIN.top) / rowMinSum;
+    bottomRowPx = availHeight - topRowPx;
+  } else {
+    topRowPx = clamp(raw.topRow * availHeight, ROW_MIN.top, Math.max(ROW_MIN.top, availHeight - ROW_MIN.bottom));
+    bottomRowPx = Math.max(availHeight - topRowPx, ROW_MIN.bottom);
+  }
+
+  return { colAPx, colBPx, colCPx, topRowPx, bottomRowPx };
 }

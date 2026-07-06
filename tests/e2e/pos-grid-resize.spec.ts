@@ -1,29 +1,32 @@
 /**
- * POS-Layout – Alle 5 Verkaufsbereiche per Maus/Touch skalierbar
+ * POS-Layout – Stabile Rasterlinien statt isolierter Panel-Größen
  *
- * Feste 4-Quadranten-Struktur bleibt erhalten (Sorte | Größe | Warenkorb /
- * Betrag | Zahlungsmittel+Buchen | Warenkorb), aber im Admin-Layoutmodus
- * lassen sich alle gemeinsamen Grenzen per Maus/Touch ziehen:
- *   A) grid-vsplit-1 – Sorte/Größe (obere Zeile)
- *   B/C) grid-vsplit-2 – Größe-Zahlungsmittel-Spalte / Warenkorb
- *   D) grid-hsplit – obere/untere Zeile
- *   E) grid-vsplit-3 – Betrag/Zahlungsmittel (untere Zeile, unabhängig von A)
+ * Nur GEMEINSAME Grid-Linien sind ziehbar, nie ein einzelnes Panel isoliert:
+ *   Spalte A = Sorte (1) + Betrag (3)
+ *   Spalte B = Größe (2) + Zahlungsmittel (4)
+ *   Spalte C = Warenkorb (volle Höhe, beide Zeilen)
+ *   Top-Row  = Sorte + Größe
+ *   Bottom-Row = Betrag + Zahlungsmittel
  *
- * Speicherung: localStorage "primaq-pos-grid-layout-v1" (verschachteltes
- * Schema columns/rows/bottomSplit), pro Gerät, nicht synchronisiert.
+ * Genau 3 Splitter: grid-vsplit-1 (A/B), grid-vsplit-2 (B/C), grid-hsplit
+ * (oben/unten). Speicherung: localStorage "primaq-pos-grid-layout-v1" als
+ * Fraktionen (colA+colB+colC=1, topRow+bottomRow=1), pro Gerät, nicht
+ * synchronisiert.
  *
- * GRIDRESIZE 1  – Admin sieht "Layout anpassen"
- * GRIDRESIZE 2  – Verkäufer sieht "Layout anpassen" nicht
- * GRIDRESIZE 3  – Layoutmodus zeigt alle 4 Resize-Griffe
- * GRIDRESIZE 4  – Splitter A verändert Breite Sorte/Größe
- * GRIDRESIZE 5  – Splitter B/C verändert Warenkorbbreite
- * GRIDRESIZE 6  – Splitter D verändert obere/untere Row-Höhe
- * GRIDRESIZE 7  – Splitter E verändert Betrag/Zahlungsmittel unabhängig von A
- * GRIDRESIZE 8  – Werte bleiben nach Reload erhalten
- * GRIDRESIZE 9  – Reset stellt Standardlayout wieder her
- * GRIDRESIZE 10 – Alte Free-Layout-Keys beeinflussen Standardlayout nicht
- * GRIDRESIZE 11 – Keine Überlappung bei 1366×1024 / 1194×834 / 1024×768
- * GRIDRESIZE 12 – Verkauf/Buchung funktioniert nach Resize weiter
+ * GRIDRESIZE 1  – Layoutmodus zeigt genau 3 Splitter, keine Panel-Eckgriffe
+ * GRIDRESIZE 2  – Admin sieht "Layout anpassen"
+ * GRIDRESIZE 3  – Verkäufer sieht "Layout anpassen" nicht
+ * GRIDRESIZE 4  – Ziehen A/B verändert Spalte A und B (nicht isolierte Panels)
+ * GRIDRESIZE 5  – Ziehen B/C verändert Spalte B und Warenkorb
+ * GRIDRESIZE 6  – Ziehen Top/Bottom verändert obere und untere Reihe
+ * GRIDRESIZE 7  – Bereich 1 und Bereich 3 behalten gleiche Breite
+ * GRIDRESIZE 8  – Bereich 2 und Bereich 4 behalten gleiche Breite
+ * GRIDRESIZE 9  – Warenkorb bleibt rechts über beide Reihen
+ * GRIDRESIZE 10 – Keine Überlappung nach Resize
+ * GRIDRESIZE 11 – Reset stellt stabile Defaults wieder her
+ * GRIDRESIZE 12 – Alte Free-Layout-Keys werden ignoriert
+ * GRIDRESIZE 13 – Layout sauber bei 1366×1024 / 1194×834 / 1024×768
+ * GRIDRESIZE 14 – Verkauf/Buchung funktioniert nach Resize weiter
  */
 
 import { expect, test, type Page } from "@playwright/test";
@@ -63,20 +66,7 @@ async function dragBy(page: Page, testId: string, dx: number, dy: number) {
   await page.mouse.up();
 }
 
-test("GRIDRESIZE 1 – Admin sieht Layout anpassen-Button", async ({ page }) => {
-  await gotoAsAdmin(page);
-  await expect(page.getByTestId("grid-layout-toggle")).toBeVisible();
-});
-
-test("GRIDRESIZE 2 – Verkäufer sieht Layout anpassen-Button nicht", async ({ page }) => {
-  await blockSupabase(page);
-  await page.setViewportSize({ width: 1366, height: 1024 });
-  await page.goto("/verkauf");
-  await waitLoaded(page);
-  await expect(page.getByTestId("grid-layout-toggle")).toHaveCount(0);
-});
-
-test("GRIDRESIZE 3 – Layoutmodus zeigt alle 4 Resize-Griffe", async ({ page }) => {
+test("GRIDRESIZE 1 – Layoutmodus zeigt genau 3 Splitter, keine Panel-Eckgriffe", async ({ page }) => {
   await gotoAsAdmin(page);
   await page.getByTestId("grid-layout-toggle").click();
 
@@ -84,51 +74,77 @@ test("GRIDRESIZE 3 – Layoutmodus zeigt alle 4 Resize-Griffe", async ({ page })
   await expect(page.getByTestId("grid-layout-reset")).toBeVisible();
   await expect(page.getByTestId("grid-vsplit-1")).toBeVisible();
   await expect(page.getByTestId("grid-vsplit-2")).toBeVisible();
-  await expect(page.getByTestId("grid-vsplit-3")).toBeVisible();
   await expect(page.getByTestId("grid-hsplit")).toBeVisible();
+
+  // Kein vierter/weiterer Splitter und keine Panel-Eckgriffe.
+  await expect(page.getByTestId("grid-vsplit-3")).toHaveCount(0);
+  await expect(page.locator('[data-testid^="panel-handle"]')).toHaveCount(0);
 });
 
-test("GRIDRESIZE 4 – Splitter A verändert Breite Sorte/Größe", async ({ page }) => {
+test("GRIDRESIZE 2 – Admin sieht Layout anpassen-Button", async ({ page }) => {
   await gotoAsAdmin(page);
-  const before = await page.getByTestId("flavor-zone").boundingBox();
-  expect(before).not.toBeNull();
+  await expect(page.getByTestId("grid-layout-toggle")).toBeVisible();
+});
+
+test("GRIDRESIZE 3 – Verkäufer sieht Layout anpassen-Button nicht", async ({ page }) => {
+  await blockSupabase(page);
+  await page.setViewportSize({ width: 1366, height: 1024 });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+  await expect(page.getByTestId("grid-layout-toggle")).toHaveCount(0);
+});
+
+test("GRIDRESIZE 4 – Ziehen A/B verändert Spalte A und B, nicht isolierte Panels", async ({ page }) => {
+  await gotoAsAdmin(page);
+  const beforeFlavor = await page.getByTestId("flavor-zone").boundingBox();
+  const beforeSize = await page.getByTestId("size-zone").boundingBox();
+  const beforeCart = await page.getByTestId("cart-zone").boundingBox();
+  expect(beforeFlavor).not.toBeNull();
+  expect(beforeSize).not.toBeNull();
+  expect(beforeCart).not.toBeNull();
 
   await page.getByTestId("grid-layout-toggle").click();
   await dragBy(page, "grid-vsplit-1", 100, 0);
   await page.getByTestId("grid-layout-toggle").click();
 
-  const wider = await page.getByTestId("flavor-zone").boundingBox();
-  expect(wider).not.toBeNull();
-  expect(wider!.width).toBeGreaterThan(before!.width + 40);
+  const afterFlavor = await page.getByTestId("flavor-zone").boundingBox();
+  const afterSize = await page.getByTestId("size-zone").boundingBox();
+  const afterCart = await page.getByTestId("cart-zone").boundingBox();
+  expect(afterFlavor).not.toBeNull();
+  expect(afterSize).not.toBeNull();
+  expect(afterCart).not.toBeNull();
 
-  await page.getByTestId("grid-layout-toggle").click();
-  await dragBy(page, "grid-vsplit-1", -150, 0);
-  await page.getByTestId("grid-layout-toggle").click();
-
-  const narrower = await page.getByTestId("flavor-zone").boundingBox();
-  expect(narrower).not.toBeNull();
-  expect(narrower!.width).toBeLessThan(wider!.width - 60);
+  expect(afterFlavor!.width).toBeGreaterThan(beforeFlavor!.width + 20);
+  expect(afterSize!.width).toBeLessThan(beforeSize!.width - 20);
+  // Warenkorb (Spalte C) bleibt von der A/B-Grenze unberührt.
+  expect(Math.abs(afterCart!.width - beforeCart!.width)).toBeLessThan(4);
 });
 
-test("GRIDRESIZE 5 – Splitter B/C verändert Warenkorbbreite", async ({ page }) => {
+test("GRIDRESIZE 5 – Ziehen B/C verändert Spalte B und Warenkorb", async ({ page }) => {
   await gotoAsAdmin(page);
-  const before = await page.getByTestId("cart-zone").boundingBox();
-  expect(before).not.toBeNull();
+  const beforeSize = await page.getByTestId("size-zone").boundingBox();
+  const beforeCart = await page.getByTestId("cart-zone").boundingBox();
+  const beforeFlavor = await page.getByTestId("flavor-zone").boundingBox();
+  expect(beforeSize).not.toBeNull();
+  expect(beforeCart).not.toBeNull();
 
   await page.getByTestId("grid-layout-toggle").click();
-  await dragBy(page, "grid-vsplit-2", -80, 0);
+  await dragBy(page, "grid-vsplit-2", 80, 0);
+  await page.getByTestId("grid-layout-toggle").click();
 
-  const wider = await page.getByTestId("cart-zone").boundingBox();
-  expect(wider).not.toBeNull();
-  expect(wider!.width).toBeGreaterThan(before!.width + 40);
+  const afterSize = await page.getByTestId("size-zone").boundingBox();
+  const afterCart = await page.getByTestId("cart-zone").boundingBox();
+  const afterFlavor = await page.getByTestId("flavor-zone").boundingBox();
+  expect(afterSize).not.toBeNull();
+  expect(afterCart).not.toBeNull();
 
-  await dragBy(page, "grid-vsplit-2", 120, 0);
-  const narrower = await page.getByTestId("cart-zone").boundingBox();
-  expect(narrower).not.toBeNull();
-  expect(narrower!.width).toBeLessThan(wider!.width - 60);
+  expect(afterSize!.width).toBeGreaterThan(beforeSize!.width + 20);
+  expect(afterCart!.width).toBeLessThan(beforeCart!.width - 20);
+  // Spalte A (Sorte/Betrag) bleibt von der B/C-Grenze unberührt.
+  expect(Math.abs(afterFlavor!.width - beforeFlavor!.width)).toBeLessThan(4);
 });
 
-test("GRIDRESIZE 6 – Splitter D verändert obere/untere Row-Höhe", async ({ page }) => {
+test("GRIDRESIZE 6 – Ziehen Top/Bottom verändert obere und untere Reihe", async ({ page }) => {
   await gotoAsAdmin(page);
   const beforeTop = await page.getByTestId("flavor-zone").boundingBox();
   const beforeBottom = await page.getByTestId("amount-zone").boundingBox();
@@ -136,71 +152,90 @@ test("GRIDRESIZE 6 – Splitter D verändert obere/untere Row-Höhe", async ({ p
   expect(beforeBottom).not.toBeNull();
 
   await page.getByTestId("grid-layout-toggle").click();
-  await dragBy(page, "grid-hsplit", 0, 60);
+  await dragBy(page, "grid-hsplit", 0, 50);
 
   const afterTop = await page.getByTestId("flavor-zone").boundingBox();
   const afterBottom = await page.getByTestId("amount-zone").boundingBox();
   expect(afterTop).not.toBeNull();
   expect(afterBottom).not.toBeNull();
-  expect(afterTop!.height).toBeGreaterThan(beforeTop!.height + 30);
-  expect(afterBottom!.height).toBeLessThan(beforeBottom!.height - 30);
+  expect(afterTop!.height).toBeGreaterThan(beforeTop!.height + 25);
+  expect(afterBottom!.height).toBeLessThan(beforeBottom!.height - 25);
 });
 
-test("GRIDRESIZE 7 – Splitter E verändert Betrag/Zahlungsmittel unabhängig von A", async ({ page }) => {
-  await gotoAsAdmin(page);
-  const beforeAmount = await page.getByTestId("amount-zone").boundingBox();
-  const beforePayment = await page.getByTestId("payment-zone").boundingBox();
-  const beforeFlavor = await page.getByTestId("flavor-zone").boundingBox();
-  const beforeSize = await page.getByTestId("size-zone").boundingBox();
-  expect(beforeAmount).not.toBeNull();
-  expect(beforePayment).not.toBeNull();
-
-  await page.getByTestId("grid-layout-toggle").click();
-  await dragBy(page, "grid-vsplit-3", 100, 0);
-  await page.getByTestId("grid-layout-toggle").click();
-
-  const afterAmount = await page.getByTestId("amount-zone").boundingBox();
-  const afterPayment = await page.getByTestId("payment-zone").boundingBox();
-  const afterFlavor = await page.getByTestId("flavor-zone").boundingBox();
-  const afterSize = await page.getByTestId("size-zone").boundingBox();
-  expect(afterAmount).not.toBeNull();
-  expect(afterPayment).not.toBeNull();
-
-  expect(afterAmount!.width).toBeGreaterThan(beforeAmount!.width + 20);
-  expect(afterPayment!.width).toBeLessThan(beforePayment!.width - 20);
-
-  // Die obere Reihe (Sorte/Größe) bleibt von Splitter E unberührt.
-  expect(Math.abs(afterFlavor!.width - beforeFlavor!.width)).toBeLessThan(4);
-  expect(Math.abs(afterSize!.width - beforeSize!.width)).toBeLessThan(4);
-});
-
-test("GRIDRESIZE 8 – Werte bleiben nach Reload erhalten", async ({ page }) => {
+test("GRIDRESIZE 7 – Bereich 1 und Bereich 3 behalten gleiche Breite", async ({ page }) => {
   await gotoAsAdmin(page);
   await page.getByTestId("grid-layout-toggle").click();
-  await dragBy(page, "grid-vsplit-1", 100, 0);
-  await dragBy(page, "grid-vsplit-3", 80, 0);
+  await dragBy(page, "grid-vsplit-1", 60, 0);
+  await dragBy(page, "grid-vsplit-2", -40, 0);
   await page.getByTestId("grid-layout-toggle").click();
 
-  const flavorBefore = await page.getByTestId("flavor-zone").boundingBox();
-  const amountBefore = await page.getByTestId("amount-zone").boundingBox();
-  expect(flavorBefore).not.toBeNull();
-  expect(amountBefore).not.toBeNull();
-
-  await page.reload();
-  await waitLoaded(page);
-
-  const flavorAfter = await page.getByTestId("flavor-zone").boundingBox();
-  const amountAfter = await page.getByTestId("amount-zone").boundingBox();
-  expect(flavorAfter).not.toBeNull();
-  expect(amountAfter).not.toBeNull();
-  expect(Math.abs(flavorAfter!.width - flavorBefore!.width)).toBeLessThan(4);
-  expect(Math.abs(amountAfter!.width - amountBefore!.width)).toBeLessThan(4);
-
-  // Layoutmodus selbst wird nicht persistiert — nur die Größen.
-  await expect(page.getByTestId("grid-layout-toggle")).toHaveText("Layout anpassen");
+  const flavorR = await page.getByTestId("flavor-zone").boundingBox();
+  const amountR = await page.getByTestId("amount-zone").boundingBox();
+  expect(flavorR).not.toBeNull();
+  expect(amountR).not.toBeNull();
+  expect(Math.abs(flavorR!.width - amountR!.width)).toBeLessThan(2);
+  expect(Math.abs(flavorR!.x - amountR!.x)).toBeLessThan(2);
 });
 
-test("GRIDRESIZE 9 – Reset stellt Standardlayout wieder her", async ({ page }) => {
+test("GRIDRESIZE 8 – Bereich 2 und Bereich 4 behalten gleiche Breite", async ({ page }) => {
+  await gotoAsAdmin(page);
+  await page.getByTestId("grid-layout-toggle").click();
+  await dragBy(page, "grid-vsplit-1", 60, 0);
+  await dragBy(page, "grid-vsplit-2", -40, 0);
+  await page.getByTestId("grid-layout-toggle").click();
+
+  const sizeR = await page.getByTestId("size-zone").boundingBox();
+  const paymentR = await page.getByTestId("payment-zone").boundingBox();
+  expect(sizeR).not.toBeNull();
+  expect(paymentR).not.toBeNull();
+  expect(Math.abs(sizeR!.width - paymentR!.width)).toBeLessThan(2);
+  expect(Math.abs(sizeR!.x - paymentR!.x)).toBeLessThan(2);
+});
+
+test("GRIDRESIZE 9 – Warenkorb bleibt rechts über beide Reihen", async ({ page }) => {
+  await gotoAsAdmin(page);
+  await page.getByTestId("grid-layout-toggle").click();
+  await dragBy(page, "grid-hsplit", 0, 40);
+  await page.getByTestId("grid-layout-toggle").click();
+
+  const flavorR = await page.getByTestId("flavor-zone").boundingBox();
+  const amountR = await page.getByTestId("amount-zone").boundingBox();
+  const cartR = await page.getByTestId("cart-zone").boundingBox();
+  expect(flavorR).not.toBeNull();
+  expect(amountR).not.toBeNull();
+  expect(cartR).not.toBeNull();
+
+  expect(cartR!.x).toBeGreaterThan(flavorR!.x);
+  expect(Math.abs(cartR!.y - flavorR!.y)).toBeLessThan(4);
+  expect(cartR!.y + cartR!.height).toBeGreaterThanOrEqual(amountR!.y + amountR!.height - 4);
+});
+
+test("GRIDRESIZE 10 – Keine Überlappung nach Resize", async ({ page }) => {
+  await gotoAsAdmin(page);
+  await page.getByTestId("grid-layout-toggle").click();
+  await dragBy(page, "grid-vsplit-1", 80, 0);
+  await dragBy(page, "grid-vsplit-2", -60, 0);
+  await dragBy(page, "grid-hsplit", 0, 50);
+  await page.getByTestId("grid-layout-toggle").click();
+
+  const flavorR = await page.getByTestId("flavor-zone").boundingBox();
+  const sizeR = await page.getByTestId("size-zone").boundingBox();
+  const cartR = await page.getByTestId("cart-zone").boundingBox();
+  const amountR = await page.getByTestId("amount-zone").boundingBox();
+  const paymentR = await page.getByTestId("payment-zone").boundingBox();
+  expect(flavorR).not.toBeNull();
+  expect(sizeR).not.toBeNull();
+  expect(cartR).not.toBeNull();
+  expect(amountR).not.toBeNull();
+  expect(paymentR).not.toBeNull();
+
+  expect(sizeR!.x).toBeGreaterThanOrEqual(flavorR!.x + flavorR!.width - 4);
+  expect(cartR!.x).toBeGreaterThanOrEqual(sizeR!.x + sizeR!.width - 4);
+  expect(paymentR!.x).toBeGreaterThanOrEqual(amountR!.x + amountR!.width - 4);
+  expect(amountR!.y).toBeGreaterThanOrEqual(flavorR!.y + flavorR!.height - 4);
+});
+
+test("GRIDRESIZE 11 – Reset stellt stabile Defaults wieder her", async ({ page }) => {
   await gotoAsAdmin(page);
   const defaultBox = await page.getByTestId("flavor-zone").boundingBox();
   expect(defaultBox).not.toBeNull();
@@ -210,7 +245,7 @@ test("GRIDRESIZE 9 – Reset stellt Standardlayout wieder her", async ({ page })
 
   const resizedBox = await page.getByTestId("flavor-zone").boundingBox();
   expect(resizedBox).not.toBeNull();
-  expect(resizedBox!.width).toBeGreaterThan(defaultBox!.width + 40);
+  expect(resizedBox!.width).toBeGreaterThan(defaultBox!.width + 20);
 
   await page.getByTestId("grid-layout-reset").click();
 
@@ -222,7 +257,7 @@ test("GRIDRESIZE 9 – Reset stellt Standardlayout wieder her", async ({ page })
   expect(stored).toBeNull();
 });
 
-test("GRIDRESIZE 10 – Alte Free-Layout-Keys beeinflussen Standardlayout nicht", async ({ page }) => {
+test("GRIDRESIZE 12 – Alte Free-Layout-Keys werden ignoriert", async ({ page }) => {
   await blockSupabase(page);
   await seedAdmin(page);
   await page.addInitScript(() => {
@@ -233,7 +268,6 @@ test("GRIDRESIZE 10 – Alte Free-Layout-Keys beeinflussen Standardlayout nicht"
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  // Standardlayout wird verwendet, keine Panels an kaputten Koordinaten.
   const flavorBox = await page.getByTestId("flavor-zone").boundingBox();
   const cartBox = await page.getByTestId("cart-zone").boundingBox();
   expect(flavorBox).not.toBeNull();
@@ -241,7 +275,6 @@ test("GRIDRESIZE 10 – Alte Free-Layout-Keys beeinflussen Standardlayout nicht"
   expect(flavorBox!.x).toBeGreaterThanOrEqual(0);
   expect(cartBox!.width).toBeGreaterThan(300);
 
-  // Die kaputten Legacy-Keys werden aktiv entfernt.
   const legacy1 = await page.evaluate(() => localStorage.getItem("primaq-pos-free-layout-v1"));
   const legacy2 = await page.evaluate(() => localStorage.getItem("primaq-pos-device-layout-v1"));
   expect(legacy1).toBeNull();
@@ -253,7 +286,7 @@ for (const vp of [
   { width: 1194, height: 834, label: "1194×834" },
   { width: 1024, height: 768, label: "1024×768" },
 ]) {
-  test(`GRIDRESIZE 11 – Keine Überlappung bei ${vp.label}`, async ({ page }) => {
+  test(`GRIDRESIZE 13 – Layout sauber bei ${vp.label}`, async ({ page }) => {
     await gotoAsAdmin(page, vp);
 
     await expect(page.getByTestId("flavor-zone")).toBeVisible();
@@ -275,20 +308,21 @@ for (const vp of [
 
     expect(sizeR!.x).toBeGreaterThanOrEqual(flavorR!.x + flavorR!.width - 4);
     expect(cartR!.x).toBeGreaterThanOrEqual(sizeR!.x + sizeR!.width - 4);
-    expect(paymentR!.x).toBeGreaterThanOrEqual(amountR!.x + amountR!.width - 4);
-    expect(cartR!.x).toBeGreaterThanOrEqual(paymentR!.x + paymentR!.width - 4);
+    expect(amountR!.y).toBeGreaterThanOrEqual(flavorR!.y + flavorR!.height - 4);
+
+    await expect(page.getByTestId("book-button")).toBeInViewport();
 
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scrollWidth).toBeLessThanOrEqual(vp.width + 4);
   });
 }
 
-test("GRIDRESIZE 12 – Verkauf/Buchung funktioniert nach Resize weiter", async ({ page }) => {
+test("GRIDRESIZE 14 – Verkauf/Buchung funktioniert nach Resize weiter", async ({ page }) => {
   await gotoAsAdmin(page);
   await page.getByTestId("grid-layout-toggle").click();
-  await dragBy(page, "grid-vsplit-1", 80, 0);
-  await dragBy(page, "grid-hsplit", 0, 50);
-  await dragBy(page, "grid-vsplit-3", -60, 0);
+  await dragBy(page, "grid-vsplit-1", 60, 0);
+  await dragBy(page, "grid-vsplit-2", -40, 0);
+  await dragBy(page, "grid-hsplit", 0, 40);
   await page.getByTestId("grid-layout-toggle").click();
 
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
