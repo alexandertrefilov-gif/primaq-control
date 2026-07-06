@@ -1,0 +1,90 @@
+"use client";
+
+import { useCallback, useRef } from "react";
+import { cn } from "@/lib/utils";
+
+type SplitterProps = {
+  /** Layout-Modus aktiv — nur dann sichtbar, ziehbar und mit Resize-Cursor. */
+  active: boolean;
+  /** Incremental pixel delta since the previous pointermove — caller just adds it on. */
+  onDrag: (deltaPx: number) => void;
+  testId: string;
+};
+
+export function VerticalSplitter({ active, onDrag, testId }: SplitterProps) {
+  const lastXRef = useRef(0);
+  const draggingRef = useRef(false);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!active) return;
+    draggingRef.current = true;
+    lastXRef.current = e.clientX;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  }, [active]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) return;
+    const delta = e.clientX - lastXRef.current;
+    lastXRef.current = e.clientX;
+    if (delta !== 0) onDrag(delta);
+  }, [onDrag]);
+
+  const handlePointerUp = useCallback(() => {
+    draggingRef.current = false;
+  }, []);
+
+  return (
+    <div
+      data-testid={testId}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      className={cn("relative h-full w-full select-none", active && "cursor-col-resize")}
+      style={active ? { touchAction: "none" } : undefined}
+    >
+      {active && (
+        <div className="pointer-events-none absolute inset-y-1 left-1/2 w-1 -translate-x-1/2 rounded-full bg-primaq-400/70" />
+      )}
+    </div>
+  );
+}
+
+export function HorizontalSplitter({ active, onDrag, testId }: SplitterProps) {
+  const lastYRef = useRef(0);
+  const draggingRef = useRef(false);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!active) return;
+    draggingRef.current = true;
+    lastYRef.current = e.clientY;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  }, [active]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) return;
+    const delta = e.clientY - lastYRef.current;
+    lastYRef.current = e.clientY;
+    if (delta !== 0) onDrag(delta);
+  }, [onDrag]);
+
+  const handlePointerUp = useCallback(() => {
+    draggingRef.current = false;
+  }, []);
+
+  return (
+    <div
+      data-testid={testId}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      className={cn("relative h-full w-full select-none", active && "cursor-row-resize")}
+      style={active ? { touchAction: "none" } : undefined}
+    >
+      {active && (
+        <div className="pointer-events-none absolute inset-x-1 top-1/2 h-1 -translate-y-1/2 rounded-full bg-primaq-400/70" />
+      )}
+    </div>
+  );
+}

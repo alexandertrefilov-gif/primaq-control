@@ -12,6 +12,16 @@ import { useAdmin } from "./admin-context";
 import type { CartFontSize, PaymentConfig, TextColorMode } from "./use-pos-layout-store";
 import { computeTextColor, cardSizeClamp } from "./use-pos-layout-store";
 import {
+  usePosGridLayoutStore,
+  clampGridLayout,
+  clamp,
+  GRID_MIN,
+  GRID_GUTTER_PX,
+  TOP_ROW_MIN,
+  BOTTOM_ROW_MIN,
+} from "./use-pos-grid-layout-store";
+import { VerticalSplitter, HorizontalSplitter } from "./pos-grid-splitter";
+import {
   FLAVORS,
   MACHINE_GROUP_LABELS,
   SIZES,
@@ -1425,6 +1435,91 @@ export function SalesPage() {
     } catch { /* ignore */ }
   }, []);
 
+  // Resizable grid splitters (Admin-only "Layout anpassen"): the fixed
+  // quadrant topology never changes, only the track sizes — no free x/y/w/h
+  // panels, no drag-anywhere. Stored per device (localStorage only).
+  const { layout: gridLayoutRaw, update: updateGridLayout, reset: resetGridLayout } = usePosGridLayoutStore();
+  const [layoutEditMode, setLayoutEditMode] = useState(false);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const gridResizeObserverRef = useRef<ResizeObserver | null>(null);
+
+  // A callback ref (not useRef + useEffect) because this component returns
+  // an early "Laden…" placeholder before hydration finishes — with a plain
+  // ref, a mount-only effect would run against that placeholder render
+  // (grid div not yet in the tree, ref.current still null) and never fire
+  // again once the real grid mounts later. A callback ref instead fires
+  // exactly when the DOM node itself attaches/detaches, independent of
+  // which render that happens on.
+  const gridContainerRef = useCallback((el: HTMLDivElement | null) => {
+    gridResizeObserverRef.current?.disconnect();
+    gridResizeObserverRef.current = null;
+    if (!el) return;
+    // ResizeObserver's own callback only fires asynchronously (next frame),
+    // which would otherwise let the very first "loaded" paint render one
+    // frame of unclamped default track sizes before the observer corrects
+    // it. Reading the rect synchronously here — refs attach after layout is
+    // flushed — means the clamped values are already in the state update
+    // that lands in the same commit, so nothing ever paints unclamped.
+    const initial = el.getBoundingClientRect();
+    setContainerSize({ width: initial.width, height: initial.height });
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setContainerSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    ro.observe(el);
+    gridResizeObserverRef.current = ro;
+  }, []);
+
+  const gridLayout = useMemo(
+    () => clampGridLayout(gridLayoutRaw, containerSize.width, containerSize.height),
+    [gridLayoutRaw, containerSize]
+  );
+
+  // Splitter A: Sorte/Größe boundary (top row only) — adjusts middlePx directly,
+  // Sorte (sole flex-grow column) absorbs the complementary change.
+  const handleDragTopSplit = useCallback((dx: number) => {
+    const leftAreaWidth = containerSize.width > 0 ? containerSize.width - gridLayout.columns.cartPx - GRID_GUTTER_PX : 0;
+    const maxMiddle = leftAreaWidth > 0 ? leftAreaWidth - GRID_MIN.flavorsWidth - GRID_GUTTER_PX : Infinity;
+    const next = clamp(gridLayout.columns.middlePx - dx, GRID_MIN.sizeWidth, Math.max(GRID_MIN.sizeWidth, maxMiddle));
+    updateGridLayout({ columns: { middlePx: next } });
+  }, [containerSize.width, gridLayout.columns.cartPx, gridLayout.columns.middlePx, updateGridLayout]);
+
+  // Splitter B/C: linke Grenze Warenkorb == rechte Grenze Größe/Zahlungsmittel.
+  const handleDragCartSplit = useCallback((dx: number) => {
+    const w = containerSize.width;
+    const maxCart = w > 0 ? w - GRID_MIN.flavorsWidth - GRID_MIN.sizeWidth - GRID_GUTTER_PX * 2 : Infinity;
+    const next = clamp(gridLayout.columns.cartPx - dx, GRID_MIN.cartWidth, Math.max(GRID_MIN.cartWidth, maxCart));
+    updateGridLayout({ columns: { cartPx: next } });
+  }, [containerSize.width, gridLayout.columns.cartPx, updateGridLayout]);
+
+  // Splitter D: obere/untere Reihe (Sorte/Größe vs. Betrag/Zahlungsmittel).
+  const handleDragRowSplit = useCallback((dy: number) => {
+    const h = containerSize.height;
+    const maxTop = h > 0 ? h - BOTTOM_ROW_MIN - GRID_GUTTER_PX : Infinity;
+    const maxBottom = h > 0 ? h - TOP_ROW_MIN - GRID_GUTTER_PX : Infinity;
+    const nextTop = clamp(gridLayout.rows.topPx + dy, TOP_ROW_MIN, Math.max(TOP_ROW_MIN, maxTop));
+    const nextBottom = clamp(gridLayout.rows.bottomPx - dy, BOTTOM_ROW_MIN, Math.max(BOTTOM_ROW_MIN, maxBottom));
+    updateGridLayout({ rows: { topPx: nextTop, bottomPx: nextBottom } });
+  }, [containerSize.height, gridLayout.rows.topPx, gridLayout.rows.bottomPx, updateGridLayout]);
+
+  // Splitter E: Betrag/Zahlungsmittel-Aufteilung (bottom row only), independent
+  // of the top row's Sorte/Größe split. gridLayout.bottomSplit.{amountFr,
+  // paymentFr} already hold live pixel widths post-clamp, valid directly as
+  // flex-grow weights.
+  const handleDragBottomSplit = useCallback((dx: number) => {
+    const leftAreaWidth = containerSize.width > 0 ? containerSize.width - gridLayout.columns.cartPx - GRID_GUTTER_PX : 0;
+    const bottomAvail = Math.max(leftAreaWidth - GRID_GUTTER_PX, 0);
+    const currentAmountPx = gridLayout.bottomSplit.amountFr;
+    const nextAmountPx = clamp(
+      currentAmountPx + dx,
+      GRID_MIN.amountWidth,
+      Math.max(GRID_MIN.amountWidth, bottomAvail - GRID_MIN.paymentWidth)
+    );
+    const nextPaymentPx = Math.max(bottomAvail - nextAmountPx, 0);
+    updateGridLayout({ bottomSplit: { amountFr: nextAmountPx, paymentFr: nextPaymentPx } });
+  }, [containerSize.width, gridLayout.columns.cartPx, gridLayout.bottomSplit.amountFr, updateGridLayout]);
+
   const [pendingFlavor, setPendingFlavor] = useState<FlavorConfig | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("bar");
   const [cashInput, setCashInput] = useState("");
@@ -1562,76 +1657,133 @@ export function SalesPage() {
     >
       {guidedMode && <GuidedStepsBar step={guidedStep} />}
 
+      {isAdmin && (
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            data-testid="grid-layout-toggle"
+            onClick={() => setLayoutEditMode((v) => !v)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-colors select-none",
+              layoutEditMode ? "bg-primaq-500 text-white shadow" : "pos-overlay pos-hover pos-text-muted"
+            )}
+          >
+            {layoutEditMode ? "Fertig" : "Layout anpassen"}
+          </button>
+          {layoutEditMode && (
+            <>
+              <span className="text-xs pos-text-dim">Linien ziehen zum Anpassen</span>
+              <button
+                data-testid="grid-layout-reset"
+                onClick={() => resetGridLayout()}
+                className="rounded-xl border pos-border-c px-3 py-1.5 text-xs font-semibold pos-text-muted transition-colors hover:bg-red-500/10 hover:text-red-400"
+              >
+                Layout zurücksetzen
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/*
-        Stable, always-on fixed grid. There is no free/absolutely-positioned
-        panel system in sales operation anymore — no drag, no resize, no
-        localStorage-driven x/y/w/h panels, for anyone, admin included.
+        Stable, always-on fixed quadrant topology — never changes. Only the
+        track sizes are adjustable, and only by Admin via the splitters
+        below; no free x/y/w/h panels, no drag-anywhere, no overlap.
 
         4-Quadranten-Layout: 1. Sorte (oben links) | 2. Größe (oben Mitte) |
         3. Betrag eingeben (unten links) | 4. Zahlungsmittel + Buchen (unten
-        Mitte) | Warenkorb (rechts, volle Höhe über beide Zeilen). Betrag
-        kommt VOR Zahlungsmittel — die neue Reihenfolge ist Sorte → Größe →
-        Betrag → Zahlungsmittel/Buchen.
+        Mitte) | Warenkorb (rechts, volle Höhe über beide Zeilen).
+
+        Outer grid: [linker Bereich (fr)] [vsplit B/C] [Warenkorb (px)]
+                    x [oben (px)] [hsplit D] [unten (px)]
+        Der linke Bereich ist eine einzelne Zelle (spannt alle drei Zeilen)
+        mit eigenem internem Flex-Layout, damit die untere Zeile (Betrag /
+        Zahlungsmittel, Splitter E) UNABHÄNGIG von der oberen Zeile (Sorte /
+        Größe, Splitter A) aufgeteilt werden kann — eine einzige Menge
+        gemeinsamer Grid-Spalten könnte das nicht abbilden.
       */}
       <div
+        ref={gridContainerRef}
         data-testid="sales-grid"
         className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(520px, 1fr) minmax(280px, 360px) minmax(360px, 440px)",
-          gridTemplateRows: "minmax(380px, 1fr) minmax(200px, auto)",
-          gridTemplateAreas: `"flavors size cart" "amount payment cart"`,
-          gap: "12px",
+          gridTemplateColumns: `1fr ${GRID_GUTTER_PX}px ${gridLayout.columns.cartPx}px`,
+          gridTemplateRows: `${gridLayout.rows.topPx}px ${GRID_GUTTER_PX}px ${gridLayout.rows.bottomPx}px`,
         }}
       >
-        <div className="min-h-0 min-w-0" style={{ gridArea: "flavors" }}>
-          <FlavorColumn
-            onFlavorClick={handleFlavorClick}
-            pendingFlavor={pendingFlavor}
-            guidedMode={guidedMode}
-            guidedActive={guidedStep === 1}
-          />
+        {/* Linker Bereich: Sorte/Größe oben, Betrag/Zahlungsmittel unten */}
+        <div className="flex min-h-0 min-w-0 flex-col" style={{ gridColumn: "1 / 2", gridRow: "1 / 4" }}>
+          <div
+            className="flex min-h-0 w-full flex-row"
+            style={{ height: gridLayout.rows.topPx }}
+          >
+            <div className="min-h-0 min-w-0" style={{ flex: "1 1 0%" }}>
+              <FlavorColumn
+                onFlavorClick={handleFlavorClick}
+                pendingFlavor={pendingFlavor}
+                guidedMode={guidedMode}
+                guidedActive={guidedStep === 1}
+              />
+            </div>
+            <div style={{ width: GRID_GUTTER_PX, flex: "0 0 auto" }}>
+              <VerticalSplitter active={layoutEditMode} onDrag={handleDragTopSplit} testId="grid-vsplit-1" />
+            </div>
+            <div className="min-h-0 min-w-0" style={{ flex: `0 0 ${gridLayout.columns.middlePx}px` }}>
+              <SizeRow
+                effectiveSizes={effectiveSizes}
+                pendingFlavor={pendingFlavor}
+                onSizePick={handleSizePick}
+                guidedMode={guidedMode}
+                guidedActive={guidedStep === 2}
+              />
+            </div>
+          </div>
+
+          <div style={{ height: GRID_GUTTER_PX, flex: "0 0 auto" }}>
+            <HorizontalSplitter active={layoutEditMode} onDrag={handleDragRowSplit} testId="grid-hsplit" />
+          </div>
+
+          <div
+            className="flex min-h-0 w-full flex-row"
+            style={{ height: gridLayout.rows.bottomPx }}
+          >
+            <div className="min-h-0 min-w-0" style={{ flex: `${gridLayout.bottomSplit.amountFr} 1 0%` }}>
+              <AmountBlock
+                cashInput={cashInput}
+                cashCents={cashCents}
+                active={betragActive}
+                onCashInput={setCashInput}
+                effectiveSizes={effectiveSizes}
+                paymentConfig={layout.payment}
+                guidedMode={guidedMode}
+                guidedActive={guidedStep === 3}
+              />
+            </div>
+            <div style={{ width: GRID_GUTTER_PX, flex: "0 0 auto" }}>
+              <VerticalSplitter active={layoutEditMode} onDrag={handleDragBottomSplit} testId="grid-vsplit-3" />
+            </div>
+            <div className="min-h-0 min-w-0" style={{ flex: `${gridLayout.bottomSplit.paymentFr} 1 0%` }}>
+              <PaymentBuchenBlock
+                showPayment={showPayment}
+                paymentMethod={payment}
+                canBook={canBook}
+                active={zahlungActive}
+                onPaymentChange={handlePaymentChange}
+                onBook={handleBook}
+                paymentConfig={layout.payment}
+                guidedMode={guidedMode}
+                guidedActive={guidedStep === 4}
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="min-h-0 min-w-0" style={{ gridArea: "size" }}>
-          <SizeRow
-            effectiveSizes={effectiveSizes}
-            pendingFlavor={pendingFlavor}
-            onSizePick={handleSizePick}
-            guidedMode={guidedMode}
-            guidedActive={guidedStep === 2}
-          />
+        <div style={{ gridColumn: "2 / 3", gridRow: "1 / 4" }}>
+          <VerticalSplitter active={layoutEditMode} onDrag={handleDragCartSplit} testId="grid-vsplit-2" />
         </div>
 
-        <div className="min-h-0 min-w-0" style={{ gridArea: "amount" }}>
-          <AmountBlock
-            cashInput={cashInput}
-            cashCents={cashCents}
-            active={betragActive}
-            onCashInput={setCashInput}
-            effectiveSizes={effectiveSizes}
-            paymentConfig={layout.payment}
-            guidedMode={guidedMode}
-            guidedActive={guidedStep === 3}
-          />
-        </div>
-
-        <div className="min-h-0 min-w-0" style={{ gridArea: "payment" }}>
-          <PaymentBuchenBlock
-            showPayment={showPayment}
-            paymentMethod={payment}
-            canBook={canBook}
-            active={zahlungActive}
-            onPaymentChange={handlePaymentChange}
-            onBook={handleBook}
-            paymentConfig={layout.payment}
-            guidedMode={guidedMode}
-            guidedActive={guidedStep === 4}
-          />
-        </div>
-
-        {/* Warenkorb – volle Höhe, spannt beide Zeilen */}
-        <div className="min-h-0" style={{ gridArea: "cart" }}>
+        {/* Warenkorb – volle Höhe, spannt alle drei Zeilen (oben, hsplit, unten) */}
+        <div className="min-h-0" style={{ gridColumn: "3 / 4", gridRow: "1 / 4" }}>
           <CartColumn
             widthPx={380}
             qtyBtnSize={layout.qtyButtonSize}
