@@ -10,7 +10,7 @@ import { usePosLayoutStore } from "./use-pos-layout-store";
 import { useGuidedModeStore } from "./use-guided-mode-store";
 import { useAdmin } from "./admin-context";
 import type { CartFontSize, PaymentConfig, TextColorMode } from "./use-pos-layout-store";
-import { computeTextColor } from "./use-pos-layout-store";
+import { computeTextColor, CARD_SIZE_VARS } from "./use-pos-layout-store";
 import {
   FLAVORS,
   MACHINE_GROUP_LABELS,
@@ -133,17 +133,23 @@ function FlavorCard({
       onClick={onClick}
       className={cn(
         "group relative flex w-full flex-col select-none focus-visible:outline-none overflow-hidden",
-        "rounded-2xl transition-all duration-200",
+        "transition-all duration-200",
         "group-hover:brightness-110 group-active:scale-[0.96]",
         isSelected
           ? "ring-[3px] ring-[#22c55e] scale-[1.04]"
           : "ring-0",
         guidedMode && !isSelected && hasAnySelection && "opacity-50",
       )}
-      style={isSelected ? { boxShadow: "0 0 22px rgba(34,197,94,0.45)" } : undefined}
+      style={{
+        borderRadius: "var(--pos-card-radius)",
+        ...(isSelected ? { boxShadow: "0 0 22px rgba(34,197,94,0.45)" } : {}),
+      }}
     >
       {/* Square card – aspect-square fills the column width */}
-      <div className="relative w-full aspect-square overflow-hidden rounded-2xl shadow-lg">
+      <div
+        className="relative w-full aspect-square overflow-hidden shadow-lg"
+        style={{ borderRadius: "var(--pos-card-radius)" }}
+      >
         {/* Background */}
         {isMix ? (
           <>
@@ -287,14 +293,12 @@ function FlavorGroup({
   label,
   flavors,
   onFlavorClick,
-  cardSize,
   selectedFlavorId,
   guidedMode = false,
 }: {
   label: string;
   flavors: FlavorConfig[];
   onFlavorClick: (flavor: FlavorConfig) => void;
-  cardSize: number;
   selectedFlavorId: string | null;
   guidedMode?: boolean;
 }) {
@@ -310,11 +314,12 @@ function FlavorGroup({
         </span>
         <div className="flex-1 h-px pos-divider" />
       </div>
-      {/* auto-fit + justify-center → cards always centered, exact cardSize columns */}
+      {/* auto-fit + justify-center → cards always centered, shared --pos-card-size columns */}
       <div
-        className="grid gap-2"
+        className="grid"
         style={{
-          gridTemplateColumns: `repeat(auto-fit, ${cardSize}px)`,
+          gridTemplateColumns: "repeat(auto-fit, var(--pos-card-size))",
+          gap: "var(--pos-card-gap)",
           justifyContent: "center",
         }}
       >
@@ -496,13 +501,11 @@ function SizePickerModal({
 
 function FlavorColumn({
   onFlavorClick,
-  cardSize,
   pendingFlavor,
   guidedMode = false,
   guidedActive = false,
 }: {
   onFlavorClick: (flavor: FlavorConfig) => void;
-  cardSize: number;
   pendingFlavor: FlavorConfig | null;
   guidedMode?: boolean;
   guidedActive?: boolean;
@@ -538,7 +541,6 @@ function FlavorColumn({
               label={groupLabel}
               flavors={flavors}
               onFlavorClick={onFlavorClick}
-              cardSize={cardSize}
               selectedFlavorId={pendingFlavor?.id ?? null}
               guidedMode={guidedMode}
             />
@@ -590,7 +592,7 @@ function SizeRow({
           Keine Größe aktiv – bitte in Einstellungen aktivieren.
         </p>
       ) : (
-        <div className="flex flex-1 min-h-0 flex-col gap-2">
+        <div className="flex min-h-0 flex-col" style={{ gap: "var(--pos-card-gap)" }}>
           {effectiveSizes.map((size) => {
             const isActive = active;
             const bgColor = isActive ? (size.backgroundColor === "#ffffff" ? "#D9B15D" : size.backgroundColor) : size.backgroundColor;
@@ -601,12 +603,16 @@ function SizeRow({
                 data-testid={`size-btn-${size.id}`}
                 onClick={() => { if (isActive) onSizePick(size.id, size.priceCents); }}
                 className={cn(
-                  "flex flex-1 min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl transition-all duration-200 select-none",
+                  "shrink-0 flex flex-col items-center justify-center gap-1 transition-all duration-200 select-none",
                   isActive
                     ? "shadow-md hover:brightness-110 active:scale-[0.97]"
                     : "opacity-35 pointer-events-none cursor-not-allowed"
                 )}
-                style={{ backgroundColor: bgColor }}
+                style={{
+                  backgroundColor: bgColor,
+                  height: "var(--pos-size-card-height)",
+                  borderRadius: "var(--pos-card-radius)",
+                }}
                 aria-disabled={!isActive}
               >
                 <span className="text-xl font-black leading-tight text-center" style={{ color: textColor }}>
@@ -1435,6 +1441,10 @@ export function SalesPage() {
   const change = cashCents - cartTotal;
   const showPayment = layout.toggles.zahlung;
 
+  // Sorten- und Größenkarten (Bereich 1 + 2) skalieren gemeinsam über dieselben
+  // CSS-Variablen, gesteuert durch die "Kartengröße"-Einstellung.
+  const cardVars = CARD_SIZE_VARS[layout.cardSizePreset];
+
   // Effective sizes: merge static defaults with salesSizes overrides, filter by visibility
   const effectiveSizes = useMemo<EffectiveSizeConfig[]>(() => {
     return SIZES
@@ -1535,7 +1545,15 @@ export function SalesPage() {
 
   return (
     <FlavorsCtx.Provider value={allFlavors}>
-    <div className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden">
+    <div
+      className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden"
+      style={{
+        "--pos-card-size": cardVars.cardSize,
+        "--pos-card-gap": cardVars.cardGap,
+        "--pos-card-radius": cardVars.cardRadius,
+        "--pos-size-card-height": cardVars.sizeCardHeight,
+      } as React.CSSProperties}
+    >
       {guidedMode && <GuidedStepsBar step={guidedStep} />}
 
       {/*
@@ -1563,7 +1581,6 @@ export function SalesPage() {
         <div className="min-h-0 min-w-0" style={{ gridArea: "flavors" }}>
           <FlavorColumn
             onFlavorClick={handleFlavorClick}
-            cardSize={layout.flavorCardSize}
             pendingFlavor={pendingFlavor}
             guidedMode={guidedMode}
             guidedActive={guidedStep === 1}

@@ -10,12 +10,14 @@ import {
   SIZE_LABELS,
   TOGGLE_LABELS,
   CART_FONT_LABELS,
+  CARD_SIZE_LABELS,
   PRESETS,
   DEFAULT_LAYOUT,
   DEFAULT_PAYMENT,
   panelSizeToPixels,
 } from "./use-pos-layout-store";
 import type {
+  CardSizePreset,
   CartFontSize,
   LayoutConfig,
   PanelConfig,
@@ -169,59 +171,6 @@ function SliderControl({
         <span>{min}{unit}</span>
         <span>{max}{unit}</span>
       </div>
-    </div>
-  );
-}
-
-function StepperControl({
-  label,
-  value,
-  min,
-  max,
-  step,
-  unit = "px",
-  defaultValue,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  unit?: string;
-  defaultValue: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <p className="text-sm font-semibold text-black/60">{label}</p>
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => onChange(Math.max(min, value - step))}
-          disabled={value <= min}
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-black/5 text-2xl font-bold text-ink transition-colors hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 select-none"
-        >
-          −
-        </button>
-        <span className="flex-1 text-center text-2xl font-black tabular-nums text-ink">
-          {value}{unit}
-        </span>
-        <button
-          onClick={() => onChange(Math.min(max, value + step))}
-          disabled={value >= max}
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-black/5 text-2xl font-bold text-ink transition-colors hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 select-none"
-        >
-          +
-        </button>
-      </div>
-      {value !== defaultValue && (
-        <button
-          onClick={() => onChange(defaultValue)}
-          className="w-full rounded-xl border border-black/10 py-2 text-xs font-semibold text-black/50 transition-colors hover:bg-black/5 hover:text-black/70 active:scale-[0.99]"
-        >
-          Standard wiederherstellen ({defaultValue}{unit})
-        </button>
-      )}
     </div>
   );
 }
@@ -839,6 +788,11 @@ export function PosLayoutSettings() {
     { id: "gross", label: CART_FONT_LABELS.gross },
     { id: "xl", label: CART_FONT_LABELS.xl },
   ];
+  const cardSizeOptions: { id: CardSizePreset; label: string }[] = [
+    { id: "klein", label: CARD_SIZE_LABELS.klein },
+    { id: "mittel", label: CARD_SIZE_LABELS.mittel },
+    { id: "gross", label: CARD_SIZE_LABELS.gross },
+  ];
 
   return (
     <div className="max-w-xl space-y-4">
@@ -905,20 +859,19 @@ export function PosLayoutSettings() {
         })}
       </div>
 
-      {/* ── Sorten-Buttons Größe ────────────────────────────────── */}
-      <div className="rounded-2xl bg-white p-4 shadow">
+      {/* ── Kartengröße (Sorten- und Größenkarten) ──────────────── */}
+      <div className="rounded-2xl bg-white p-4 shadow" data-testid="card-size-setting">
         <div className="mb-4 border-b border-black/5 pb-3">
-          <p className="text-xs font-bold uppercase tracking-widest text-black/40">Sorten-Buttons</p>
-          <p className="mt-0.5 text-xs text-black/40">Größe der Sortenkarten im Bereich Sorten wählen</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-black/40">Kartengröße</p>
+          <p className="mt-0.5 text-xs text-black/40">
+            Sorten- und Größenkarten (Bereich 1 + 2) skalieren gemeinsam
+          </p>
         </div>
-        <StepperControl
-          label="Sorten-Buttons Größe"
-          value={active.flavorCardSize}
-          min={110}
-          max={240}
-          step={10}
-          defaultValue={DEFAULT_LAYOUT.flavorCardSize}
-          onChange={(v) => update({ ...active, flavorCardSize: v })}
+        <SegmentControl
+          value={active.cardSizePreset}
+          options={cardSizeOptions}
+          onChange={(v) => update({ ...active, cardSizePreset: v })}
+          disabled={!editMode}
         />
       </div>
 
@@ -931,7 +884,7 @@ export function PosLayoutSettings() {
         <div className="grid grid-cols-2 gap-2 p-3">
           {(Object.entries(PRESETS) as [PresetId, typeof PRESETS[PresetId]][]).map(([id, preset]) => {
             const isActive =
-              active.flavorCardSize === preset.config.flavorCardSize &&
+              active.cardSizePreset === preset.config.cardSizePreset &&
               active.cartFontSize === preset.config.cartFontSize &&
               active.cartWidth === preset.config.cartWidth &&
               active.qtyButtonSize === preset.config.qtyButtonSize;
