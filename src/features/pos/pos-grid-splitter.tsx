@@ -11,6 +11,15 @@ type SplitterProps = {
   testId: string;
 };
 
+// The grid gutter track itself is only 12px — a real mouse cursor easily
+// overshoots that while the visible pill inside it is thinner still (4px).
+// While active, the actual pointer-handling element balloons 8px past each
+// edge of the track (via absolute positioning, so it doesn't affect grid
+// sizing) to make grabbing it forgiving; the visible pill stays thin and
+// centered. Inactive, it stays exactly track-sized so it never steals
+// clicks meant for neighboring cards.
+const HIT_OVERHANG_PX = 8;
+
 export function VerticalSplitter({ active, onDrag, testId }: SplitterProps) {
   const lastXRef = useRef(0);
   const draggingRef = useRef(false);
@@ -35,17 +44,22 @@ export function VerticalSplitter({ active, onDrag, testId }: SplitterProps) {
   }, []);
 
   return (
-    <div
-      data-testid={testId}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      className={cn("relative h-full w-full select-none", active && "cursor-col-resize")}
-      style={active ? { touchAction: "none" } : undefined}
-    >
-      {active && (
-        <div className="pointer-events-none absolute inset-y-1 left-1/2 w-1 -translate-x-1/2 rounded-full bg-primaq-400/70" />
-      )}
+    <div className="relative h-full w-full">
+      <div
+        data-testid={testId}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        className={cn(
+          "h-full w-full select-none",
+          active && "absolute inset-y-0 z-10 cursor-col-resize"
+        )}
+        style={active ? { touchAction: "none", left: -HIT_OVERHANG_PX, right: -HIT_OVERHANG_PX } : undefined}
+      >
+        {active && (
+          <div className="pointer-events-none absolute inset-y-1 left-1/2 w-1 -translate-x-1/2 rounded-full bg-primaq-400/70" />
+        )}
+      </div>
     </div>
   );
 }
@@ -74,17 +88,22 @@ export function HorizontalSplitter({ active, onDrag, testId }: SplitterProps) {
   }, []);
 
   return (
-    <div
-      data-testid={testId}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      className={cn("relative h-full w-full select-none", active && "cursor-row-resize")}
-      style={active ? { touchAction: "none" } : undefined}
-    >
-      {active && (
-        <div className="pointer-events-none absolute inset-x-1 top-1/2 h-1 -translate-y-1/2 rounded-full bg-primaq-400/70" />
-      )}
+    <div className="relative h-full w-full">
+      <div
+        data-testid={testId}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        className={cn(
+          "h-full w-full select-none",
+          active && "absolute inset-x-0 z-10 cursor-row-resize"
+        )}
+        style={active ? { touchAction: "none", top: -HIT_OVERHANG_PX, bottom: -HIT_OVERHANG_PX } : undefined}
+      >
+        {active && (
+          <div className="pointer-events-none absolute inset-x-1 top-1/2 h-1 -translate-y-1/2 rounded-full bg-primaq-400/70" />
+        )}
+      </div>
     </div>
   );
 }
