@@ -118,6 +118,9 @@ test("3: Barzahlung addiert Schnellbeträge – Rückgeld korrekt", async ({ pag
   await clickSize(page, "Groß");
   // 5,00 €
 
+  // Zahlungsmittel (Bar) explizit wählen, um die Betrag-Eingabe zu aktivieren
+  await page.getByTestId("payment-tab-bar").click();
+
   // Schnellbutton 10 € → Gegeben 10 €, Rückgeld 5 €
   await page.getByTestId("quick-amount-1000").click();
   await expect(page.getByText("Rückgeld")).toBeVisible();
@@ -139,6 +142,7 @@ test("4: Bestellung buchen → Warenkorb leer, Tagesumsatz korrekt", async ({ pa
   await clickFlavor(page, "Erdbeere");
   await clickSize(page, "Klein");
 
+  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
@@ -209,6 +213,7 @@ test("7: Drei Buchungen – Gesamtumsatz korrekt summiert", async ({ page }) => 
   // Bar: 2,50
   await clickFlavor(page, "Vanille");
   await clickSize(page, "Klein");
+  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 

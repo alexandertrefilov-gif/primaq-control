@@ -6,10 +6,12 @@
  * Admin eingeschlossen. /verkauf zeigt immer und ausschließlich das feste
  * Standard-Grid, unabhängig davon, was in localStorage steht.
  *
- * Topologie (5 Bereiche): Sorten (links, 1fr) | Größe über Zahlungsmittel
- * (Mitte, 320-380px) | Warenkorb (rechts, volle Höhe, 360-440px). Der
- * Betrag+Buchen-Bereich läuft unten unter Sorten+Mitte, aber nicht unter
- * dem Warenkorb.
+ * Topologie: Sorten (links, 1fr) | Größe (Mitte, 320-380px) | Warenkorb
+ * (rechts, volle Höhe, 360-440px). Unten läuft EINE Bezahlkarte
+ * ("Betrag eingeben & Bestellung buchen") unter Sorten+Mitte, aber nicht
+ * unter dem Warenkorb — sie enthält Zahlungsmittel, Betrag-Eingabe, feste
+ * Beträge und den Buchen-Button als eine Einheit. Es gibt keine separate
+ * Zahlungskarte mehr unter „Größe wählen".
  *
  * Ergänzt tests/e2e/pos-layout-ipad.spec.ts (LAY 1-11: Zonen sichtbar, kein
  * Überlapp, Warenkorb rechts, kein horizontaler Scroll, Buchung funktioniert)
@@ -17,20 +19,23 @@
  *
  * GRID 1 – Sichtbarer Abstand zwischen Sorten und Größen
  * GRID 2 – Sichtbarer Abstand zwischen Größen-Spalte und Warenkorb
- * GRID 3 – Sichtbarer Abstand zwischen Betrag/Buchen-Bereich und Footer
+ * GRID 3 – Sichtbarer Abstand zwischen Bezahlkarte und Footer
  * GRID 4 – Bestellung buchen überlappt nicht die Schnellbetrag-Buttons (Stapel)
- * GRID 5 – Standardlayout sichtbar: Sorten, Größen, Zahlung, Betrag, Warenkorb rechts
+ * GRID 5 – Standardlayout sichtbar: Sorten, Größen, Bezahlkarte, Warenkorb rechts
  * GRID 6 – Kein Layout-Button, keine Free-Layout-Handles – auch nicht für Admin
  * GRID 7 – Buchung funktioniert im Standardlayout
  * GRID 8 – Verkäufer sieht IMMER das Standard-Grid, selbst mit gespeichertem Free-Layout
  * GRID 9 – Admin sieht ebenfalls IMMER das Standard-Grid, selbst mit gespeichertem Layout
  * GRID 10 – Kaputtes/ungültiges localStorage-Layout wird ignoriert – /verkauf bleibt stabil
  * GRID 11 – Legacy-Layout-Keys werden beim Laden aktiv aus localStorage entfernt
- * GRID 12 – Größe steht direkt über Zahlungsmittel in derselben mittleren Spalte
- * GRID 13 – Betrag/Buchen-Bereich reicht nicht unter den Warenkorb
+ * GRID 12 – Kein separater Zahlungskarten-Bereich mehr unter „Größe wählen"
+ * GRID 13 – Bezahlkarte reicht nicht unter den Warenkorb
  * GRID 14 – Zahlungsmittel gesperrt (abgedunkelt, keine Aktion) bis Warenkorb nicht leer
- * GRID 15 – Betrag/Buchen gesperrt (abgedunkelt, keine Aktion) bis Zahlungsmittel gewählt
+ * GRID 15 – Betrag/Festbeträge/Buchen gesperrt bis Zahlungsmittel explizit gewählt
  * GRID 16 – Nach Buchung: Zahlungsmittel wieder auf Bar zurückgesetzt
+ * GRID 17 – Bar/Karte/QR sitzen in der unteren Bezahlkarte
+ * GRID 18 – Keine leere Fläche links unten (Zahlungsmittel direkt über Betrag-Eingabe)
+ * GRID 19 – Layout sauber bei 1194×834 (kein Überlapp)
  */
 
 import { expect, test } from "@playwright/test";
@@ -106,7 +111,7 @@ test("GRID 2 – Sichtbarer Abstand zwischen Größen-Spalte und Warenkorb", asy
   expect(hGap).toBeGreaterThanOrEqual(MIN_GAP);
 });
 
-test("GRID 3 – Sichtbarer Abstand zwischen Betrag/Buchen-Bereich und Footer", async ({ page }) => {
+test("GRID 3 – Sichtbarer Abstand zwischen Bezahlkarte und Footer", async ({ page }) => {
   await blockSupabase(page);
   await page.setViewportSize({ width: 1366, height: 1024 });
   await page.goto("/verkauf");
@@ -131,7 +136,7 @@ test("GRID 4 – Bestellung buchen überlappt nicht die Schnellbetrag-Buttons", 
   expect(vGap).toBeGreaterThanOrEqual(0);
 });
 
-test("GRID 5 – Standardlayout sichtbar: Sorten, Größen, Zahlung, Betrag, Warenkorb rechts", async ({ page }) => {
+test("GRID 5 – Standardlayout sichtbar: Sorten, Größen, Bezahlkarte, Warenkorb rechts", async ({ page }) => {
   await blockSupabase(page);
   await page.setViewportSize({ width: 1366, height: 1024 });
   await page.goto("/verkauf");
@@ -140,8 +145,8 @@ test("GRID 5 – Standardlayout sichtbar: Sorten, Größen, Zahlung, Betrag, War
   await expect(page.getByTestId("sales-grid")).toBeVisible();
   await expect(page.getByTestId("flavor-zone")).toBeVisible();
   await expect(page.getByTestId("size-zone")).toBeVisible();
-  await expect(page.getByTestId("payment-zone")).toBeVisible();
   await expect(page.getByTestId("amount-zone")).toBeVisible();
+  await expect(page.getByTestId("payment-tab-bar")).toBeVisible();
   await expect(page.getByTestId("cart-zone")).toBeVisible();
 
   // Warenkorb rechts von Sorten
@@ -195,7 +200,7 @@ test("GRID 8 – Verkäufer sieht IMMER das Standard-Grid, selbst mit gespeicher
 
   await expect(page.getByTestId("flavor-zone")).toBeVisible();
   await expect(page.getByTestId("size-zone")).toBeVisible();
-  await expect(page.getByTestId("payment-zone")).toBeVisible();
+  await expect(page.getByTestId("amount-zone")).toBeVisible();
   await expect(page.getByTestId("cart-zone")).toBeVisible();
 });
 
@@ -246,24 +251,26 @@ test("GRID 11 – Legacy-Layout-Keys werden beim Laden aktiv aus localStorage en
   expect(deviceLs).toBeNull();
 });
 
-// ── Neue Topologie: Größe/Zahlungsmittel in der Mitte, Betrag nicht unter Warenkorb ──
+// ── Zahlungsmittel jetzt Teil der unteren Bezahlkarte, keine separate Karte ──
 
-test("GRID 12 – Größe steht direkt über Zahlungsmittel in derselben mittleren Spalte", async ({ page }) => {
+test("GRID 12 – Kein separater Zahlungskarten-Bereich mehr unter „Größe wählen\"", async ({ page }) => {
   await blockSupabase(page);
   await page.setViewportSize({ width: 1366, height: 1024 });
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  const sizeR = await rect(page, "size-zone");
-  const paymentR = await rect(page, "payment-zone");
+  // Es existiert kein eigenständiger "payment-zone"-Container mehr.
+  await expect(page.locator('[data-testid="payment-zone"]')).toHaveCount(0);
 
-  // Zahlungsmittel liegt unterhalb von Größe, kein vertikaler Überlapp
-  expect(paymentR.y).toBeGreaterThanOrEqual(sizeR.y + sizeR.height - 4);
-  // Beide in derselben Spalte: annähernd gleiche linke Kante
-  expect(Math.abs(paymentR.x - sizeR.x)).toBeLessThan(4);
+  // Direkt unter dem Größen-Bereich (in derselben Spalte) folgt nichts mehr –
+  // die Zahlungsmittel-Auswahl liegt jetzt unten in der Bezahlkarte.
+  const sizeR = await rect(page, "size-zone");
+  const amountR = await rect(page, "amount-zone");
+  // Die Bezahlkarte beginnt klar unterhalb der Größen-Zeile (eigene Grid-Zeile).
+  expect(amountR.y).toBeGreaterThanOrEqual(sizeR.y + sizeR.height - 4);
 });
 
-test("GRID 13 – Betrag/Buchen-Bereich reicht nicht unter den Warenkorb", async ({ page }) => {
+test("GRID 13 – Bezahlkarte reicht nicht unter den Warenkorb", async ({ page }) => {
   await blockSupabase(page);
   await page.setViewportSize({ width: 1366, height: 1024 });
   await page.goto("/verkauf");
@@ -281,35 +288,44 @@ test("GRID 14 – Zahlungsmittel gesperrt bis Warenkorb nicht leer", async ({ pa
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  // Noch nichts im Warenkorb: Zahlungsmittel-Tabs sichtbar, aber ohne Wirkung
-  await expect(page.getByTestId("payment-zone")).toBeVisible();
+  // Noch nichts im Warenkorb: Bezahlkarte + Zahlungsmittel-Tabs sichtbar, aber ohne Wirkung
+  await expect(page.getByTestId("amount-zone")).toBeVisible();
+  await expect(page.getByTestId("amount-zone")).toHaveCSS("pointer-events", "none");
   await expect(page.getByTestId("payment-tab-karte")).toHaveAttribute("aria-disabled", "true");
   await page.getByTestId("payment-tab-karte").click({ force: true });
   // "Karte gewählt"-Indikator darf nicht erscheinen – Klick hatte keine Wirkung
   await expect(page.getByText("Kartenzahlung gewählt")).not.toBeVisible();
 
-  // Nach Sorte+Größe (Warenkorb nicht leer) funktioniert die Auswahl
+  // Nach Sorte+Größe (Warenkorb nicht leer) ist die Bezahlkarte aktiv
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
   await page.getByTestId("size-btn-klein").click();
+  await expect(page.getByTestId("amount-zone")).not.toHaveCSS("pointer-events", "none");
   await expect(page.getByTestId("payment-tab-karte")).toHaveAttribute("aria-disabled", "false");
   await page.getByTestId("payment-tab-karte").click();
   await expect(page.getByText("Kartenzahlung gewählt")).toBeVisible();
 });
 
-test("GRID 15 – Betrag/Buchen aktiv sobald Zahlungsmittel (Bar-Default) aktiv ist", async ({ page }) => {
+test("GRID 15 – Betrag/Festbeträge/Buchen gesperrt bis Zahlungsmittel explizit gewählt", async ({ page }) => {
   await blockSupabase(page);
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  // Vor jeder Auswahl (leerer Warenkorb): Betrag-Bereich gesperrt
-  await expect(page.getByTestId("amount-zone")).toHaveCSS("pointer-events", "none");
-
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
   await page.getByTestId("size-btn-klein").click();
 
-  // Bar ist bereits als Standard aktiv – Betrag-Bereich ist sofort nutzbar,
-  // ohne dass der Bar-Tab erneut angetippt werden muss.
-  await expect(page.getByTestId("amount-zone")).not.toHaveCSS("pointer-events", "none");
+  // Zahlungsmittel selbst ist aktiv, aber noch nicht explizit angetippt –
+  // Betrag-Eingabe und Festbeträge bleiben bis dahin gesperrt.
+  await expect(page.getByTestId("payment-tab-bar")).toHaveAttribute("aria-disabled", "false");
+  const cashRow = page.getByTestId("cash-plus").locator("..");
+  await expect(cashRow).toHaveCSS("pointer-events", "none");
+  await expect(page.getByTestId("quick-amounts-row")).toHaveCSS("pointer-events", "none");
+  await expect(page.locator('[data-testid="amount-zone"] input')).toBeDisabled();
+
+  // Nach explizitem Antippen von Bar wird der Betrag-Bereich aktiv
+  await page.getByTestId("payment-tab-bar").click();
+  await expect(cashRow).not.toHaveCSS("pointer-events", "none");
+  await expect(page.locator('[data-testid="amount-zone"] input')).toBeEnabled();
+  await expect(page.getByTestId("quick-amounts-row")).not.toHaveCSS("pointer-events", "none");
   await page.getByTestId("cash-plus").click();
   const inputValue = await page.locator('[data-testid="amount-zone"] input').inputValue();
   expect(inputValue).not.toBe("");
@@ -326,9 +342,67 @@ test("GRID 16 – Nach Buchung: Zahlungsmittel wieder auf Bar zurückgesetzt", a
   await page.getByTestId("book-button").click();
   await expect(page.getByText("Noch leer")).toBeVisible();
 
-  // Nächste Bestellung: ohne erneuten Tab-Klick ist Bar bereits wieder aktiv
-  // (quick-amounts-row existiert nur im Bar-Modus) – beweist den Reset direkt.
+  // Nächste Bestellung: Bar-Tab ist wieder der aktive Standard-Tab
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
   await page.getByTestId("size-btn-klein").click();
+  await page.getByTestId("payment-tab-bar").click();
   await expect(page.getByTestId("quick-amounts-row")).toBeVisible();
+  await expect(page.getByTestId("quick-amounts-row")).not.toHaveCSS("pointer-events", "none");
+});
+
+test("GRID 17 – Bar/Karte/QR sitzen in der unteren Bezahlkarte", async ({ page }) => {
+  await blockSupabase(page);
+  await page.setViewportSize({ width: 1366, height: 1024 });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  const amountR = await rect(page, "amount-zone");
+  for (const id of ["payment-tab-bar", "payment-tab-karte", "payment-tab-qr"]) {
+    const r = await rect(page, id);
+    // Jeder Zahlungsmittel-Tab liegt vollständig innerhalb der Bezahlkarte.
+    expect(r.x).toBeGreaterThanOrEqual(amountR.x - 2);
+    expect(r.y).toBeGreaterThanOrEqual(amountR.y - 2);
+    expect(r.x + r.width).toBeLessThanOrEqual(amountR.x + amountR.width + 2);
+    expect(r.y + r.height).toBeLessThanOrEqual(amountR.y + amountR.height + 2);
+  }
+});
+
+test("GRID 18 – Keine leere Fläche links unten: Zahlungsmittel direkt über Betrag-Eingabe", async ({ page }) => {
+  await blockSupabase(page);
+  await page.setViewportSize({ width: 1366, height: 1024 });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  const paymentGroupR = await rect(page, "payment-method-group");
+  const cashMinusR = await rect(page, "cash-minus");
+  // Der Abstand zwischen Zahlungsmittel-Gruppe und Betrag-Eingabe entspricht
+  // dem üblichen Innenabstand (8-10px) – keine große leere Fläche dazwischen.
+  const vGap = cashMinusR.y - (paymentGroupR.y + paymentGroupR.height);
+  expect(vGap).toBeGreaterThanOrEqual(0);
+  expect(vGap).toBeLessThan(24);
+});
+
+test("GRID 19 – Layout sauber bei 1194×834 (kein Überlapp)", async ({ page }) => {
+  await blockSupabase(page);
+  await page.setViewportSize({ width: 1194, height: 834 });
+  await page.goto("/verkauf");
+  await waitLoaded(page);
+
+  await expect(page.getByTestId("sales-grid")).toBeVisible();
+  await expect(page.getByTestId("flavor-zone")).toBeVisible();
+  await expect(page.getByTestId("size-zone")).toBeVisible();
+  await expect(page.getByTestId("amount-zone")).toBeVisible();
+  await expect(page.getByTestId("cart-zone")).toBeVisible();
+
+  const flavorR = await rect(page, "flavor-zone");
+  const sizeR = await rect(page, "size-zone");
+  const amountR = await rect(page, "amount-zone");
+  const cartR = await rect(page, "cart-zone");
+
+  // Sorten/Größe nebeneinander, Warenkorb rechts davon, Bezahlkarte unten –
+  // keine Fläche überlappt eine andere.
+  expect(sizeR.x).toBeGreaterThanOrEqual(flavorR.x + flavorR.width - 4);
+  expect(cartR.x).toBeGreaterThanOrEqual(sizeR.x + sizeR.width - 4);
+  expect(amountR.y).toBeGreaterThanOrEqual(flavorR.y + flavorR.height - 4);
+  expect(amountR.x + amountR.width).toBeLessThanOrEqual(cartR.x + 4);
 });

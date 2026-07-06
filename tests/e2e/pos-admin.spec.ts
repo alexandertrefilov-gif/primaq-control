@@ -85,6 +85,7 @@ test("Admin 2: Bottom-Bar zeigt letzte Buchung nach Bestellung", async ({ page }
   // Book Klein Vanille (Bar, 5 €)
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
   await page.getByRole("button", { name: /^Klein/ }).click();
+  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
@@ -160,6 +161,7 @@ test("Admin 7: Letzte Buchung stornieren – Daily auf 0 reduziert", async ({ pa
   // Book one order: Klein Vanille Bar (2,50 €)
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
   await page.getByRole("button", { name: /^Klein/ }).click();
+  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 
@@ -190,6 +192,7 @@ test("Admin 8: Storno letzter von zwei Buchungen – erste bleibt erhalten", asy
   // Buchung 1: Klein Vanille Bar (2,50 €)
   await page.getByRole("button", { name: "Vanille", exact: true }).click();
   await page.getByRole("button", { name: /^Klein/ }).click();
+  await page.getByTestId("payment-tab-bar").click();
   await page.getByTestId("quick-amount-500").click();
   await page.getByRole("button", { name: "Bestellung buchen" }).click();
 

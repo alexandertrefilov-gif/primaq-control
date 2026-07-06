@@ -86,18 +86,18 @@ for (const vp of VIEWPORTS) {
     // Alle vier Zonen müssen sichtbar sein
     await expect(page.getByTestId("flavor-zone")).toBeVisible();
     await expect(page.getByTestId("size-zone")).toBeVisible();
-    await expect(page.getByTestId("payment-zone")).toBeVisible();
+    await expect(page.getByTestId("amount-zone")).toBeVisible();
     await expect(page.getByTestId("cart-zone")).toBeVisible();
 
     // Größen-Buttons sichtbar
     await expect(page.getByTestId("size-btn-klein")).toBeVisible();
     await expect(page.getByTestId("payment-tab-bar")).toBeVisible();
 
-    // Zahlungsbereich (mittlere Spalte) und Sortenbereich (linke Spalte)
-    // stehen nebeneinander, nicht übereinander – kein horizontaler Überlapp.
+    // Bezahlkarte (unten) und Sortenbereich (oben links) stehen übereinander,
+    // nicht nebeneinander – kein vertikaler Überlapp.
     const flavorR = await rect(page, "flavor-zone");
-    const paymentR = await rect(page, "payment-zone");
-    expect(noHorizOverlap(flavorR, paymentR)).toBe(true);
+    const amountR = await rect(page, "amount-zone");
+    expect(noVertOverlap(flavorR, amountR)).toBe(true);
   });
 }
 
@@ -116,18 +116,18 @@ test("LAY 4: Sortenbereich und Größenbereich schneiden sich nicht (1024×768)"
   expect(noHorizOverlap(flavorR, sizeR)).toBe(true);
 });
 
-// ── LAY 5: Größenbereich und Zahlungsbereich schneiden sich nicht ─────────────
+// ── LAY 5: Größenbereich und Bezahlkarte schneiden sich nicht ────────────────
 
-test("LAY 5: Größenbereich und Zahlungsbereich schneiden sich nicht (1024×768)", async ({ page }) => {
+test("LAY 5: Größenbereich und Bezahlkarte schneiden sich nicht (1024×768)", async ({ page }) => {
   await freshDb(page, "lay5");
   await blockSupabase(page);
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto("/verkauf");
   await waitLoaded(page);
 
-  const sizeR    = await rect(page, "size-zone");
-  const paymentR = await rect(page, "payment-zone");
-  expect(noVertOverlap(sizeR, paymentR)).toBe(true);
+  const sizeR   = await rect(page, "size-zone");
+  const amountR = await rect(page, "amount-zone");
+  expect(noVertOverlap(sizeR, amountR)).toBe(true);
 });
 
 // ── LAY 6: Warenkorb bleibt rechts ───────────────────────────────────────────

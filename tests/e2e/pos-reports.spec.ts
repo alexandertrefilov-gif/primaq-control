@@ -370,7 +370,7 @@ test("RPT 10: Verkauf bleibt nach Bericht-Besuchen voll funktionsfähig", async 
   // Core elements must be present
   await expect(page.getByTestId("flavor-zone")).toBeVisible();
   await expect(page.getByTestId("size-zone")).toBeVisible();
-  await expect(page.getByTestId("payment-zone")).toBeVisible();
+  await expect(page.getByTestId("amount-zone")).toBeVisible();
   await expect(page.getByTestId("cart-zone")).toBeVisible();
 
   // Select a flavor and size → cart should update
