@@ -51,8 +51,12 @@ export function VerticalSplitter({ active, onDrag, testId }: SplitterProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         className={cn(
-          "h-full w-full select-none",
-          active && "absolute inset-y-0 z-10 cursor-col-resize"
+          "select-none",
+          // width is NOT set here while active: an explicit width (e.g.
+          // Tailwind's w-full) wins over conflicting left/right insets on an
+          // absolutely positioned box, silently cancelling the overhang.
+          // left/right alone must be the only thing determining the box.
+          active ? "absolute inset-y-0 z-10 cursor-col-resize" : "h-full w-full"
         )}
         style={active ? { touchAction: "none", left: -HIT_OVERHANG_PX, right: -HIT_OVERHANG_PX } : undefined}
       >
@@ -95,8 +99,10 @@ export function HorizontalSplitter({ active, onDrag, testId }: SplitterProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         className={cn(
-          "h-full w-full select-none",
-          active && "absolute inset-x-0 z-10 cursor-row-resize"
+          "select-none",
+          // height is NOT set here while active — see VerticalSplitter for why
+          // an explicit height would cancel the top/bottom overhang.
+          active ? "absolute inset-x-0 z-10 cursor-row-resize" : "h-full w-full"
         )}
         style={active ? { touchAction: "none", top: -HIT_OVERHANG_PX, bottom: -HIT_OVERHANG_PX } : undefined}
       >
