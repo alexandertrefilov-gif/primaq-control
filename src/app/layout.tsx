@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { AppShell } from "@/components/navigation/app-shell";
 import { SyncFoundation } from "@/components/sync/sync-foundation";
+import { PwaUpdateWatcher } from "@/components/sync/pwa-update-watcher";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default function RootLayout({
     <html lang="de">
       <body>
         <SyncFoundation />
+        <PwaUpdateWatcher />
         <AppShell>{children}</AppShell>
       </body>
     </html>

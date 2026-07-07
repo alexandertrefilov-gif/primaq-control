@@ -424,16 +424,15 @@ test("Settings 8: 'Jetzt synchronisieren' zeigt Zeitstempel — nicht mehr '—'
   await expect(page.getByTestId("manual-sync-btn")).toBeVisible();
 
   // Verify baseline: "Letzter Sync" row shows "—"
-  await expect(page.getByText("—")).toBeVisible({ timeout: 3000 });
+  await expect(page.getByTestId("last-sync-value")).toHaveText("—", { timeout: 3000 });
 
   // Switch to CONNECTED so the button-click flush succeeds
   await mockSupabaseConnected(page);
   await page.getByTestId("manual-sync-btn").click();
 
-  // After flush+_recordSync() → CustomEvent "primaq-sync-completed" → setStats
-  // → UI must now show "Gerade eben" (synced less than a minute ago)
-  await expect(page.getByText("Gerade eben")).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText("—")).not.toBeVisible();
+  // After flush+_recordPush()/_recordPull() → CustomEvent "primaq-sync-completed"
+  // → setStats → UI must now show "Gerade eben" (synced less than a minute ago)
+  await expect(page.getByTestId("last-sync-value")).toHaveText("Gerade eben", { timeout: 5000 });
 
   // Verify localStorage was written (survives reload)
   const saved = await page.evaluate(() => {

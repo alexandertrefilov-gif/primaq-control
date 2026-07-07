@@ -29,6 +29,8 @@ export interface SyncStats {
   pendingCount: number;
   failedCount: number;
   lastSyncAt: string | null;
+  lastPushAt: string | null;
+  lastPullAt: string | null;
   lastError: string | null;
 }
 
@@ -68,6 +70,8 @@ class SyncService {
     pendingCount: 0,
     failedCount: 0,
     lastSyncAt: null,
+    lastPushAt: null,
+    lastPullAt: null,
     lastError: null,
   };
   private _statusListeners = new Set<StatusListener>();
@@ -115,31 +119,55 @@ class SyncService {
       pendingCount: pending,
       failedCount: failed,
       lastSyncAt: this._stats.lastSyncAt,
+      lastPushAt: this._stats.lastPushAt,
+      lastPullAt: this._stats.lastPullAt,
       lastError: this._stats.lastError,
     };
     this._deriveStatus();
     this._notify();
   }
 
-  private _recordSync(): void {
+  /** Records a successful push (flush) — updates lastPushAt and the combined lastSyncAt. */
+  private _recordPush(): void {
     const now = new Date().toISOString();
-    console.log("[Sync] recordSync", now);
+    console.log("[Sync] recordPush", now);
+    this._stats.lastPushAt = now;
     this._stats.lastSyncAt = now;
     try {
       if (typeof window !== "undefined") {
+        localStorage.setItem("primaq-last-push", now);
         localStorage.setItem("primaq-last-sync", now);
         // CustomEvent guarantees UI update independently of the subscription path.
-        window.dispatchEvent(new CustomEvent("primaq-sync-completed", { detail: { at: now } }));
+        window.dispatchEvent(new CustomEvent("primaq-sync-completed", { detail: { at: now, direction: "push" } }));
+      }
+    } catch { /* ignore — private/storage-blocked contexts */ }
+  }
+
+  /** Records a successful pull — updates lastPullAt and the combined lastSyncAt. */
+  private _recordPull(): void {
+    const now = new Date().toISOString();
+    console.log("[Sync] recordPull", now);
+    this._stats.lastPullAt = now;
+    this._stats.lastSyncAt = now;
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("primaq-last-pull", now);
+        localStorage.setItem("primaq-last-sync", now);
+        window.dispatchEvent(new CustomEvent("primaq-sync-completed", { detail: { at: now, direction: "pull" } }));
       }
     } catch { /* ignore — private/storage-blocked contexts */ }
   }
 
   async init(): Promise<void> {
-    // Restore last sync timestamp so the UI never shows "—" after a reload.
+    // Restore last sync timestamps so the UI never shows "—" after a reload.
     try {
       if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("primaq-last-sync");
-        if (saved) this._stats.lastSyncAt = saved;
+        const savedSync = localStorage.getItem("primaq-last-sync");
+        if (savedSync) this._stats.lastSyncAt = savedSync;
+        const savedPush = localStorage.getItem("primaq-last-push");
+        if (savedPush) this._stats.lastPushAt = savedPush;
+        const savedPull = localStorage.getItem("primaq-last-pull");
+        if (savedPull) this._stats.lastPullAt = savedPull;
       }
     } catch { /* ignore */ }
 
@@ -163,7 +191,6 @@ class SyncService {
           console.warn("[Sync] sync_health nicht verfügbar:", err);
         }
         await this.pull();
-        this._recordSync();
       } else {
         log("Offline");
       }
@@ -191,7 +218,7 @@ class SyncService {
       }
 
       if (pending.length === 0) {
-        this._recordSync();
+        this._recordPush();
         await this._refreshStats();
         return;
       }
@@ -273,7 +300,7 @@ class SyncService {
 
       this._isFlushing = false;
       if (!hadError) {
-        this._recordSync();
+        this._recordPush();
         this._stats.lastError = null;
         log("Flush beendet");
       } else {
@@ -338,6 +365,8 @@ class SyncService {
     } catch (err) {
       log("pull sales state error:", err);
     }
+
+    this._recordPull();
   }
 
   private async _applySettingsRow(row: SettingsRow): Promise<boolean> {
@@ -496,8 +525,7 @@ class SyncService {
       await this.pull();
       console.log("[SalesSync] syncNow: pull() fertig — flush() startet");
       await this.flush();
-      console.log("[SalesSync] syncNow: flush() fertig — recordSync()");
-      this._recordSync();
+      console.log("[SalesSync] syncNow: flush() fertig");
     } catch (err) {
       console.error("[Sync] syncNow error:", err);
       log("syncNow error:", err);

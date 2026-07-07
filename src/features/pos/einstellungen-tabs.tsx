@@ -12,6 +12,17 @@ import { PosLayoutSettings } from "./pos-layout-settings";
 import { useGuidedModeStore } from "./use-guided-mode-store";
 import { usePosThemeStore, COLOR_VARS, COLOR_LABELS, type ColorVar } from "./use-pos-theme-store";
 import { SyncPanel } from "@/components/sync/sync-panel";
+import { enqueueSettingsSync } from "@/lib/sync/enqueue-settings";
+import { getSyncService } from "@/lib/sync/sync-service";
+
+// Keys that flow through the pos_settings cloud-sync pipeline (enqueueSettingsSync).
+// primaq-pos-year-history is intentionally excluded here — it syncs per-day via a
+// separate mechanism (enqueueDaySync), not as a single settings blob.
+const SYNCABLE_SETTINGS_KEYS = [
+  "primaq-pos-flavors-v1",
+  "primaq-pos-layout-v1",
+  "primaq-pos-vat-rate",
+] as const;
 
 // Settings: Sorten, Bilder, Farben, Preise, Größen, Jahresdaten.
 const SETTINGS_KEYS = [
@@ -70,10 +81,28 @@ async function importKeys(
           return;
         }
         let count = 0;
+        let pushedAny = false;
         for (const key of allowedKeys) {
           if (key in payload.keys && payload.keys[key] !== null) {
-            await dbSet(key, JSON.stringify(payload.keys[key]));
+            const value = payload.keys[key];
+            await dbSet(key, JSON.stringify(value));
             count++;
+            // Push imported settings to the cloud with a fresh updatedAt —
+            // otherwise the stale pre-import meta timestamp stays in place,
+            // and the next pull() from another device can silently overwrite
+            // the just-imported data with older cloud data (LWW backwards).
+            if ((SYNCABLE_SETTINGS_KEYS as readonly string[]).includes(key)) {
+              await enqueueSettingsSync(key, value);
+              pushedAny = true;
+            }
+          }
+        }
+        if (pushedAny) {
+          try {
+            await getSyncService().flush();
+          } catch {
+            // Import already succeeded locally; a flush failure (e.g. offline)
+            // just leaves the push queued for the next successful sync.
           }
         }
         resolve(count);

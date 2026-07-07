@@ -7,6 +7,8 @@ const emptyStats: SyncStats = {
   pendingCount: 0,
   failedCount: 0,
   lastSyncAt: null,
+  lastPushAt: null,
+  lastPullAt: null,
   lastError: null,
 };
 
@@ -23,12 +25,19 @@ export function useSyncStatus() {
       setStats(st);
     });
 
-    // Belt-and-suspenders: also listen for the CustomEvent that _recordSync()
-    // dispatches. This guarantees the UI updates even if the subscription
-    // callback is missed due to React batching or subscription timing.
+    // Belt-and-suspenders: also listen for the CustomEvent that _recordPush()/
+    // _recordPull() dispatch. This guarantees the UI updates even if the
+    // subscription callback is missed due to React batching or subscription
+    // timing.
     const onSyncCompleted = (e: Event) => {
-      const at = (e as CustomEvent<{ at: string }>).detail?.at;
-      if (at) setStats((prev) => ({ ...prev, lastSyncAt: at }));
+      const detail = (e as CustomEvent<{ at: string; direction?: "push" | "pull" }>).detail;
+      if (!detail?.at) return;
+      setStats((prev) => ({
+        ...prev,
+        lastSyncAt: detail.at,
+        lastPushAt: detail.direction === "push" ? detail.at : prev.lastPushAt,
+        lastPullAt: detail.direction === "pull" ? detail.at : prev.lastPullAt,
+      }));
     };
     window.addEventListener("primaq-sync-completed", onSyncCompleted);
 

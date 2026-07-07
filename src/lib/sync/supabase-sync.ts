@@ -151,6 +151,7 @@ export interface SettingsRow {
   settings_key: string;
   data: unknown;
   updated_at: string;
+  device_id: string | null;
 }
 
 /**
@@ -165,6 +166,7 @@ export async function upsertSettings(payload: SettingsPayload): Promise<void> {
     settings_key: payload.settingsKey,
     data: payload.data,
     updated_at: payload.updatedAt,
+    device_id: payload.deviceId,
   });
   if (error) throw error;
 }

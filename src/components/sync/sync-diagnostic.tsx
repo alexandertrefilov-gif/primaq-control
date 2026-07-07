@@ -5,7 +5,13 @@ import { dbGet, getDb } from "@/lib/db";
 import type { SyncOp } from "@/lib/db";
 import { pullSettings, upsertSettings } from "@/lib/sync/supabase-sync";
 
-const DIAG_KEYS = ["primaq-pos-flavors-v1", "primaq-pos-layout-v1"] as const;
+const DIAG_KEYS = [
+  "primaq-pos-flavors-v1",
+  "primaq-pos-layout-v1",
+  "primaq-pos-vat-rate",
+  "primaq-pos-event-plan",
+  "primaq-pos-report-permissions",
+] as const;
 type DiagKey = (typeof DIAG_KEYS)[number];
 
 type DiagRow = {
@@ -21,6 +27,7 @@ type DiagRow = {
   cloudFirstName: string | null;
   cloudImageLen: number | null;
   cloudUpdatedAt: string | null;
+  cloudDeviceId: string | null;
   wouldApply: boolean;
   reason: string;
 };
@@ -58,6 +65,7 @@ function firstImageLen(data: unknown, key: DiagKey): number | null {
       const img = flavors.find((f) => f.imageSrc?.startsWith("data:"))?.imageSrc;
       return img ? img.length : 0;
     }
+    if (key !== "primaq-pos-layout-v1") return null;
     const layout = data as {
       active?: { salesSizes?: Record<string, { imageDataUrl?: string | null }> };
     };
@@ -215,6 +223,7 @@ export function SyncDiagnostic() {
           cloudFirstName: cloudFlavor.name,
           cloudImageLen: cloudData ? firstImageLen(cloudData, key) : null,
           cloudUpdatedAt,
+          cloudDeviceId: cloudRow?.device_id ?? null,
           wouldApply,
           reason,
         };
@@ -361,6 +370,7 @@ export function SyncDiagnostic() {
                 v={row.cloudImageLen === null ? "—" : row.cloudImageLen === 0 ? "kein base64-Bild" : `${row.cloudImageLen.toLocaleString()} Bytes`}
               />
               <R label="cloud updated_at" v={row.cloudUpdatedAt ?? "—"} />
+              <R label="zuletzt geschrieben von Gerät" v={row.cloudDeviceId ? row.cloudDeviceId.slice(0, 8) : "—"} />
 
               <Section label="Entscheidung (nächster Pull)" />
               <R

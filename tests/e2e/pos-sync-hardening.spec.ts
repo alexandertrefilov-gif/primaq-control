@@ -366,7 +366,7 @@ test("Hard 5: SyncPanel − zeigt pending-Anzahl korrekt", async ({ page }) => {
   await page.waitForTimeout(600);
 
   // After offline flush attempt, panel shows pending count = 2
-  await expect(page.getByText("2")).toBeVisible();
+  await expect(page.getByTestId("pending-count-value")).toHaveText("2");
 });
 
 // ── Test 6: Pull ergänzt fehlende Jahresdaten ────────────────────────────────
