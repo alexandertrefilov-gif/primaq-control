@@ -11,9 +11,13 @@
  * EVT 8  – Verkauf (Buchung) bleibt unverändert funktionsfähig
  * EVT 9  – Nicht gesetzter Name zeigt "—" im Tagesabschluss
  * EVT 10 – Enter im Eingabefeld speichert den Namen
+ * EVT 11 – Jahresbericht CSV enthält Einsatzname
+ * EVT 12 – Jahresbericht Excel-Export (Tagesübersicht-Blatt) enthält Einsatzname
+ * EVT 13 – Sync-Queue-Payload für pos_year_history enthält eventName
  */
 
 import { expect, test, type Page } from "@playwright/test";
+import * as XLSX from "xlsx";
 import type { DailySummary } from "../../src/features/pos/pos-types";
 
 async function blockSupabase(page: Page) {
@@ -262,4 +266,144 @@ test("EVT 10 – Enter im Eingabefeld speichert den Namen", async ({ page }) => 
 
   await expect(page.getByText("Einsatzname gespeichert")).toBeVisible();
   await expect(page.getByTestId("event-name-display")).toHaveText("Sommerfest");
+});
+
+test("EVT 11 – Jahresbericht CSV enthält Einsatzname", async ({ page }) => {
+  const year = new Date().getFullYear();
+  await seedHistoryWithEvent(page, makeSummary(`${year}-03-10`, "Frühlingsfest"), "evt11");
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await page.goto("/berichte?tab=jahresabschluss");
+  await waitLoaded(page);
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: /CSV exportieren/ }).click(),
+  ]);
+
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  const content = Buffer.concat(chunks).toString("utf-8");
+
+  expect(content).toContain("Frühlingsfest");
+  expect(content).toContain("Einsatz");
+});
+
+test("EVT 12 – Jahresbericht Excel-Export enthält Einsatzname (Tagesübersicht-Blatt)", async ({ page }) => {
+  const year = new Date().getFullYear();
+  await seedHistoryWithEvent(page, makeSummary(`${year}-04-20`, "Osterfest"), "evt12");
+  await blockSupabase(page);
+  await seedAdmin(page);
+  await page.goto("/berichte?tab=jahresabschluss");
+  await waitLoaded(page);
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: /Excel exportieren/ }).click(),
+  ]);
+
+  const filePath = await download.path();
+  expect(filePath).not.toBeNull();
+  const wb = XLSX.readFile(filePath!);
+  expect(wb.SheetNames).toContain("Tagesuebersicht");
+
+  const sheet = wb.Sheets["Tagesuebersicht"];
+  const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1 });
+  const header = rows[0] as unknown as string[];
+  expect(header).toContain("Einsatz / Veranstaltung");
+
+  const eventCol = header.indexOf("Einsatz / Veranstaltung");
+  const dataRow = rows.find((r, i) => i > 0 && (r as unknown as string[])[0] === `${year}-04-20`) as unknown as string[];
+  expect(dataRow).toBeDefined();
+  expect(dataRow[eventCol]).toBe("Osterfest");
+});
+
+test("EVT 13 – Sync-Queue-Payload für pos_year_history enthält eventName", async ({ page }) => {
+  await blockSupabase(page);
+  await seedAdmin(page);
+
+  // Seed today's live daily state with one order, so closing the day
+  // actually calls saveDay() → enqueueDaySync().
+  await page.addInitScript(() => {
+    if (window.sessionStorage.getItem("evt13-seeded") === "1") return;
+    window.sessionStorage.setItem("evt13-seeded", "1");
+    const today = new Date().toISOString().slice(0, 10);
+    const del = indexedDB.deleteDatabase("primaq-pos");
+    del.onsuccess = () => {
+      const req = indexedDB.open("primaq-pos", 2);
+      req.onupgradeneeded = (e: Event) => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        db.createObjectStore("kv", { keyPath: "key" });
+        const sq = db.createObjectStore("sync_queue", { keyPath: "id" });
+        sq.createIndex("status", "status");
+      };
+      req.onsuccess = (e: Event) => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        const tx = db.transaction("kv", "readwrite");
+        tx.objectStore("kv").put({
+          key: "primaq-pos-state",
+          value: JSON.stringify({
+            cart: [],
+            daily: {
+              date: today,
+              totalCents: 250,
+              cashCents: 250,
+              cardCents: 0,
+              qrCents: 0,
+              orderCount: 1,
+              orders: [],
+            },
+          }),
+        });
+      };
+    };
+  });
+  await page.goto("/berichte?tab=tagesabschluss");
+  await waitLoaded(page);
+
+  await page.getByTestId("event-name-input").fill("Weinfest Heilbronn");
+  await page.getByTestId("event-name-save").click();
+  await expect(page.getByTestId("event-name-display")).toHaveText("Weinfest Heilbronn");
+
+  await page.getByTestId("daily-reset-btn").click();
+  await page.getByTestId("daily-reset-btn").click();
+
+  await page.waitForFunction(() =>
+    new Promise<boolean>((resolve) => {
+      const req = indexedDB.open("primaq-pos");
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains("sync_queue")) { db.close(); resolve(false); return; }
+        const tx = db.transaction("sync_queue", "readonly");
+        const all = tx.objectStore("sync_queue").getAll();
+        all.onsuccess = () => {
+          db.close();
+          const ops = all.result as { entity: string }[];
+          resolve(ops.some((o) => o.entity === "pos_year_history"));
+        };
+        all.onerror = () => { db.close(); resolve(false); };
+      };
+      req.onerror = () => resolve(false);
+    })
+  );
+
+  const ops = await page.evaluate(() =>
+    new Promise<{ entity: string; payload: string }[]>((resolve) => {
+      const req = indexedDB.open("primaq-pos");
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction("sync_queue", "readonly");
+        const all = tx.objectStore("sync_queue").getAll();
+        all.onsuccess = () => { db.close(); resolve(all.result); };
+        all.onerror = () => { db.close(); resolve([]); };
+      };
+      req.onerror = () => resolve([]);
+    })
+  );
+
+  const yearHistoryOp = ops.find((o) => o.entity === "pos_year_history");
+  expect(yearHistoryOp).toBeDefined();
+  const parsed = JSON.parse(yearHistoryOp!.payload);
+  expect(parsed.summary.eventName).toBe("Weinfest Heilbronn");
 });

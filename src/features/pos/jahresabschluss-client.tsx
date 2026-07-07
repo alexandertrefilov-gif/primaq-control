@@ -220,11 +220,12 @@ async function downloadXlsx(
 
   // Sheet 3: All days
   const dayData = [
-    ["Datum", "Umsatz brutto (€)", "Bar (€)", "Karte (€)", "QR (€)", "Bestellungen", `Netto ${vatLabel} (€)`, `MwSt ${vatLabel} (€)`],
+    ["Datum", "Einsatz / Veranstaltung", "Umsatz brutto (€)", "Bar (€)", "Karte (€)", "QR (€)", "Bestellungen", `Netto ${vatLabel} (€)`, `MwSt ${vatLabel} (€)`],
     ...days.map((d) => {
       const net = calcNetForDay(d, vatRate);
       return [
         d.date,
+        d.eventName ?? "",
         d.totalCents / 100,
         d.cashCents / 100,
         d.cardCents / 100,

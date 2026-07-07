@@ -58,7 +58,7 @@ function buildMonthCsv(days: DailySummary[], year: number, month: number, vatRat
     cardCents += d.cardCents; qrCents += d.qrCents; orders += d.orderCount;
     netTotalCents += net;
   }
-  rows.push(["", "Gesamt", fmtNum(totalCents), fmtNum(cashCents),
+  rows.push(["", "Gesamt", "", fmtNum(totalCents), fmtNum(cashCents),
     fmtNum(cardCents), fmtNum(qrCents), orders,
     fmtNum(netTotalCents), fmtNum(totalCents - netTotalCents)].join(";"));
   return "﻿" + rows.join("\n");
