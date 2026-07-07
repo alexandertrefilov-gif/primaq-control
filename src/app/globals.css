@@ -8,18 +8,7 @@
   /* Default: Nacht (helles Graphit-Grau) */
   color-scheme: dark;
   --pos-bg:        #3A3C42;
-
-  /* ── Device-local layout defaults (overridden per-device via JS) ─── */
-  --pos-cart-width:     400px;
-  --pos-flavors-height: 480px;
-  --pos-sizes-height:   116px;
-  --pos-payment-height: 240px;
-
-  /* ── Sorten-/Größenkarten (Bereich 1+2) – unabhängig einstellbar, Default 180px, quadratisch ── */
-  --pos-card-size:      clamp(140px, 13.18vw, 180px);
-  --pos-size-card-size: clamp(140px, 13.18vw, 180px);
-  --pos-card-gap:       12px;
-  --pos-card-radius:    16px;
+  --pos-card-radius: 16px;
   --pos-surface:   #44474E;
   --pos-section:   #4C505A;
   --pos-border:    #585C67;
@@ -112,6 +101,44 @@ a {
 /* Hover states */
 .pos-hover:hover  { background-color: color-mix(in srgb, var(--pos-text) 6%, transparent); }
 .pos-active:hover { background-color: color-mix(in srgb, var(--pos-text) 10%, transparent); }
+
+/* ── Touch tile — shared tactile 3D press for full-bleed POS buttons ─────────
+   Normal: raised bottom-edge shadow, like a physical key.
+   Hover: brighter + shadow grows.
+   Active: presses down 2px, shadow shrinks, inner shadow darkens the face. */
+.pos-touch-tile {
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+  box-shadow:
+    0 4px 0 rgba(0, 0, 0, 0.22),
+    0 8px 16px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+.pos-touch-tile:hover {
+  filter: brightness(1.08);
+  box-shadow:
+    0 5px 0 rgba(0, 0, 0, 0.22),
+    0 12px 22px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.pos-touch-tile:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.22),
+    0 3px 6px rgba(0, 0, 0, 0.24),
+    inset 0 3px 10px rgba(0, 0, 0, 0.35);
+}
+.pos-touch-tile:disabled,
+.pos-touch-tile[aria-disabled="true"] {
+  transition: none;
+}
+.pos-touch-tile:disabled:hover,
+.pos-touch-tile[aria-disabled="true"]:hover {
+  filter: none;
+  box-shadow:
+    0 4px 0 rgba(0, 0, 0, 0.22),
+    0 8px 16px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
 
 /* Overlay buttons – adapt to ANY text color (replaces hardcoded bg-white/8 etc.) */
 .pos-overlay               { background-color: color-mix(in srgb, var(--pos-text)  8%, transparent); }

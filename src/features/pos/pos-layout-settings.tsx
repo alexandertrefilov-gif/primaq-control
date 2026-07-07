@@ -101,53 +101,6 @@ function SliderControl({
   );
 }
 
-function StepperControl({
-  value,
-  min,
-  max,
-  step,
-  unit = "px",
-  onChange,
-  disabled,
-  testId,
-}: {
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  unit?: string;
-  onChange: (v: number) => void;
-  disabled: boolean;
-  testId?: string;
-}) {
-  return (
-    <div
-      data-testid={testId}
-      className={cn("flex items-center gap-3 transition-opacity", disabled && "opacity-40 pointer-events-none")}
-    >
-      <button
-        onClick={() => onChange(Math.max(min, value - step))}
-        disabled={value <= min}
-        aria-label="verringern"
-        className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-black/5 text-2xl font-bold text-ink transition-colors hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 select-none"
-      >
-        −
-      </button>
-      <span className="flex-1 text-center text-xl font-black tabular-nums text-ink">
-        {value}{unit}
-      </span>
-      <button
-        onClick={() => onChange(Math.min(max, value + step))}
-        disabled={value >= max}
-        aria-label="erhöhen"
-        className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-black/5 text-2xl font-bold text-ink transition-colors hover:bg-primaq-100 hover:text-primaq-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 select-none"
-      >
-        +
-      </button>
-    </div>
-  );
-}
-
 function SegmentControl<T extends string>({
   value,
   options,
@@ -773,40 +726,16 @@ export function PosLayoutSettings() {
         })}
       </div>
 
-      {/* ── Kartengröße: Sorten- und Größenkarten getrennt einstellbar ──── */}
-      <div className="overflow-hidden rounded-2xl bg-white shadow" data-testid="card-size-setting">
-        <div className="border-b border-black/5 px-4 py-3">
-          <p className="text-xs font-bold uppercase tracking-widest text-black/40">Kartengröße</p>
-          <p className="mt-0.5 text-xs text-black/40">
-            Sortenkarten und Größenkarten unabhängig voneinander skalieren
-          </p>
-        </div>
-        <div className="divide-y divide-black/5">
-          <div className="px-4 py-4 space-y-3">
-            <p className="text-sm font-semibold text-ink">Sortenkarten</p>
-            <StepperControl
-              testId="product-card-size-stepper"
-              value={active.productCardSizePx}
-              min={120}
-              max={240}
-              step={10}
-              onChange={(v) => update({ ...active, productCardSizePx: v })}
-              disabled={!editMode}
-            />
-          </div>
-          <div className="px-4 py-4 space-y-3">
-            <p className="text-sm font-semibold text-ink">Größenkarten</p>
-            <StepperControl
-              testId="size-card-size-stepper"
-              value={active.sizeCardSizePx}
-              min={120}
-              max={240}
-              step={10}
-              onChange={(v) => update({ ...active, sizeCardSizePx: v })}
-              disabled={!editMode}
-            />
-          </div>
-        </div>
+      {/* ── Hinweis: Sorten-/Größenkarten füllen jetzt immer den Bereich ── */}
+      <div
+        data-testid="card-size-resize-hint"
+        className="flex items-start gap-2.5 rounded-2xl border border-primaq-100 bg-primaq-50 p-4 text-sm text-primaq-700"
+      >
+        <p>
+          Sorten- und Größenkarten füllen jetzt immer den kompletten Bereich aus und
+          wachsen automatisch mit der Fenstergröße — eine feste Kartengröße lässt sich
+          nicht mehr einstellen.
+        </p>
       </div>
 
       {/* ── Verkaufsmodus presets ───────────────────────────────── */}
@@ -818,8 +747,6 @@ export function PosLayoutSettings() {
         <div className="grid grid-cols-2 gap-2 p-3">
           {(Object.entries(PRESETS) as [PresetId, typeof PRESETS[PresetId]][]).map(([id, preset]) => {
             const isActive =
-              active.productCardSizePx === preset.config.productCardSizePx &&
-              active.sizeCardSizePx === preset.config.sizeCardSizePx &&
               active.cartFontSize === preset.config.cartFontSize &&
               active.qtyButtonSize === preset.config.qtyButtonSize;
             return (

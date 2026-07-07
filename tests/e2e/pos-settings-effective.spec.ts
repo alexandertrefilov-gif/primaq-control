@@ -13,9 +13,9 @@
  * SETTINGS-EFFECTIVE 2 – Geräte-Layout-Presets existieren nicht mehr
  * SETTINGS-EFFECTIVE 3 – Hinweistext auf "Layout anpassen" ist sichtbar (Verkaufsoberfläche-Tab)
  * SETTINGS-EFFECTIVE 4 – Hinweistext auf "Layout anpassen" ist sichtbar (Farben/Ansicht-Bereich)
- * SETTINGS-EFFECTIVE 5 – Verbleibende Einstellungen (Kartengröße) wirken weiterhin
+ * SETTINGS-EFFECTIVE 5 – Kartengröße-Regler existiert nicht mehr (Touch-Tiles-Redesign)
  * SETTINGS-EFFECTIVE 6 – Verbleibende Einstellungen (Mengenbuttons) wirken weiterhin
- * SETTINGS-EFFECTIVE 7 – Verkaufsmodus-Presets funktionieren weiterhin ohne cartWidth
+ * SETTINGS-EFFECTIVE 7 – Verkaufsmodus-Presets funktionieren weiterhin ohne cartWidth/productCardSizePx
  */
 
 import { expect, test, type Page } from "@playwright/test";
@@ -79,14 +79,11 @@ test("SETTINGS-EFFECTIVE 4 – Hinweistext auf Layout anpassen (Farben/Ansicht-B
   await expect(hint).toContainText("Layout anpassen");
 });
 
-test("SETTINGS-EFFECTIVE 5 – Kartengröße wirkt weiterhin", async ({ page }) => {
+test("SETTINGS-EFFECTIVE 5 – Kartengröße-Regler existiert nicht mehr (Karten füllen den Bereich automatisch)", async ({ page }) => {
   await gotoVerkaufsoberflaeche(page);
-  await unlockEditMode(page);
-
-  const stepper = page.getByTestId("product-card-size-stepper");
-  await expect(stepper).toBeVisible();
-  await stepper.getByRole("button", { name: "erhöhen" }).click();
-  await expect(stepper.getByText("190px")).toBeVisible();
+  await expect(page.getByTestId("product-card-size-stepper")).toHaveCount(0);
+  await expect(page.getByTestId("size-card-size-stepper")).toHaveCount(0);
+  await expect(page.getByTestId("card-size-resize-hint")).toBeVisible();
 });
 
 test("SETTINGS-EFFECTIVE 6 – Mengenbuttons-Regler wirkt weiterhin", async ({ page }) => {
@@ -102,6 +99,6 @@ test("SETTINGS-EFFECTIVE 7 – Verkaufsmodus-Presets funktionieren weiterhin", a
 
   await expect(page.getByRole("button", { name: "Standard", exact: false })).toBeVisible();
   await page.getByRole("button", { name: "iPad", exact: false }).click();
-  // No crash, preset applies without a dead cartWidth field breaking anything.
-  await expect(page.getByTestId("product-card-size-stepper")).toBeVisible();
+  // No crash, preset applies without the dead cartWidth/productCardSizePx fields breaking anything.
+  await expect(page.getByText("Mengenbuttons (− Menge +)")).toBeVisible();
 });

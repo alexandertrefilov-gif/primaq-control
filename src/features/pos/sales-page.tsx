@@ -10,7 +10,7 @@ import { usePosLayoutStore } from "./use-pos-layout-store";
 import { useGuidedModeStore } from "./use-guided-mode-store";
 import { useAdmin } from "./admin-context";
 import type { CartFontSize, PaymentConfig, TextColorMode } from "./use-pos-layout-store";
-import { computeTextColor, cardSizeClamp } from "./use-pos-layout-store";
+import { computeTextColor } from "./use-pos-layout-store";
 import {
   usePosGridLayoutStore,
   clampGridLayout,
@@ -141,11 +141,9 @@ function FlavorCard({
       aria-label={flavor.name}
       onClick={onClick}
       className={cn(
-        "group relative flex w-full flex-col select-none focus-visible:outline-none overflow-hidden",
-        "transition-all duration-200",
-        "group-hover:brightness-110 group-active:scale-[0.96]",
+        "pos-touch-tile relative flex w-full flex-col select-none focus-visible:outline-none overflow-hidden",
         isSelected
-          ? "ring-[3px] ring-[#22c55e] scale-[1.04]"
+          ? "ring-[3px] ring-[#22c55e] scale-[1.02]"
           : "ring-0",
         guidedMode && !isSelected && hasAnySelection && "opacity-50",
       )}
@@ -156,7 +154,7 @@ function FlavorCard({
     >
       {/* Square card – aspect-square fills the column width */}
       <div
-        className="relative w-full aspect-square overflow-hidden shadow-lg"
+        className="relative w-full aspect-square overflow-hidden"
         style={{ borderRadius: "var(--pos-card-radius)" }}
       >
         {/* Background */}
@@ -323,13 +321,14 @@ function FlavorGroup({
         </span>
         <div className="flex-1 h-px pos-divider" />
       </div>
-      {/* auto-fit + justify-center → cards always centered, shared --pos-card-size columns */}
+      {/* Fixed 3 columns, always 1fr — tiles fill the full row width exactly,
+          growing/shrinking with the container instead of leaving empty space
+          around a fixed card size. */}
       <div
         className="grid"
         style={{
-          gridTemplateColumns: "repeat(auto-fit, var(--pos-card-size))",
-          gap: "var(--pos-card-gap)",
-          justifyContent: "center",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "12px",
         }}
       >
         {flavors.map((f) => (
@@ -550,11 +549,11 @@ function FlavorColumn({
         guidedMode && guidedActive && "ring-2 ring-[#00D6A3]/50"
       )}
     >
-      <div className="flex-none px-3 pt-2">
+      <div className="flex-none px-4 pt-3">
         <SectionHeader title="1. Sorte wählen" accentActive={guidedMode && guidedActive} />
       </div>
       {/* Scrollable flavor list – flex-1 fills remaining panel height */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-2 space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-3">
         {groups.map(([groupId, groupLabel]) => {
           const flavors = allFlavors.filter((f) => f.group === groupId);
           return (
@@ -594,8 +593,8 @@ function SizeRow({
       data-testid="size-zone"
       data-guided-active={guidedMode && guidedActive ? "true" : undefined}
       className={cn(
-        // h-full: fills its grid cell; vertical column of size cards next to Sorten
-        "h-full flex flex-col gap-2 rounded-2xl pos-section overflow-auto p-2 transition-all",
+        // h-full: fills its grid cell; vertical column of size tiles next to Sorten
+        "h-full flex flex-col gap-2 rounded-2xl pos-section overflow-hidden p-4 transition-all",
         guidedMode && guidedActive && "guided-ring-pulse"
       )}
     >
@@ -612,37 +611,38 @@ function SizeRow({
           Keine Größe aktiv – bitte in Einstellungen aktivieren.
         </p>
       ) : (
-        <div
-          className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto"
-          style={{ gap: "var(--pos-card-gap)" }}
-        >
+        // Three full-width tiles sharing the remaining height equally — no
+        // fixed card size, no centered leftover space; each tile IS the size.
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
           {effectiveSizes.map((size) => {
             const isActive = active;
             const bgColor = isActive ? (size.backgroundColor === "#ffffff" ? "#D9B15D" : size.backgroundColor) : size.backgroundColor;
             const textColor = isActive ? computeTextColor(size.textColorMode, bgColor) : "color-mix(in srgb, var(--pos-text) 35%, transparent)";
+            const imgSrc = size.imageDataUrl ?? size.imageSrc;
             return (
               <button
                 key={size.id}
                 data-testid={`size-btn-${size.id}`}
                 onClick={() => { if (isActive) onSizePick(size.id, size.priceCents); }}
                 className={cn(
-                  "shrink-0 flex flex-col items-center justify-center gap-1 transition-all duration-200 select-none",
-                  isActive
-                    ? "shadow-md hover:brightness-110 active:scale-[0.97]"
-                    : "opacity-35 pointer-events-none cursor-not-allowed"
+                  "pos-touch-tile relative flex w-full flex-1 min-h-0 flex-col items-center justify-center gap-1 overflow-hidden select-none",
+                  !isActive && "opacity-35 pointer-events-none cursor-not-allowed"
                 )}
                 style={{
                   backgroundColor: bgColor,
-                  width: "var(--pos-size-card-size)",
-                  height: "var(--pos-size-card-size)",
-                  borderRadius: "var(--pos-card-radius)",
+                  borderRadius: "16px",
                 }}
                 aria-disabled={!isActive}
               >
-                <span className="text-xl font-black leading-tight text-center" style={{ color: textColor }}>
+                {imgSrc && (
+                  <div className="relative w-full flex-1 min-h-0 flex items-center justify-center px-2 pt-2">
+                    <FlavorImage src={imgSrc} scale={size.imageScale} className="drop-shadow-lg" />
+                  </div>
+                )}
+                <span className="shrink-0 text-xl font-black leading-tight text-center" style={{ color: textColor }}>
                   {size.name}
                 </span>
-                <span className="text-lg font-black tabular-nums leading-none" style={{ color: textColor, opacity: isActive ? 0.82 : 1 }}>
+                <span className="shrink-0 pb-1 text-lg font-black tabular-nums leading-none" style={{ color: textColor, opacity: isActive ? 0.82 : 1 }}>
                   {fmt(size.priceCents)}
                 </span>
               </button>
@@ -1546,12 +1546,6 @@ export function SalesPage() {
   const change = cashCents - cartTotal;
   const showPayment = layout.toggles.zahlung;
 
-  // Sorten- (Bereich 1) und Größenkarten (Bereich 2) sind unabhängig
-  // einstellbar, aber beide quadratisch — jede liest ihre eigene
-  // CSS-Variable, responsiv per clamp() begrenzt auf den gewählten Wert.
-  const productCardSize = cardSizeClamp(layout.productCardSizePx);
-  const sizeCardSize = cardSizeClamp(layout.sizeCardSizePx);
-
   // Effective sizes: merge static defaults with salesSizes overrides, filter by visibility
   const effectiveSizes = useMemo<EffectiveSizeConfig[]>(() => {
     return SIZES
@@ -1655,9 +1649,6 @@ export function SalesPage() {
     <div
       className="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden"
       style={{
-        "--pos-card-size": productCardSize,
-        "--pos-size-card-size": sizeCardSize,
-        "--pos-card-gap": "12px",
         "--pos-card-radius": "16px",
       } as React.CSSProperties}
     >
