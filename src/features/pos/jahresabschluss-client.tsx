@@ -572,6 +572,8 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
     () => history.filter((d) => d.date.startsWith(String(selectedYear))),
     [history, selectedYear]
   );
+  const historyDaysToDelete = useMemo(() => days.filter((d) => !d.isLive), [days]);
+  const hasLiveDay = days.some((d) => d.isLive);
 
   const monthly = useMemo(() => computeMonthly(days, selectedYear, vatRate), [days, selectedYear, vatRate]);
   const articles = useMemo(() => computeArticles(days), [days]);
@@ -855,11 +857,16 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
       <ReportResetDialog
         open={showResetDialog}
         title={`Jahr ${selectedYear} zurücksetzen`}
-        scopeLabel={`${selectedYear} (${days.length} ${days.length === 1 ? "Tag" : "Tage"})`}
+        scopeLabel={`${selectedYear}`}
+        unitLabel="Jahresdaten"
+        historyCount={historyDaysToDelete.length}
+        hasLiveDay={hasLiveDay}
         onClose={() => setShowResetDialog(false)}
         onConfirm={async () => {
-          // Exclude today's still-open live day — use "Tagesdaten zurücksetzen" for that.
-          const dates = days.filter((d) => !d.isLive).map((d) => d.date);
+          // Only ever delete closed history days — the live, not-yet-closed
+          // day is never a deletable pos_year_history entry; use
+          // "Tagesdaten zurücksetzen" for that.
+          const dates = historyDaysToDelete.map((d) => d.date);
           await getSyncService().resetHistoryDates(dates);
           handleResetSuccess();
         }}

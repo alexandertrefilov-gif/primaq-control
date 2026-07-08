@@ -4,8 +4,11 @@ import { useState, useCallback } from "react";
 
 interface ReportResetDialogProps {
   open: boolean;
-  title: string;       // z.B. "KW26 2026 zurücksetzen"
-  scopeLabel: string;  // z.B. "KW26 2026 (7 Tage)"
+  title: string;        // z.B. "KW26 2026 zurücksetzen"
+  scopeLabel: string;    // z.B. "KW26 2026"
+  unitLabel: string;     // z.B. "Wochendaten" / "Monatsdaten" / "Jahresdaten"
+  historyCount: number;  // Anzahl abgeschlossener Tage, die tatsächlich gelöscht würden
+  hasLiveDay: boolean;   // ob ein noch laufender (nicht abgeschlossener) Tag mit eingeblendet ist
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }
@@ -21,12 +24,37 @@ function WarningIcon() {
   );
 }
 
-export function ReportResetDialog({ open, title, scopeLabel, onClose, onConfirm }: ReportResetDialogProps) {
+function InfoIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+      className="text-primaq-600" aria-hidden>
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 16v-4"/><path d="M12 8h.01"/>
+    </svg>
+  );
+}
+
+function dayWord(n: number): string {
+  return n === 1 ? "Tag" : "Tage";
+}
+
+export function ReportResetDialog({
+  open,
+  title,
+  scopeLabel,
+  unitLabel,
+  historyCount,
+  hasLiveDay,
+  onClose,
+  onConfirm,
+}: ReportResetDialogProps) {
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canConfirm = inputValue === "RESET";
+  const nothingToDelete = historyCount === 0;
 
   const handleConfirm = useCallback(async () => {
     if (!canConfirm || loading) return;
@@ -38,6 +66,7 @@ export function ReportResetDialog({ open, title, scopeLabel, onClose, onConfirm 
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reset fehlgeschlagen.");
+    } finally {
       setLoading(false);
     }
   }, [canConfirm, loading, onConfirm, onClose]);
@@ -50,6 +79,46 @@ export function ReportResetDialog({ open, title, scopeLabel, onClose, onConfirm 
   }, [loading, onClose]);
 
   if (!open) return null;
+
+  if (nothingToDelete) {
+    const message = hasLiveDay
+      ? `Es gibt keine abgeschlossenen ${unitLabel} zum Löschen. Der laufende Tag wird nicht gelöscht.`
+      : `Es gibt keine abgeschlossenen ${unitLabel} zum Löschen.`;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/40" onClick={handleClose} aria-hidden />
+        <div
+          role="dialog"
+          aria-modal="true"
+          data-testid="report-reset-dialog"
+          className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+        >
+          <div className="mb-5 flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primaq-100">
+              <InfoIcon />
+            </div>
+            <div>
+              <p className="text-base font-black text-black/90">{title}</p>
+              <p className="mt-0.5 text-sm text-black/60" data-testid="reset-dialog-message">
+                {message}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleClose}
+            data-testid="reset-close-info"
+            className="w-full rounded-xl bg-primaq-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primaq-700"
+          >
+            Schließen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const message = hasLiveDay
+    ? `Es werden nur abgeschlossene ${unitLabel} gelöscht (${historyCount} ${dayWord(historyCount)}). Der laufende Tag bleibt erhalten.`
+    : `Alle abgeschlossenen Daten für ${scopeLabel} werden gelöscht (${historyCount} ${dayWord(historyCount)}).`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -66,8 +135,8 @@ export function ReportResetDialog({ open, title, scopeLabel, onClose, onConfirm 
           </div>
           <div>
             <p className="text-base font-black text-black/90">{title}</p>
-            <p className="mt-0.5 text-sm text-black/60">
-              Alle Daten für <strong>{scopeLabel}</strong> werden gelöscht.
+            <p className="mt-0.5 text-sm text-black/60" data-testid="reset-dialog-message">
+              {message}
             </p>
           </div>
         </div>
@@ -98,7 +167,7 @@ export function ReportResetDialog({ open, title, scopeLabel, onClose, onConfirm 
         </label>
 
         {error && (
-          <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+          <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" data-testid="reset-error">
             {error}
           </p>
         )}

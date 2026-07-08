@@ -139,6 +139,15 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
   const vatCents   = totalCents - netCents;
   const hasData    = totalCents > 0;
 
+  // Only real, closed pos_year_history entries are ever deletable — a day
+  // slot with no summary at all has nothing to delete either, and was
+  // previously wrongly included here (any falsy `summary?.isLive` matched).
+  const historyDaysToDelete = useMemo(
+    () => weekDays.filter((d) => d.summary && !d.summary.isLive),
+    [weekDays]
+  );
+  const hasLiveDay = weekDays.some((d) => d.summary?.isLive);
+
   function prevWeek() {
     if (isoWeek === 1) {
       const newYear = isoYear - 1;
@@ -359,11 +368,15 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
         open={resetOpen}
         title={`${kw} ${isoYear} zurücksetzen`}
         scopeLabel={`${kw} ${isoYear} (${dateRangeLabel})`}
+        unitLabel="Wochendaten"
+        historyCount={historyDaysToDelete.length}
+        hasLiveDay={hasLiveDay}
         onClose={() => setResetOpen(false)}
         onConfirm={async () => {
-          // Exclude today's still-open live day — it has no pos_year_history
-          // entry to reset yet; use "Tagesdaten zurücksetzen" for that.
-          const dates = weekDays.filter((d) => !d.summary?.isLive).map((d) => d.dateStr);
+          // Only ever delete closed history days — the live, not-yet-closed
+          // day has no pos_year_history entry to reset yet; use
+          // "Tagesdaten zurücksetzen" for that.
+          const dates = historyDaysToDelete.map((d) => d.dateStr);
           await getSyncService().resetHistoryDates(dates);
         }}
       />

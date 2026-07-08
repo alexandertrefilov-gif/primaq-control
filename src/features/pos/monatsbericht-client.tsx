@@ -87,6 +87,8 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
   const [resetOpen, setResetOpen] = useState(false);
 
   const days = useMemo(() => daysOfMonth(history, year, month), [history, year, month]);
+  const historyDaysToDelete = useMemo(() => days.filter((d) => !d.isLive), [days]);
+  const hasLiveDay = days.some((d) => d.isLive);
 
   const totalCents = days.reduce((s, d) => s + d.totalCents, 0);
   const cashCents  = days.reduce((s, d) => s + d.cashCents,  0);
@@ -300,11 +302,16 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
       <ReportResetDialog
         open={resetOpen}
         title={`${monthLabel} ${year} zurücksetzen`}
-        scopeLabel={`${monthLabel} ${year} (${days.length} ${days.length === 1 ? "Tag" : "Tage"})`}
+        scopeLabel={`${monthLabel} ${year}`}
+        unitLabel="Monatsdaten"
+        historyCount={historyDaysToDelete.length}
+        hasLiveDay={hasLiveDay}
         onClose={() => setResetOpen(false)}
         onConfirm={async () => {
-          // Exclude today's still-open live day — use "Tagesdaten zurücksetzen" for that.
-          const dates = days.filter((d) => !d.isLive).map((d) => d.date);
+          // Only ever delete closed history days — the live, not-yet-closed
+          // day is never a deletable pos_year_history entry; use
+          // "Tagesdaten zurücksetzen" for that.
+          const dates = historyDaysToDelete.map((d) => d.date);
           await getSyncService().resetHistoryDates(dates);
         }}
       />
