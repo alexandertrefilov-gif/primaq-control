@@ -518,7 +518,7 @@ function SectionHeader({ title, accentActive = false }: { title: string; accentA
       )}>
         {title}
       </p>
-      <div className="mt-2 mb-3.5 h-px pos-divider" />
+      <div className="mt-1.5 mb-2 h-px pos-divider" />
     </div>
   );
 }
@@ -594,7 +594,7 @@ function SizeRow({
       data-guided-active={guidedMode && guidedActive ? "true" : undefined}
       className={cn(
         // h-full: fills its grid cell; vertical column of size tiles next to Sorten
-        "h-full flex flex-col gap-2 rounded-2xl pos-section overflow-hidden p-4 transition-all",
+        "h-full flex flex-col gap-1.5 rounded-2xl pos-section overflow-hidden p-3 transition-all",
         guidedMode && guidedActive && "guided-ring-pulse"
       )}
     >
@@ -613,7 +613,7 @@ function SizeRow({
       ) : (
         // Three full-width tiles sharing the remaining height equally — no
         // fixed card size, no centered leftover space; each tile IS the size.
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
           {effectiveSizes.map((size) => {
             const isActive = active;
             const bgColor = isActive ? (size.backgroundColor === "#ffffff" ? "#D9B15D" : size.backgroundColor) : size.backgroundColor;
@@ -625,7 +625,7 @@ function SizeRow({
                 data-testid={`size-btn-${size.id}`}
                 onClick={() => { if (isActive) onSizePick(size.id, size.priceCents); }}
                 className={cn(
-                  "pos-touch-tile relative flex w-full flex-1 min-h-0 flex-col items-center justify-center gap-1 overflow-hidden select-none",
+                  "pos-touch-tile relative flex w-full flex-1 min-h-0 flex-row items-center gap-3 overflow-hidden select-none px-3",
                   !isActive && "opacity-35 pointer-events-none cursor-not-allowed"
                 )}
                 style={{
@@ -635,16 +635,18 @@ function SizeRow({
                 aria-disabled={!isActive}
               >
                 {imgSrc && (
-                  <div className="relative w-full flex-1 min-h-0 flex items-center justify-center px-2 pt-2">
+                  <div className="relative h-full w-[35%] shrink-0 flex items-center justify-center py-2">
                     <FlavorImage src={imgSrc} scale={size.imageScale} className="drop-shadow-lg" />
                   </div>
                 )}
-                <span className="shrink-0 text-xl font-black leading-tight text-center" style={{ color: textColor }}>
-                  {size.name}
-                </span>
-                <span className="shrink-0 pb-1 text-lg font-black tabular-nums leading-none" style={{ color: textColor, opacity: isActive ? 0.82 : 1 }}>
-                  {fmt(size.priceCents)}
-                </span>
+                <div className="flex min-w-0 flex-1 flex-col items-start justify-center gap-1">
+                  <span className="w-full truncate text-left text-2xl font-black leading-tight" style={{ color: textColor }}>
+                    {size.name}
+                  </span>
+                  <span className="w-full truncate text-left text-lg font-black tabular-nums leading-none" style={{ color: textColor, opacity: isActive ? 0.82 : 1 }}>
+                    {fmt(size.priceCents)}
+                  </span>
+                </div>
               </button>
             );
           })}
@@ -778,7 +780,7 @@ function AmountBlock({
       data-testid="amount-zone"
       data-guided-active={guidedMode && guidedActive ? "true" : undefined}
       className={cn(
-        "h-full flex flex-col gap-2 rounded-2xl pos-section p-2 transition-all",
+        "h-full flex flex-col gap-1 rounded-2xl pos-section p-1.5 transition-all",
         guidedMode && guidedActive && "guided-ring-pulse ring-2 ring-[#00D6A3]/50",
         !active && "opacity-40 pointer-events-none"
       )}
@@ -789,7 +791,7 @@ function AmountBlock({
         <button
           data-testid="cash-minus"
           onClick={() => { if (active) onCashInput((Math.max(0, cashCents - 50) / 100).toFixed(2)); }}
-          className="h-14 w-14 shrink-0 grid place-items-center rounded-xl bg-red-500/20 text-red-400 text-2xl font-black transition-all hover:bg-red-500/30 active:scale-95 select-none"
+          className="h-11 w-11 shrink-0 grid place-items-center rounded-xl bg-red-500/20 text-red-400 text-2xl font-black transition-all hover:bg-red-500/30 active:scale-95 select-none"
         >−</button>
         <input
           type="number"
@@ -800,17 +802,17 @@ function AmountBlock({
           onChange={(e) => onCashInput(e.target.value)}
           placeholder="0,00"
           disabled={!active}
-          className="min-h-[56px] min-w-0 flex-1 rounded-xl border-2 px-3 text-center text-4xl font-black tabular-nums outline-none transition-all pos-input focus:ring-4 focus:ring-green-500/20"
+          className="min-h-[44px] min-w-0 flex-1 rounded-xl border-2 px-3 text-center text-3xl font-black tabular-nums outline-none transition-all pos-input focus:ring-4 focus:ring-green-500/20"
         />
         <button
           data-testid="cash-plus"
           onClick={() => { if (active) onCashInput(((cashCents + 50) / 100).toFixed(2)); }}
-          className="h-14 w-14 shrink-0 grid place-items-center rounded-xl bg-green-500/20 text-green-400 text-2xl font-black transition-all hover:bg-green-500/30 active:scale-95 select-none"
+          className="h-11 w-11 shrink-0 grid place-items-center rounded-xl bg-green-500/20 text-green-400 text-2xl font-black transition-all hover:bg-green-500/30 active:scale-95 select-none"
         >+</button>
         <button
           data-testid="cash-clear"
           onClick={() => { if (active) onCashInput(""); }}
-          className="h-14 w-14 shrink-0 grid place-items-center rounded-xl bg-orange-500/20 text-orange-400 text-xl font-black transition-all hover:bg-orange-500/30 active:scale-95 select-none"
+          className="h-11 w-11 shrink-0 grid place-items-center rounded-xl bg-orange-500/20 text-orange-400 text-xl font-black transition-all hover:bg-orange-500/30 active:scale-95 select-none"
         >C</button>
       </div>
 
@@ -819,14 +821,14 @@ function AmountBlock({
       </p>
       <div
         data-testid="quick-amounts-row"
-        className="flex flex-1 min-h-0 flex-wrap content-start gap-2 overflow-y-auto"
+        className="grid flex-1 min-h-0 grid-cols-3 auto-rows-fr gap-2"
       >
         {quickItems.map(({ cents, bgColor, textColor }) => (
           <button
             key={cents}
             data-testid={`quick-amount-${cents}`}
             onClick={() => { if (active) onCashInput(((cashCents + cents) / 100).toFixed(2)); }}
-            className="w-[calc(33.333%-6px)] shrink-0 rounded-xl min-h-[56px] flex flex-col items-center justify-center px-1 text-lg font-black leading-tight tracking-tight transition-all active:scale-95 select-none hover:brightness-110"
+            className="min-h-[60px] rounded-xl flex flex-col items-center justify-center px-1 text-xl font-black leading-tight tracking-tight transition-all active:scale-95 select-none hover:brightness-110"
             style={{ backgroundColor: bgColor, color: textColor }}
           >
             {fmt(cents)}
@@ -872,7 +874,7 @@ function PaymentBuchenBlock({
       data-testid="payment-zone"
       data-guided-active={guidedMode && guidedActive ? "true" : undefined}
       className={cn(
-        "h-full flex flex-col gap-2 rounded-2xl pos-section p-2 transition-all",
+        "h-full flex flex-col gap-2 rounded-2xl pos-section p-1.5 transition-all",
         guidedMode && guidedActive && "guided-ring-pulse ring-2 ring-green-400/40",
         !active && "opacity-40 pointer-events-none"
       )}
@@ -891,9 +893,9 @@ function PaymentBuchenBlock({
                   data-testid={`payment-tab-${m}`}
                   onClick={() => { if (active) onPaymentChange(m); }}
                   aria-disabled={!active}
-                  className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl transition-all duration-200 active:scale-[0.97] select-none"
+                  className="flex flex-1 flex-col items-center justify-center gap-2 rounded-2xl transition-all duration-200 active:scale-[0.97] select-none"
                   style={{
-                    minHeight: 64,
+                    minHeight: 80,
                     backgroundColor: isActive ? color : `${color}22`,
                     color: isActive ? "#ffffff" : color,
                     boxShadow: isActive
@@ -902,7 +904,7 @@ function PaymentBuchenBlock({
                   }}
                 >
                   {PAYMENT_ICONS[m]}
-                  <span className="text-base font-black leading-none">{PAYMENT_LABELS[m]}</span>
+                  <span className="text-lg font-black leading-none">{PAYMENT_LABELS[m]}</span>
                 </button>
               );
             })}
@@ -917,15 +919,16 @@ function PaymentBuchenBlock({
         </>
       )}
 
-      {/* Bestellung buchen – volle Breite, mindestens doppelt so breit wie
-          ein Zahlungsbutton und deutlich größer/ergonomischer als dieser */}
+      {/* Bestellung buchen – volle Breite, wichtigster Button der gesamten
+          Anwendung: füllt die gesamte nach den Zahlungsmittel-Tabs verbleibende
+          Höhe (statt per mt-auto nur ans untere Ende geschoben zu werden). */}
       <button
         data-testid="book-button"
         data-guided-ready={guidedMode && guidedActive && canBook ? "true" : undefined}
         onClick={onBook}
         disabled={!canBook}
         className={cn(
-          "mt-auto flex w-full items-center justify-center gap-2.5 rounded-2xl min-h-[72px] font-black transition-all select-none text-xl px-3",
+          "flex w-full flex-1 min-h-[96px] items-center justify-center gap-3 rounded-2xl font-black transition-all select-none text-2xl px-3",
           canBook
             ? "text-white shadow-lg hover:brightness-110 active:scale-[0.98]"
             : "pos-overlay pos-text-dim cursor-not-allowed",
@@ -933,7 +936,7 @@ function PaymentBuchenBlock({
         )}
         style={canBook ? { backgroundColor: bookColor } : undefined}
       >
-        <ShoppingCart className="h-7 w-7 shrink-0" aria-hidden />
+        <ShoppingCart className="h-9 w-9 shrink-0" aria-hidden />
         <span className="leading-tight text-center uppercase tracking-wide">
           {showPayment && paymentMethod === "qr" ? "QR anzeigen" : "Bestellung buchen"}
         </span>
