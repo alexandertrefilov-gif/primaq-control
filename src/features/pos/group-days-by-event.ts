@@ -2,20 +2,26 @@ import { calcNetForDay } from "./use-pos-vat-store";
 import type { ReportDay } from "./use-report-data";
 
 /**
- * A run of report days sharing the same eventName, in the order the report
- * period presents them (chronological). Days with no eventName are grouped
- * under `eventName: null` ("Ohne Einsatz").
+ * A run of report days belonging to the same event, in the order the report
+ * period presents them (chronological). Days with neither eventId nor
+ * eventName are grouped under `eventName: null` ("Ohne Einsatz").
  *
- * IMPORTANT limitation (no eventId in the data model — see use-report-data.ts
- * / pos-types.ts DailySummary): grouping is done by matching the `eventName`
- * string. Two genuinely different events that happen to share an identical
- * name are indistinguishable and will be merged into one group. A typo'd
- * name creates its own separate group instead of joining the intended one.
- * This is an accepted, documented trade-off for avoiding a data-model
- * migration (per-order/per-day eventId) — see PR/report notes.
+ * Grouping prefers `eventId` (set on days closed after the PlannedEvent
+ * model was introduced) and falls back to matching the `eventName` string
+ * for legacy days that only ever had a free-text name (see
+ * pos-types.ts DailySummary, event-types.ts PlannedEvent). This keeps old
+ * data fully visible and grouped exactly as before, without requiring any
+ * backfill — new data groups more precisely via the id.
+ *
+ * Residual limitation for legacy (id-less) days only: two genuinely
+ * different events that happen to share an identical name are still
+ * indistinguishable and will be merged into one name-based group. Any day
+ * with a real eventId is immune to that ambiguity.
  */
 export type EventGroup = {
-  /** Grouping key: the eventName, or null for "Ohne Einsatz". */
+  /** The eventId shared by this group's days, if any of them have one. */
+  eventId: string | null;
+  /** Display name — the eventName of the group's days. */
   eventName: string | null;
   days: ReportDay[];
   totalCents: number;
@@ -29,18 +35,25 @@ export type EventGroup = {
   hasLiveDay: boolean;
 };
 
+function groupKey(day: ReportDay): string {
+  if (day.eventId) return `id:${day.eventId}`;
+  if (day.eventName) return `name:${day.eventName}`;
+  return "none";
+}
+
 /**
- * Groups report days by eventName, preserving each group's first-occurrence
- * order (chronological, since callers pass days already date-sorted).
- * Only days that actually carry data (a ReportDay, not an empty calendar
- * slot) should be passed in — filter those out before calling this.
+ * Groups report days by eventId (falling back to eventName for legacy days
+ * without one), preserving each group's first-occurrence order (chronological,
+ * since callers pass days already date-sorted). Only days that actually carry
+ * data (a ReportDay, not an empty calendar slot) should be passed in — filter
+ * those out before calling this.
  */
 export function groupDaysByEvent(days: ReportDay[], fallbackVatRate: number): EventGroup[] {
-  const order: (string | null)[] = [];
-  const byKey = new Map<string | null, ReportDay[]>();
+  const order: string[] = [];
+  const byKey = new Map<string, ReportDay[]>();
 
   for (const day of days) {
-    const key = day.eventName ?? null;
+    const key = groupKey(day);
     if (!byKey.has(key)) {
       byKey.set(key, []);
       order.push(key);
@@ -56,8 +69,10 @@ export function groupDaysByEvent(days: ReportDay[], fallbackVatRate: number): Ev
     const qrCents = groupDays.reduce((s, d) => s + d.qrCents, 0);
     const orderCount = groupDays.reduce((s, d) => s + d.orderCount, 0);
     const netCents = groupDays.reduce((s, d) => s + calcNetForDay(d, fallbackVatRate), 0);
+    const first = groupDays[0];
     return {
-      eventName: key,
+      eventId: first.eventId ?? null,
+      eventName: first.eventName ?? null,
       days: groupDays,
       totalCents,
       cashCents,

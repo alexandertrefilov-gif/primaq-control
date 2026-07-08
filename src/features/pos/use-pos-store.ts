@@ -150,12 +150,49 @@ export function usePosStore() {
     });
   }, []);
 
+  // Manual free-text entry always wins over — and detaches from — a
+  // previously auto-linked/selected PlannedEvent, since the typed text may no
+  // longer match that event's name.
   const setEventName = useCallback((name: string | null) => {
     setState((current) => ({
       ...current,
-      daily: { ...current.daily, eventName: name ?? undefined },
+      daily: {
+        ...current.daily,
+        eventName: name ?? undefined,
+        eventId: undefined,
+        eventStartDate: undefined,
+        eventEndDate: undefined,
+        eventDayIndex: undefined,
+        eventTotalDays: undefined,
+      },
     }));
   }, []);
+
+  /** Links today to a specific PlannedEvent (auto-detected or user-selected). */
+  const setEventDetails = useCallback(
+    (details: {
+      eventId: string;
+      eventName: string;
+      eventStartDate: string;
+      eventEndDate: string;
+      eventDayIndex: number;
+      eventTotalDays: number;
+    } | null) => {
+      setState((current) => ({
+        ...current,
+        daily: {
+          ...current.daily,
+          eventName: details?.eventName ?? undefined,
+          eventId: details?.eventId ?? undefined,
+          eventStartDate: details?.eventStartDate ?? undefined,
+          eventEndDate: details?.eventEndDate ?? undefined,
+          eventDayIndex: details?.eventDayIndex ?? undefined,
+          eventTotalDays: details?.eventTotalDays ?? undefined,
+        },
+      }));
+    },
+    []
+  );
 
   const resetDaily = useCallback(() => {
     setState((current) => ({ ...current, daily: emptyDaily() }));
@@ -194,6 +231,7 @@ export function usePosStore() {
     clearCart,
     bookOrder,
     setEventName,
+    setEventDetails,
     resetDaily,
     voidLastOrder,
   };

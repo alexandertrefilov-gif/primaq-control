@@ -10,6 +10,7 @@ import { groupDaysByEvent } from "./group-days-by-event";
 import { getFlavorName, getItemSizeName } from "./pos-config";
 import { usePosVatStore, calcNetForDay, effectiveVatRate } from "./use-pos-vat-store";
 import { useEventPlanStore } from "./use-event-plan-store";
+import { eventTotalDays, isDateWithinEvent, type PlannedEvent } from "./event-types";
 import { getSyncService } from "@/lib/sync/sync-service";
 import type { DailySummary } from "./pos-types";
 
@@ -295,18 +296,25 @@ function PaymentBar({ label, cents, total }: { label: string; cents: number; tot
 
 const DAYS_HEADER = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
+type EventDraft = {
+  eventId: string | null; // null while creating a brand-new event
+  eventName: string;
+  startDate: string;
+  endDate: string;
+  location: string;
+};
+
 function EventPlanTab() {
-  const { events, saveEvent, removeEvent } = useEventPlanStore();
+  const { events, createEvent, updateEvent, removeEvent } = useEventPlanStore();
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
   const [calYear, setCalYear] = useState(today.getFullYear());
   const [calMonth, setCalMonth] = useState(today.getMonth()); // 0-11
-  const [editDate, setEditDate] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
+  const [draft, setDraft] = useState<EventDraft | null>(null);
 
-  const eventMap = useMemo(() => new Map(events.map((e) => [e.date, e.name])), [events]);
+  // Events that overlap the currently displayed year at all (for the list below).
   const yearEvents = useMemo(
-    () => events.filter((e) => e.date.startsWith(String(calYear))),
+    () => events.filter((e) => e.startDate.slice(0, 4) === String(calYear) || e.endDate.slice(0, 4) === String(calYear)),
     [events, calYear]
   );
 
@@ -327,31 +335,60 @@ function EventPlanTab() {
     else setCalMonth((m) => m + 1);
   }
 
+  function eventForDate(dateStr: string): PlannedEvent | undefined {
+    return events.find((e) => isDateWithinEvent(e, dateStr));
+  }
+
   function openDay(dayNum: number) {
     const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-    setEditDate(dateStr);
-    setEditName(eventMap.get(dateStr) ?? "");
+    const existing = eventForDate(dateStr);
+    if (existing) {
+      setDraft({
+        eventId: existing.eventId,
+        eventName: existing.eventName,
+        startDate: existing.startDate,
+        endDate: existing.endDate,
+        location: existing.location ?? "",
+      });
+    } else {
+      setDraft({ eventId: null, eventName: "", startDate: dateStr, endDate: dateStr, location: "" });
+    }
+  }
+
+  function openEditFromList(event: PlannedEvent) {
+    setCalYear(parseInt(event.startDate.slice(0, 4)));
+    setCalMonth(parseInt(event.startDate.slice(5, 7)) - 1);
+    setDraft({
+      eventId: event.eventId,
+      eventName: event.eventName,
+      startDate: event.startDate,
+      endDate: event.endDate,
+      location: event.location ?? "",
+    });
+  }
+
+  function closeDraft() {
+    setDraft(null);
   }
 
   function handleSave() {
-    if (!editDate || !editName.trim()) return;
-    saveEvent({ date: editDate, name: editName.trim() });
-    setEditDate(null);
-    setEditName("");
+    if (!draft || !draft.eventName.trim()) return;
+    const startDate = draft.startDate;
+    // Never allow endDate < startDate — clamp instead of rejecting the save.
+    const endDate = draft.endDate < startDate ? startDate : draft.endDate;
+    const location = draft.location.trim() || undefined;
+    if (draft.eventId) {
+      updateEvent(draft.eventId, { eventName: draft.eventName.trim(), startDate, endDate, location });
+    } else {
+      createEvent({ eventName: draft.eventName.trim(), startDate, endDate, location });
+    }
+    closeDraft();
   }
 
   function handleDelete() {
-    if (!editDate) return;
-    removeEvent(editDate);
-    setEditDate(null);
-    setEditName("");
-  }
-
-  function openEditFromList(date: string, name: string) {
-    setCalYear(parseInt(date.slice(0, 4)));
-    setCalMonth(parseInt(date.slice(5, 7)) - 1);
-    setEditDate(date);
-    setEditName(name);
+    if (!draft?.eventId) return;
+    removeEvent(draft.eventId);
+    closeDraft();
   }
 
   return (
@@ -381,7 +418,8 @@ function EventPlanTab() {
         </button>
       </div>
 
-      {/* Calendar grid */}
+      {/* Calendar grid — multi-day events render as a connected bar across the
+          week row(s) they span, not just isolated dots per day. */}
       <div className="rounded-2xl bg-white shadow overflow-hidden">
         <div className="grid grid-cols-7 border-b border-black/5">
           {DAYS_HEADER.map((d) => (
@@ -399,30 +437,41 @@ function EventPlanTab() {
               return <div key={i} className="aspect-square" />;
             }
             const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-            const hasEvent = eventMap.has(dateStr);
+            const event = eventForDate(dateStr);
             const isToday = dateStr === todayStr;
-            const isEditing = editDate === dateStr;
+            const isEditing = draft?.startDate === dateStr && !draft.eventId;
+            const isEditingExisting = draft?.eventId && event?.eventId === draft.eventId;
+            const col = i % 7;
+            const isRowStart = col === 0 || dateStr === event?.startDate;
+            const isRowEnd = col === 6 || dateStr === event?.endDate;
             return (
               <button
                 key={i}
                 data-testid={`cal-day-${dateStr}`}
                 onClick={() => openDay(dayNum)}
-                className={`flex flex-col items-center gap-0.5 py-2.5 transition-colors hover:bg-black/5 ${isEditing ? "bg-primaq-50" : ""}`}
+                className={`relative flex flex-col items-center gap-0.5 py-2.5 transition-colors hover:bg-black/5 ${
+                  isEditing || isEditingExisting ? "ring-2 ring-inset ring-primaq-400" : ""
+                }`}
               >
+                {event && (
+                  <span
+                    aria-hidden
+                    className={`absolute inset-y-1 left-0 right-0 -z-10 bg-primaq-100 ${
+                      isRowStart ? "rounded-l-lg" : ""
+                    } ${isRowEnd ? "rounded-r-lg" : ""}`}
+                  />
+                )}
                 <span
                   className={`text-sm font-semibold leading-none ${
                     isToday
                       ? "flex h-7 w-7 items-center justify-center rounded-full bg-primaq-500 text-white"
-                      : hasEvent
+                      : event
                         ? "text-primaq-700"
                         : "text-ink"
                   }`}
                 >
                   {dayNum}
                 </span>
-                {hasEvent && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-primaq-500" />
-                )}
               </button>
             );
           })}
@@ -430,37 +479,70 @@ function EventPlanTab() {
       </div>
 
       {/* Edit / Add form */}
-      {editDate && (
+      {draft && (
         <div
           data-testid="event-plan-form"
           className="rounded-2xl border border-primaq-200 bg-primaq-50 p-4 space-y-3"
         >
           <p className="text-[11px] font-bold uppercase tracking-widest text-primaq-700/60">
-            {editDate} · {eventMap.has(editDate) ? "Einsatz bearbeiten" : "Neuer Einsatz"}
+            {draft.startDate === draft.endDate ? draft.startDate : `${draft.startDate} – ${draft.endDate}`}
+            {" · "}
+            {draft.eventId ? "Einsatz bearbeiten" : "Neuer Einsatz"}
           </p>
           <input
             data-testid="event-plan-name-input"
             type="text"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
+            value={draft.eventName}
+            onChange={(e) => setDraft({ ...draft, eventName: e.target.value })}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSave();
-              if (e.key === "Escape") { setEditDate(null); setEditName(""); }
+              if (e.key === "Escape") closeDraft();
             }}
             placeholder="Name des Einsatzes"
             autoFocus
+            className="w-full rounded-xl border border-primaq-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink placeholder-black/25 focus:border-primaq-500 focus:outline-none focus:ring-2 focus:ring-primaq-500/20"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-xs font-bold text-black/50">Startdatum</span>
+              <input
+                data-testid="event-plan-start-input"
+                type="date"
+                value={draft.startDate}
+                onChange={(e) => setDraft({ ...draft, startDate: e.target.value })}
+                className="mt-1 w-full rounded-xl border border-primaq-200 bg-white px-3 py-2 text-sm font-semibold text-ink focus:border-primaq-500 focus:outline-none focus:ring-2 focus:ring-primaq-500/20"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-bold text-black/50">Enddatum</span>
+              <input
+                data-testid="event-plan-end-input"
+                type="date"
+                value={draft.endDate}
+                min={draft.startDate}
+                onChange={(e) => setDraft({ ...draft, endDate: e.target.value })}
+                className="mt-1 w-full rounded-xl border border-primaq-200 bg-white px-3 py-2 text-sm font-semibold text-ink focus:border-primaq-500 focus:outline-none focus:ring-2 focus:ring-primaq-500/20"
+              />
+            </label>
+          </div>
+          <input
+            data-testid="event-plan-location-input"
+            type="text"
+            value={draft.location}
+            onChange={(e) => setDraft({ ...draft, location: e.target.value })}
+            placeholder="Ort (optional)"
             className="w-full rounded-xl border border-primaq-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink placeholder-black/25 focus:border-primaq-500 focus:outline-none focus:ring-2 focus:ring-primaq-500/20"
           />
           <div className="flex gap-2">
             <button
               data-testid="event-plan-save"
               onClick={handleSave}
-              disabled={!editName.trim()}
+              disabled={!draft.eventName.trim()}
               className="rounded-xl bg-primaq-500 px-4 py-2 text-sm font-bold text-white hover:bg-primaq-700 disabled:bg-black/10 disabled:text-black/30 transition-colors"
             >
               Speichern
             </button>
-            {eventMap.has(editDate) && (
+            {draft.eventId && (
               <button
                 data-testid="event-plan-delete"
                 onClick={handleDelete}
@@ -470,7 +552,7 @@ function EventPlanTab() {
               </button>
             )}
             <button
-              onClick={() => { setEditDate(null); setEditName(""); }}
+              onClick={closeDraft}
               className="ml-auto rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-bold text-black/50 hover:bg-black/5 transition-colors"
             >
               Abbrechen
@@ -496,34 +578,51 @@ function EventPlanTab() {
           </p>
         ) : (
           <div className="divide-y divide-black/5">
-            {yearEvents.map((ev) => (
-              <div
-                key={ev.date}
-                data-testid={`event-plan-item-${ev.date}`}
-                className="flex items-center gap-3 px-5 py-3"
-              >
-                <span className="shrink-0 rounded-lg bg-primaq-50 px-2.5 py-1 text-xs font-black tabular-nums text-primaq-700">
-                  {ev.date}
-                </span>
-                <span className="flex-1 min-w-0 truncate text-sm font-semibold text-ink">
-                  {ev.name}
-                </span>
-                <button
-                  data-testid={`event-plan-edit-${ev.date}`}
-                  onClick={() => openEditFromList(ev.date, ev.name)}
-                  className="shrink-0 rounded-lg border border-black/10 bg-white px-3 py-1 text-xs font-bold text-black/50 hover:bg-black/5 transition-colors"
+            {yearEvents.map((ev) => {
+              const totalDays = eventTotalDays(ev);
+              return (
+                <div
+                  key={ev.eventId}
+                  data-testid={`event-plan-item-${ev.eventId}`}
+                  className="flex items-center gap-3 px-5 py-3"
                 >
-                  Bearb.
-                </button>
-                <button
-                  data-testid={`event-plan-remove-${ev.date}`}
-                  onClick={() => removeEvent(ev.date)}
-                  className="shrink-0 rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-bold text-red-500 hover:bg-red-50 transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
+                  <span className="shrink-0 rounded-lg bg-primaq-50 px-2.5 py-1 text-xs font-black tabular-nums text-primaq-700">
+                    {ev.startDate === ev.endDate ? ev.startDate : `${ev.startDate} – ${ev.endDate}`}
+                  </span>
+                  <span className="flex-1 min-w-0 truncate text-sm font-semibold text-ink">
+                    {ev.eventName}
+                    {totalDays > 1 && (
+                      <span className="ml-1.5 text-xs font-bold text-black/35">({totalDays} Tage)</span>
+                    )}
+                  </span>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${
+                      ev.status === "running"
+                        ? "bg-primaq-100 text-primaq-700"
+                        : ev.status === "completed"
+                          ? "bg-black/5 text-black/40"
+                          : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {ev.status === "running" ? "läuft" : ev.status === "completed" ? "beendet" : "geplant"}
+                  </span>
+                  <button
+                    data-testid={`event-plan-edit-${ev.eventId}`}
+                    onClick={() => openEditFromList(ev)}
+                    className="shrink-0 rounded-lg border border-black/10 bg-white px-3 py-1 text-xs font-bold text-black/50 hover:bg-black/5 transition-colors"
+                  >
+                    Bearb.
+                  </button>
+                  <button
+                    data-testid={`event-plan-remove-${ev.eventId}`}
+                    onClick={() => removeEvent(ev.eventId)}
+                    className="shrink-0 rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-bold text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -533,11 +632,19 @@ function EventPlanTab() {
         data-testid="event-plan-add-btn"
         onClick={() => {
           const prefix = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
-          const d = todayStr.startsWith(prefix)
-            ? todayStr
-            : `${prefix}-01`;
-          setEditDate(d);
-          setEditName(eventMap.get(d) ?? "");
+          const d = todayStr.startsWith(prefix) ? todayStr : `${prefix}-01`;
+          const existing = eventForDate(d);
+          setDraft(
+            existing
+              ? {
+                  eventId: existing.eventId,
+                  eventName: existing.eventName,
+                  startDate: existing.startDate,
+                  endDate: existing.endDate,
+                  location: existing.location ?? "",
+                }
+              : { eventId: null, eventName: "", startDate: d, endDate: d, location: "" }
+          );
         }}
         className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primaq-200 px-5 py-3 text-sm font-bold text-primaq-600 hover:border-primaq-400 hover:bg-primaq-50/50 transition-colors"
       >
@@ -552,7 +659,7 @@ function EventPlanTab() {
 
 type ResetTarget =
   | { kind: "period" }
-  | { kind: "event"; eventName: string | null }
+  | { kind: "event"; eventId: string | null; eventName: string | null }
   | { kind: "day"; date: string };
 
 export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }) {
@@ -598,7 +705,9 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
       };
     }
     if (resetTarget.kind === "event") {
-      const group = eventGroups.find((g) => g.eventName === resetTarget.eventName);
+      const group = eventGroups.find((g) =>
+        resetTarget.eventId ? g.eventId === resetTarget.eventId : g.eventName === resetTarget.eventName
+      );
       const deletable = (group?.days ?? []).filter((d) => !d.isLive);
       return {
         title: `${resetTarget.eventName ?? "Ohne Einsatz"} löschen`,
@@ -825,10 +934,12 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
                   </tr>
                 </thead>
                 <tbody>
-                  {eventGroups.map((group) => (
-                    <Fragment key={`group-${group.eventName ?? "none"}`}>
+                  {eventGroups.map((group) => {
+                    const groupKey = group.eventId ?? group.eventName ?? "ohne-einsatz";
+                    return (
+                    <Fragment key={`group-${groupKey}`}>
                       <tr
-                        data-testid={`year-event-group-${group.eventName ?? "ohne-einsatz"}`}
+                        data-testid={`year-event-group-${groupKey}`}
                         className="border-b border-black/5 bg-primaq-50/60"
                       >
                         <td className="px-5 py-2.5 font-black text-ink">
@@ -849,8 +960,8 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
                         <td className="px-3 py-2.5 text-right">
                           {isAdmin && group.days.some((d) => !d.isLive) && (
                             <button
-                              data-testid={`delete-event-${group.eventName ?? "ohne-einsatz"}`}
-                              onClick={() => setResetTarget({ kind: "event", eventName: group.eventName })}
+                              data-testid={`year-delete-event-${groupKey}`}
+                              onClick={() => setResetTarget({ kind: "event", eventId: group.eventId, eventName: group.eventName })}
                               className="rounded-lg p-1.5 text-black/30 transition-colors hover:bg-red-50 hover:text-red-600"
                               aria-label={`${group.eventName ?? "Ohne Einsatz"} löschen`}
                             >
@@ -861,7 +972,14 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
                       </tr>
                       {group.days.map((d) => (
                         <tr key={d.date} data-testid={`year-day-row-${d.date}`} className="border-b border-black/5">
-                          <td className="px-5 py-2 pl-8 text-ink tabular-nums">{d.date}</td>
+                          <td className="px-5 py-2 pl-8 text-ink tabular-nums">
+                            {d.date}
+                            {d.eventTotalDays && d.eventTotalDays > 1 && (
+                              <span className="ml-1.5 text-[10px] font-bold text-black/35">
+                                Tag {d.eventDayIndex} von {d.eventTotalDays}
+                              </span>
+                            )}
+                          </td>
                           <td className="px-4 py-2 text-right font-bold text-ink tabular-nums">{fmt(d.totalCents)}</td>
                           <td className="px-4 py-2 text-right tabular-nums text-black/60">
                             {d.cashCents > 0 ? fmt(d.cashCents) : "—"}
@@ -882,7 +1000,7 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
                           <td className="px-3 py-2 text-right">
                             {isAdmin && !d.isLive && (
                               <button
-                                data-testid={`delete-day-${d.date}`}
+                                data-testid={`year-delete-day-${d.date}`}
                                 onClick={() => setResetTarget({ kind: "day", date: d.date })}
                                 className="rounded-lg p-1.5 text-black/25 transition-colors hover:bg-red-50 hover:text-red-600"
                                 aria-label={`Tagesabschluss ${d.date} löschen`}
@@ -894,7 +1012,8 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
                         </tr>
                       ))}
                     </Fragment>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -9,6 +9,7 @@ import { useAdmin } from "./admin-context";
 import { getFlavorName, getItemSizeName } from "./pos-config";
 import { usePosVatStore, calcNet } from "./use-pos-vat-store";
 import { useEventPlanStore } from "./use-event-plan-store";
+import { eventDayIndex, eventTotalDays, isDateWithinEvent, type PlannedEvent } from "./event-types";
 import type { DailySummary } from "./pos-types";
 
 function fmt(cents: number): string {
@@ -84,19 +85,34 @@ function downloadCsv(
   URL.revokeObjectURL(url);
 }
 
+function linkDetailsFor(event: PlannedEvent, date: string) {
+  return {
+    eventId: event.eventId,
+    eventName: event.eventName,
+    eventStartDate: event.startDate,
+    eventEndDate: event.endDate,
+    eventDayIndex: eventDayIndex(event, date)!,
+    eventTotalDays: eventTotalDays(event),
+  };
+}
+
 export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
-  const { daily, resetDaily, setEventName, hydrated } = usePosStore();
+  const { daily, resetDaily, setEventName, setEventDetails, hydrated } = usePosStore();
   const { saveDay } = usePosYearStore();
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
   const { vatRate, setVatRate, hydrated: vatHydrated } = usePosVatStore();
-  const { events: eventPlans, hydrated: eventPlanHydrated } = useEventPlanStore();
+  const { events: eventPlans, hydrated: eventPlanHydrated, createEvent } = useEventPlanStore();
   const [confirming, setConfirming] = useState(false);
   const [startCashInput, setStartCashInput] = useState("");
   const [bankDepositInput, setBankDepositInput] = useState("");
   const [eventInput, setEventInput] = useState("");
   const [eventToast, setEventToast] = useState<string | null>(null);
+  const [showEventPicker, setShowEventPicker] = useState(false);
 
-  // Initialise input from stored value after hydration; auto-fill from plan if no name set
+  // Planned events whose [startDate, endDate] range covers today.
+  const matchingEvents = eventPlans.filter((e) => isDateWithinEvent(e, daily.date));
+
+  // Initialise input from stored value after hydration; auto-fill from plan if no name set.
   useEffect(() => {
     if (!hydrated || !eventPlanHydrated) return;
     const stored = daily.eventName ?? null;
@@ -104,10 +120,12 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
       setEventInput(stored);
       return;
     }
-    const plan = eventPlans.find((e) => e.date === daily.date);
-    if (plan) {
-      setEventInput(plan.name);
-      setEventName(plan.name);
+    if (matchingEvents.length === 1) {
+      const event = matchingEvents[0];
+      setEventDetails(linkDetailsFor(event, daily.date));
+      setEventInput(event.eventName);
+    } else if (matchingEvents.length > 1) {
+      setShowEventPicker(true);
     }
   }, [hydrated, eventPlanHydrated]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -118,6 +136,28 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
     setEventToast(msg);
     setTimeout(() => setEventToast(null), 2500);
   }, [eventInput, setEventName]);
+
+  const handlePickEvent = useCallback(
+    (event: PlannedEvent) => {
+      setEventDetails(linkDetailsFor(event, daily.date));
+      setEventInput(event.eventName);
+      setShowEventPicker(false);
+    },
+    [daily.date, setEventDetails]
+  );
+
+  const handleCreateFromManual = useCallback(() => {
+    const name = eventInput.trim();
+    if (!name) return;
+    const event = createEvent({ eventName: name, startDate: daily.date, endDate: daily.date });
+    setEventDetails(linkDetailsFor(event, daily.date));
+    setEventToast("Neue Veranstaltung angelegt und verknüpft");
+    setTimeout(() => setEventToast(null), 2500);
+  }, [eventInput, daily.date, createEvent, setEventDetails]);
+
+  // Manual entry can offer "create as new event" once there's a typed name,
+  // no plan already linked, and no plan matches today anyway.
+  const canOfferCreate = eventInput.trim().length > 0 && !daily.eventId && matchingEvents.length === 0;
 
   const handleReset = useCallback(() => {
     if (!isAdmin) return;
@@ -176,6 +216,36 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
         <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-black/40">
           Einsatz / Veranstaltung
         </p>
+
+        {showEventPicker && matchingEvents.length > 1 && (
+          <div data-testid="event-picker" className="mb-3 rounded-xl border border-primaq-200 bg-primaq-50 p-3">
+            <p className="mb-2 text-xs font-bold text-primaq-700">
+              Mehrere geplante Veranstaltungen für heute — bitte auswählen:
+            </p>
+            <div className="space-y-1.5">
+              {matchingEvents.map((event) => (
+                <button
+                  key={event.eventId}
+                  data-testid={`event-picker-option-${event.eventId}`}
+                  onClick={() => handlePickEvent(event)}
+                  className="flex w-full items-center justify-between rounded-lg border border-primaq-200 bg-white px-3 py-2 text-left text-sm font-semibold text-ink hover:bg-primaq-50 transition-colors"
+                >
+                  <span>{event.eventName}</span>
+                  <span className="text-xs font-normal text-black/40">
+                    {event.startDate === event.endDate ? event.startDate : `${event.startDate} – ${event.endDate}`}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {daily.eventId && daily.eventTotalDays && daily.eventTotalDays > 1 && (
+          <p data-testid="event-day-index" className="mb-2 text-xs font-bold text-primaq-600">
+            Tag {daily.eventDayIndex} von {daily.eventTotalDays} · {daily.eventStartDate} – {daily.eventEndDate}
+          </p>
+        )}
+
         <div className="flex gap-2">
           <input
             type="text"
@@ -200,6 +270,15 @@ export function DailyClosePage({ guestAccess }: { guestAccess?: boolean }) {
             {daily.eventName ?? "—"}
           </span>
         </p>
+        {canOfferCreate && (
+          <button
+            data-testid="event-plan-create-from-manual"
+            onClick={handleCreateFromManual}
+            className="mt-2 rounded-lg border border-primaq-200 bg-white px-3 py-1.5 text-xs font-bold text-primaq-600 hover:bg-primaq-50 transition-colors"
+          >
+            Als neue Veranstaltung für heute anlegen
+          </button>
+        )}
         {eventToast && (
           <p className="mt-2 rounded-xl bg-green-50 px-3 py-2 text-xs font-bold text-green-700">
             {eventToast}

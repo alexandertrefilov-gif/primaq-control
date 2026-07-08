@@ -112,7 +112,7 @@ function triggerDownload(content: string, filename: string) {
 
 type ResetTarget =
   | { kind: "period" }
-  | { kind: "event"; eventName: string | null }
+  | { kind: "event"; eventId: string | null; eventName: string | null }
   | { kind: "day"; date: string };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -184,7 +184,9 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
       };
     }
     if (resetTarget.kind === "event") {
-      const group = eventGroups.find((g) => g.eventName === resetTarget.eventName);
+      const group = eventGroups.find((g) =>
+        resetTarget.eventId ? g.eventId === resetTarget.eventId : g.eventName === resetTarget.eventName
+      );
       const deletable = (group?.days ?? []).filter((d) => !d.isLive);
       return {
         title: `${resetTarget.eventName ?? "Ohne Einsatz"} löschen`,
@@ -334,10 +336,12 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
                 </tr>
               </thead>
               <tbody>
-                {eventGroups.map((group) => (
-                  <Fragment key={`group-${group.eventName ?? "none"}`}>
+                {eventGroups.map((group) => {
+                  const groupKey = group.eventId ?? group.eventName ?? "ohne-einsatz";
+                  return (
+                  <Fragment key={`group-${groupKey}`}>
                     <tr
-                      data-testid={`week-event-group-${group.eventName ?? "ohne-einsatz"}`}
+                      data-testid={`week-event-group-${groupKey}`}
                       className="border-b border-black/5 bg-primaq-50/60"
                     >
                       <td className="px-5 py-2.5 font-black text-ink" colSpan={2}>
@@ -358,8 +362,8 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
                       <td className="px-3 py-2.5 text-right">
                         {isAdmin && group.days.some((d) => !d.isLive) && (
                           <button
-                            data-testid={`delete-event-${group.eventName ?? "ohne-einsatz"}`}
-                            onClick={() => setResetTarget({ kind: "event", eventName: group.eventName })}
+                            data-testid={`week-delete-event-${groupKey}`}
+                            onClick={() => setResetTarget({ kind: "event", eventId: group.eventId, eventName: group.eventName })}
                             className="rounded-lg p-1.5 text-black/30 transition-colors hover:bg-red-50 hover:text-red-600"
                             aria-label={`${group.eventName ?? "Ohne Einsatz"} löschen`}
                           >
@@ -370,7 +374,14 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
                     </tr>
                     {group.days.map((d) => (
                       <tr key={d.date} data-testid={`week-day-row-${d.date}`} className="border-b border-black/5">
-                        <td className="px-5 py-2 pl-8 text-ink tabular-nums">{d.date}</td>
+                        <td className="px-5 py-2 pl-8 text-ink tabular-nums">
+                          {d.date}
+                          {d.eventTotalDays && d.eventTotalDays > 1 && (
+                            <span className="ml-1.5 text-[10px] font-bold text-black/35">
+                              Tag {d.eventDayIndex} von {d.eventTotalDays}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-2 text-black/60">{WEEKDAY_BY_DATE.get(d.date) ?? ""}</td>
                         <td className="px-4 py-2 text-right font-bold text-ink tabular-nums">{fmt(d.totalCents)}</td>
                         <td className="px-4 py-2 text-right tabular-nums text-black/60">
@@ -392,7 +403,7 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
                         <td className="px-3 py-2 text-right">
                           {isAdmin && !d.isLive && (
                             <button
-                              data-testid={`delete-day-${d.date}`}
+                              data-testid={`week-delete-day-${d.date}`}
                               onClick={() => setResetTarget({ kind: "day", date: d.date })}
                               className="rounded-lg p-1.5 text-black/25 transition-colors hover:bg-red-50 hover:text-red-600"
                               aria-label={`Tagesabschluss ${d.date} löschen`}
@@ -404,7 +415,8 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
                       </tr>
                     ))}
                   </Fragment>
-                ))}
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="bg-black/[0.02] font-bold">
