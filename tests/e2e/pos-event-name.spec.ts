@@ -168,7 +168,9 @@ test("EVT 5 – Wochenbericht zeigt Einsatzname in Tabellenspalte", async ({ pag
 
   const row = page.getByTestId(`week-day-row-${date}`);
   await expect(row).toBeVisible();
-  await expect(row).toContainText("Firmenfeier Bosch");
+  // Der Einsatzname steht jetzt in der Gruppen-Kopfzeile (Ebene 1: Einsatz),
+  // nicht mehr in der einzelnen Tageszeile (Ebene 2: Tage).
+  await expect(page.getByTestId("week-event-group-Firmenfeier Bosch")).toContainText("Firmenfeier Bosch");
 });
 
 test("EVT 6 – Monatsbericht zeigt Einsatzname in Tabellenspalte", async ({ page }) => {
@@ -188,7 +190,9 @@ test("EVT 6 – Monatsbericht zeigt Einsatzname in Tabellenspalte", async ({ pag
 
   const row = page.getByTestId(`month-day-row-${date}`);
   await expect(row).toBeVisible();
-  await expect(row).toContainText("Parkplatz Verkauf");
+  // Der Einsatzname steht jetzt in der Gruppen-Kopfzeile (Ebene 1: Einsatz),
+  // nicht mehr in der einzelnen Tageszeile (Ebene 2: Tage).
+  await expect(page.getByTestId("month-event-group-Parkplatz Verkauf")).toContainText("Parkplatz Verkauf");
 });
 
 test("EVT 7 – CSV-Download enthält Einsatzname (Tagesabschluss)", async ({ page }) => {

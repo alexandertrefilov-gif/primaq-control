@@ -110,8 +110,11 @@ test("MERGE 1 – Wochenbericht zeigt laufenden Einsatz ohne Tagesabschluss", as
 
   const row = page.getByTestId(`week-day-row-${todayStr()}`);
   await expect(row).toBeVisible();
-  await expect(row).toContainText("Stuttgart Lichterfest");
-  await expect(row).toContainText("läuft");
+  // Einsatzname und "läuft"-Badge stehen in der Gruppen-Kopfzeile (Ebene 1),
+  // die Tageszeile selbst (Ebene 2) zeigt nur noch Datum/Zahlen.
+  const group = page.getByTestId("week-event-group-Stuttgart Lichterfest");
+  await expect(group).toContainText("Stuttgart Lichterfest");
+  await expect(group).toContainText("läuft");
 });
 
 test("MERGE 2 – Monatsbericht zeigt laufenden Einsatz ohne Tagesabschluss", async ({ page }) => {
@@ -127,7 +130,8 @@ test("MERGE 2 – Monatsbericht zeigt laufenden Einsatz ohne Tagesabschluss", as
 
   const row = page.getByTestId(`month-day-row-${todayStr()}`);
   await expect(row).toBeVisible();
-  await expect(row).toContainText("Parkfest Esslingen");
+  // Einsatzname steht in der Gruppen-Kopfzeile (Ebene 1: Einsatz).
+  await expect(page.getByTestId("month-event-group-Parkfest Esslingen")).toContainText("Parkfest Esslingen");
 });
 
 test("MERGE 3 – Jahresabschluss-CSV enthält laufenden Einsatz ohne Tagesabschluss", async ({ page }) => {
@@ -204,8 +208,10 @@ test("MERGE 4 – Nach Tagesabschluss verschwindet läuft-Badge, kein Doppel-Ein
 
   const row = page.getByTestId(`week-day-row-${todayStr()}`);
   await expect(row).toBeVisible();
-  await expect(row).toContainText("Nachtmarkt Tübingen");
-  await expect(row).not.toContainText("läuft");
+  // Einsatzname + "läuft"-Badge stehen in der Gruppen-Kopfzeile (Ebene 1).
+  const group = page.getByTestId("week-event-group-Nachtmarkt Tübingen");
+  await expect(group).toContainText("Nachtmarkt Tübingen");
+  await expect(group).not.toContainText("läuft");
 
   // Exactly one row for today — not duplicated between history and live merge.
   await expect(page.getByTestId(`week-day-row-${todayStr()}`)).toHaveCount(1);
@@ -221,8 +227,9 @@ test("MERGE 5 – Verkäufe ohne Einsatzname zeigen Ohne Einsatz", async ({ page
   await page.goto("/berichte?tab=wochenbericht");
   await waitLoaded(page);
 
-  const row = page.getByTestId(`week-day-row-${todayStr()}`);
-  await expect(row).toContainText("Ohne Einsatz");
+  // Tage ohne Einsatzname werden unter der "Ohne Einsatz"-Gruppe (Ebene 1) geführt.
+  await expect(page.getByTestId("week-event-group-ohne-einsatz")).toContainText("Ohne Einsatz");
+  await expect(page.getByTestId(`week-day-row-${todayStr()}`)).toBeVisible();
 });
 
 test("MERGE 6 – Debug-Panel zeigt korrekte Zähler", async ({ page }) => {

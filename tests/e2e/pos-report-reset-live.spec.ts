@@ -231,7 +231,7 @@ test("RESET-LIVE 3 – Wochenreset mit nur Live-Tag zeigt Info-Dialog statt Netz
   await page.getByTestId("reset-close-info").click();
   await expect(page.getByTestId("report-reset-dialog")).not.toBeVisible();
 
-  await expect(page.getByTestId(`week-day-row-${todayStr()}`)).toContainText("läuft");
+  await expect(page.getByTestId("week-event-group-Sommerfest Reset-Test")).toContainText("läuft");
 });
 
 test("RESET-LIVE 4 – Wochenreset mit History + Live löscht nur History, Live bleibt", async ({ page }) => {
@@ -258,9 +258,10 @@ test("RESET-LIVE 4 – Wochenreset mit History + Live löscht nur History, Live 
   await page.getByTestId("reset-confirm").click();
   await expect(page.getByTestId("report-reset-dialog")).not.toBeVisible({ timeout: 10000 });
 
-  await expect(page.getByTestId(`week-day-row-${todayStr()}`)).toContainText("läuft");
-  // Deleted history day reverts to an empty slot ("—"), not "Ohne Einsatz".
-  await expect(page.getByTestId(`week-day-row-${historyDate}`)).toContainText("—");
+  await expect(page.getByTestId("week-event-group-Nachtmarkt Reset-Test")).toContainText("läuft");
+  // Deleted history day is gone entirely — empty days are no longer rendered
+  // in the grouped-by-Einsatz table (nothing to show or delete).
+  await expect(page.getByTestId(`week-day-row-${historyDate}`)).toHaveCount(0);
 });
 
 test("RESET-LIVE 5 – Jahresreset mit nur Live-Tag zeigt Info-Dialog", async ({ page }) => {

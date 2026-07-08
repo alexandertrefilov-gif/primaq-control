@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Download, Lock, Trash2 } from "lucide-react";
 import { useAdmin } from "./admin-context";
 import { useReportData, type ReportDay } from "./use-report-data";
 import { ReportEventDebug } from "./report-event-debug";
+import { groupDaysByEvent } from "./group-days-by-event";
 import { usePosVatStore, calcNetForDay } from "./use-pos-vat-store";
 import { ReportResetDialog } from "./report-reset-dialog";
 import { getSyncService } from "@/lib/sync/sync-service";
@@ -74,6 +75,13 @@ function triggerDownload(content: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+// ── Reset target ──────────────────────────────────────────────────────────────
+
+type ResetTarget =
+  | { kind: "period" }
+  | { kind: "event"; eventName: string | null }
+  | { kind: "day"; date: string };
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) {
@@ -84,11 +92,12 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
-  const [resetOpen, setResetOpen] = useState(false);
+  const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null);
 
   const days = useMemo(() => daysOfMonth(history, year, month), [history, year, month]);
   const historyDaysToDelete = useMemo(() => days.filter((d) => !d.isLive), [days]);
   const hasLiveDay = days.some((d) => d.isLive);
+  const eventGroups = useMemo(() => groupDaysByEvent(days, vatRate), [days, vatRate]);
 
   const totalCents = days.reduce((s, d) => s + d.totalCents, 0);
   const cashCents  = days.reduce((s, d) => s + d.cashCents,  0);
@@ -99,6 +108,52 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
   const vatCents   = totalCents - netCents;
   const hasData    = days.length > 0;
 
+  const monthLabel = MONTHS[month - 1];
+  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+
+  const resetDialogProps = useMemo(() => {
+    if (!resetTarget) return null;
+    if (resetTarget.kind === "period") {
+      return {
+        title: `${monthLabel} ${year} zurücksetzen`,
+        scopeLabel: `${monthLabel} ${year}`,
+        unitLabel: "Monatsdaten",
+        strongConfirmWord: "MONAT LÖSCHEN",
+        daysToDelete: historyDaysToDelete.map((d) => ({ date: d.date, eventName: d.eventName ?? null })),
+        hasLiveDay,
+        onConfirm: async () => {
+          const dates = historyDaysToDelete.map((d) => d.date);
+          await getSyncService().resetHistoryDates(dates);
+        },
+      };
+    }
+    if (resetTarget.kind === "event") {
+      const group = eventGroups.find((g) => g.eventName === resetTarget.eventName);
+      const deletable = (group?.days ?? []).filter((d) => !d.isLive);
+      return {
+        title: `${resetTarget.eventName ?? "Ohne Einsatz"} löschen`,
+        scopeLabel: resetTarget.eventName ?? "Ohne Einsatz",
+        unitLabel: "diesen Einsatz",
+        daysToDelete: deletable.map((d) => ({ date: d.date, eventName: d.eventName ?? null })),
+        hasLiveDay: !!group?.hasLiveDay,
+        onConfirm: async () => {
+          await getSyncService().resetHistoryDates(deletable.map((d) => d.date));
+        },
+      };
+    }
+    const day = days.find((d) => d.date === resetTarget.date);
+    return {
+      title: `Tagesabschluss ${resetTarget.date} löschen`,
+      scopeLabel: resetTarget.date,
+      unitLabel: "diesen Tagesabschluss",
+      daysToDelete: day && !day.isLive ? [{ date: day.date, eventName: day.eventName ?? null }] : [],
+      hasLiveDay: !!day?.isLive,
+      onConfirm: async () => {
+        await getSyncService().resetHistoryDates([resetTarget.date]);
+      },
+    };
+  }, [resetTarget, monthLabel, year, historyDaysToDelete, hasLiveDay, eventGroups, days]);
+
   function prevMonth() {
     if (month === 1) { setYear((y) => y - 1); setMonth(12); }
     else { setMonth((m) => m - 1); }
@@ -108,9 +163,6 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
     if (month === 12) { setYear((y) => y + 1); setMonth(1); }
     else { setMonth((m) => m + 1); }
   }
-
-  const monthLabel = MONTHS[month - 1];
-  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
 
   if (!hydrated || !adminHydrated || !vatHydrated) {
     return <div className="flex h-40 items-center justify-center text-black/40">Laden…</div>;
@@ -180,12 +232,14 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
         </div>
       </div>
 
-      {/* ── Daily table ───────────────────────────────────────────────────── */}
+      {/* ── Grouped-by-Einsatz table ────────────────────────────────────────
+          Ebene 1: Einsatz (bzw. "Ohne Einsatz"), Ebene 2: Tage innerhalb
+          dieses Einsatzes. */}
       {hasData ? (
         <div className="rounded-2xl bg-white shadow overflow-hidden">
           <div className="border-b border-black/5 px-5 py-3">
             <p className="text-xs font-bold uppercase tracking-widest text-black/40">
-              {monthLabel} {year} · {days.length} {days.length === 1 ? "Tag" : "Tage"}
+              {monthLabel} {year} · Gruppierung nach Einsatz
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -194,59 +248,100 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
                 <tr className="border-b border-black/5 text-left">
                   <th className="px-5 py-3 font-bold text-black/40">Datum</th>
                   <th className="px-4 py-3 font-bold text-black/40">Tag</th>
-                  <th className="px-4 py-3 font-bold text-black/40">Einsatz</th>
                   <th className="px-4 py-3 text-right font-bold text-black/40">Umsatz</th>
                   <th className="px-4 py-3 text-right font-bold text-black/40">Bar</th>
                   <th className="px-4 py-3 text-right font-bold text-black/40">Karte</th>
                   <th className="px-4 py-3 text-right font-bold text-black/40">QR</th>
                   <th className="px-4 py-3 text-right font-bold text-black/40">Bestellungen</th>
+                  <th className="px-4 py-3 text-right font-bold text-black/40">MwSt</th>
+                  <th className="px-4 py-3 text-right font-bold text-black/40">Netto</th>
+                  <th className="px-3 py-3" />
                 </tr>
               </thead>
               <tbody>
-                {days.map((d) => (
-                  <tr
-                    key={d.date}
-                    data-testid={`month-day-row-${d.date}`}
-                    className="border-b border-black/5"
-                  >
-                    <td className="px-5 py-3 font-semibold text-ink tabular-nums">{d.date}</td>
-                    <td className="px-4 py-3 text-black/60">{weekdayLabel(d.date)}</td>
-                    <td className="px-4 py-3 text-sm text-black/60">
-                      {d.eventName ? (
-                        <>
-                          {d.eventName}
-                          {d.isLive && (
-                            <span className="ml-1.5 rounded-full bg-primaq-100 px-1.5 py-0.5 text-[10px] font-bold text-primaq-700">
-                              läuft
-                            </span>
+                {eventGroups.map((group) => (
+                  <Fragment key={`group-${group.eventName ?? "none"}`}>
+                    <tr
+                      data-testid={`month-event-group-${group.eventName ?? "ohne-einsatz"}`}
+                      className="border-b border-black/5 bg-primaq-50/60"
+                    >
+                      <td className="px-5 py-2.5 font-black text-ink" colSpan={2}>
+                        {group.eventName ?? "Ohne Einsatz"}
+                        {group.hasLiveDay && (
+                          <span className="ml-1.5 rounded-full bg-primaq-100 px-1.5 py-0.5 text-[10px] font-bold text-primaq-700">
+                            läuft
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-black text-ink tabular-nums">{fmt(group.totalCents)}</td>
+                      <td className="px-4 py-2.5 text-right font-bold tabular-nums text-black/60">{fmt(group.cashCents)}</td>
+                      <td className="px-4 py-2.5 text-right font-bold tabular-nums text-black/60">{fmt(group.cardCents)}</td>
+                      <td className="px-4 py-2.5 text-right font-bold tabular-nums text-black/60">{fmt(group.qrCents)}</td>
+                      <td className="px-4 py-2.5 text-right font-bold tabular-nums text-black/60">{group.orderCount}</td>
+                      <td className="px-4 py-2.5 text-right font-bold tabular-nums text-black/60">{fmt(group.vatCents)}</td>
+                      <td className="px-4 py-2.5 text-right font-bold tabular-nums text-black/60">{fmt(group.netCents)}</td>
+                      <td className="px-3 py-2.5 text-right">
+                        {isAdmin && group.days.some((d) => !d.isLive) && (
+                          <button
+                            data-testid={`delete-event-${group.eventName ?? "ohne-einsatz"}`}
+                            onClick={() => setResetTarget({ kind: "event", eventName: group.eventName })}
+                            className="rounded-lg p-1.5 text-black/30 transition-colors hover:bg-red-50 hover:text-red-600"
+                            aria-label={`${group.eventName ?? "Ohne Einsatz"} löschen`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {group.days.map((d) => (
+                      <tr key={d.date} data-testid={`month-day-row-${d.date}`} className="border-b border-black/5">
+                        <td className="px-5 py-2 pl-8 text-ink tabular-nums">{d.date}</td>
+                        <td className="px-4 py-2 text-black/60">{weekdayLabel(d.date)}</td>
+                        <td className="px-4 py-2 text-right font-bold text-ink tabular-nums">{fmt(d.totalCents)}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-black/60">
+                          {d.cashCents > 0 ? fmt(d.cashCents) : "—"}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums text-black/60">
+                          {d.cardCents > 0 ? fmt(d.cardCents) : "—"}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums text-black/60">
+                          {d.qrCents > 0 ? fmt(d.qrCents) : "—"}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums text-black/60">{d.orderCount}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-black/60">
+                          {fmt(d.totalCents - calcNetForDay(d, vatRate))}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums text-black/60">
+                          {fmt(calcNetForDay(d, vatRate))}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {isAdmin && !d.isLive && (
+                            <button
+                              data-testid={`delete-day-${d.date}`}
+                              onClick={() => setResetTarget({ kind: "day", date: d.date })}
+                              className="rounded-lg p-1.5 text-black/25 transition-colors hover:bg-red-50 hover:text-red-600"
+                              aria-label={`Tagesabschluss ${d.date} löschen`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
                           )}
-                        </>
-                      ) : (
-                        "Ohne Einsatz"
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold text-ink tabular-nums">{fmt(d.totalCents)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-black/60">
-                      {d.cashCents > 0 ? fmt(d.cashCents) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-black/60">
-                      {d.cardCents > 0 ? fmt(d.cardCents) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-black/60">
-                      {d.qrCents > 0 ? fmt(d.qrCents) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-black/60">{d.orderCount}</td>
-                  </tr>
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="bg-black/[0.02] font-bold">
-                  <td className="px-5 py-3 font-black text-ink" colSpan={3}>Gesamt</td>
+                  <td className="px-5 py-3 font-black text-ink" colSpan={2}>Gesamt</td>
                   <td className="px-4 py-3 text-right text-ink tabular-nums">{fmt(totalCents)}</td>
                   <td className="px-4 py-3 text-right text-ink tabular-nums">{fmt(cashCents)}</td>
                   <td className="px-4 py-3 text-right text-ink tabular-nums">{fmt(cardCents)}</td>
                   <td className="px-4 py-3 text-right text-ink tabular-nums">{fmt(qrCents)}</td>
                   <td className="px-4 py-3 text-right text-ink tabular-nums">{orderCount}</td>
+                  <td className="px-4 py-3 text-right text-ink tabular-nums">{fmt(vatCents)}</td>
+                  <td className="px-4 py-3 text-right text-ink tabular-nums">{fmt(netCents)}</td>
+                  <td />
                 </tr>
               </tfoot>
             </table>
@@ -290,7 +385,7 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
         {isAdmin && hasData && (
           <button
             data-testid="reset-month-btn"
-            onClick={() => setResetOpen(true)}
+            onClick={() => setResetTarget({ kind: "period" })}
             className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-3 font-bold text-red-600 shadow-sm hover:bg-red-50 transition-colors"
           >
             <Trash2 className="h-4 w-4" />
@@ -299,22 +394,13 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
         )}
       </div>
 
-      <ReportResetDialog
-        open={resetOpen}
-        title={`${monthLabel} ${year} zurücksetzen`}
-        scopeLabel={`${monthLabel} ${year}`}
-        unitLabel="Monatsdaten"
-        historyCount={historyDaysToDelete.length}
-        hasLiveDay={hasLiveDay}
-        onClose={() => setResetOpen(false)}
-        onConfirm={async () => {
-          // Only ever delete closed history days — the live, not-yet-closed
-          // day is never a deletable pos_year_history entry; use
-          // "Tagesdaten zurücksetzen" for that.
-          const dates = historyDaysToDelete.map((d) => d.date);
-          await getSyncService().resetHistoryDates(dates);
-        }}
-      />
+      {resetDialogProps && (
+        <ReportResetDialog
+          open={resetTarget !== null}
+          onClose={() => setResetTarget(null)}
+          {...resetDialogProps}
+        />
+      )}
     </div>
   );
 }

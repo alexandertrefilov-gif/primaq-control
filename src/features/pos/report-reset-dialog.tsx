@@ -1,14 +1,26 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useMemo, useState, useCallback } from "react";
+import { distinctEventLabels } from "./group-days-by-event";
+
+interface DeletableDay {
+  date: string;
+  eventName?: string | null;
+}
 
 interface ReportResetDialogProps {
   open: boolean;
   title: string;        // z.B. "KW26 2026 zurücksetzen"
   scopeLabel: string;    // z.B. "KW26 2026"
-  unitLabel: string;     // z.B. "Wochendaten" / "Monatsdaten" / "Jahresdaten"
-  historyCount: number;  // Anzahl abgeschlossener Tage, die tatsächlich gelöscht würden
+  unitLabel: string;     // z.B. "Wochendaten" / "Monatsdaten" / "Jahresdaten" / "diesen Einsatz" / "diesen Tag"
+  daysToDelete: DeletableDay[]; // die tatsächlich zu löschenden, abgeschlossenen Tage
   hasLiveDay: boolean;   // ob ein noch laufender (nicht abgeschlossener) Tag mit eingeblendet ist
+  /**
+   * Wort, das bei mehreren betroffenen Einsätzen statt "RESET" eingegeben
+   * werden muss (z. B. "WOCHE LÖSCHEN"). Ohne diese Prop (oder bei nur einem
+   * betroffenen Einsatz) genügt weiterhin "RESET".
+   */
+  strongConfirmWord?: string;
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }
@@ -44,8 +56,9 @@ export function ReportResetDialog({
   title,
   scopeLabel,
   unitLabel,
-  historyCount,
+  daysToDelete,
   hasLiveDay,
+  strongConfirmWord,
   onClose,
   onConfirm,
 }: ReportResetDialogProps) {
@@ -53,8 +66,13 @@ export function ReportResetDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canConfirm = inputValue === "RESET";
+  const historyCount = daysToDelete.length;
   const nothingToDelete = historyCount === 0;
+
+  const affectedEvents = useMemo(() => distinctEventLabels(daysToDelete), [daysToDelete]);
+  const multipleEventsAffected = affectedEvents.length > 1;
+  const requiredWord = multipleEventsAffected && strongConfirmWord ? strongConfirmWord : "RESET";
+  const canConfirm = inputValue === requiredWord;
 
   const handleConfirm = useCallback(async () => {
     if (!canConfirm || loading) return;
@@ -141,6 +159,27 @@ export function ReportResetDialog({
           </div>
         </div>
 
+        <div className="mb-4 rounded-xl bg-black/[0.03] p-3">
+          <p className="mb-1.5 text-xs font-bold text-black/60">
+            Diese Aktion löscht folgende Einsätze/Tagesabschlüsse:
+          </p>
+          <ul className="space-y-0.5 text-sm font-semibold text-ink" data-testid="reset-affected-events">
+            {affectedEvents.map((label) => (
+              <li key={label}>· {label}</li>
+            ))}
+          </ul>
+        </div>
+
+        {multipleEventsAffected && (
+          <p
+            className="mb-4 rounded-xl bg-red-100 px-3 py-2 text-sm font-bold text-red-800"
+            data-testid="reset-multi-event-warning"
+          >
+            Achtung: Es sind mehrere Einsätze betroffen ({affectedEvents.length}). Alle oben genannten
+            Einsätze werden unwiderruflich gelöscht.
+          </p>
+        )}
+
         <p className="mb-4 text-sm font-semibold text-red-600">
           Dieser Vorgang kann nicht rückgängig gemacht werden.
         </p>
@@ -148,7 +187,7 @@ export function ReportResetDialog({
         <label className="block">
           <span className="text-sm font-bold text-black/70">
             Zur Bestätigung eingeben:{" "}
-            <span className="font-black text-black/90 tracking-widest">RESET</span>
+            <span className="font-black text-black/90 tracking-widest">{requiredWord}</span>
           </span>
           <input
             type="text"
@@ -160,7 +199,7 @@ export function ReportResetDialog({
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
-            placeholder="RESET"
+            placeholder={requiredWord}
             data-testid="reset-input"
             className="mt-2 w-full rounded-xl border border-black/15 bg-white px-4 py-2.5 text-sm font-bold tracking-widest text-black/90 placeholder-black/20 focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-200 disabled:opacity-60"
           />

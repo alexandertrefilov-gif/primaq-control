@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useState, useMemo } from "react";
+import { Fragment, useCallback, useState, useMemo } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Lock, Plus, Trash2 } from "lucide-react";
 import { useAdmin } from "./admin-context";
 import { useReportData } from "./use-report-data";
 import { ReportEventDebug } from "./report-event-debug";
 import { ReportResetDialog } from "./report-reset-dialog";
+import { groupDaysByEvent } from "./group-days-by-event";
 import { getFlavorName, getItemSizeName } from "./pos-config";
 import { usePosVatStore, calcNetForDay, effectiveVatRate } from "./use-pos-vat-store";
 import { useEventPlanStore } from "./use-event-plan-store";
@@ -549,18 +550,19 @@ function EventPlanTab() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+type ResetTarget =
+  | { kind: "period" }
+  | { kind: "event"; eventName: string | null }
+  | { kind: "day"; date: string };
+
 export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }) {
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
   const { days: history, hydrated, activeEventName, todayOrderCount } = useReportData();
   const { vatRate, hydrated: vatHydrated } = usePosVatStore();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null);
   const [activeTab, setActiveTab] = useState<"uebersicht" | "planung">("uebersicht");
-
-  const handleResetSuccess = useCallback(() => {
-    setShowResetDialog(false);
-  }, []);
 
   const years = useMemo(() => {
     const set = new Set(history.map((d) => parseInt(d.date.slice(0, 4))));
@@ -574,9 +576,53 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
   );
   const historyDaysToDelete = useMemo(() => days.filter((d) => !d.isLive), [days]);
   const hasLiveDay = days.some((d) => d.isLive);
+  const eventGroups = useMemo(() => groupDaysByEvent(days, vatRate), [days, vatRate]);
 
   const monthly = useMemo(() => computeMonthly(days, selectedYear, vatRate), [days, selectedYear, vatRate]);
   const articles = useMemo(() => computeArticles(days), [days]);
+
+  const resetDialogProps = useMemo(() => {
+    if (!resetTarget) return null;
+    if (resetTarget.kind === "period") {
+      return {
+        title: `Jahr ${selectedYear} zurücksetzen`,
+        scopeLabel: `${selectedYear}`,
+        unitLabel: "Jahresdaten",
+        strongConfirmWord: "JAHR LÖSCHEN",
+        daysToDelete: historyDaysToDelete.map((d) => ({ date: d.date, eventName: d.eventName ?? null })),
+        hasLiveDay,
+        onConfirm: async () => {
+          const dates = historyDaysToDelete.map((d) => d.date);
+          await getSyncService().resetHistoryDates(dates);
+        },
+      };
+    }
+    if (resetTarget.kind === "event") {
+      const group = eventGroups.find((g) => g.eventName === resetTarget.eventName);
+      const deletable = (group?.days ?? []).filter((d) => !d.isLive);
+      return {
+        title: `${resetTarget.eventName ?? "Ohne Einsatz"} löschen`,
+        scopeLabel: resetTarget.eventName ?? "Ohne Einsatz",
+        unitLabel: "diesen Einsatz",
+        daysToDelete: deletable.map((d) => ({ date: d.date, eventName: d.eventName ?? null })),
+        hasLiveDay: !!group?.hasLiveDay,
+        onConfirm: async () => {
+          await getSyncService().resetHistoryDates(deletable.map((d) => d.date));
+        },
+      };
+    }
+    const day = days.find((d) => d.date === resetTarget.date);
+    return {
+      title: `Tagesabschluss ${resetTarget.date} löschen`,
+      scopeLabel: resetTarget.date,
+      unitLabel: "diesen Tagesabschluss",
+      daysToDelete: day && !day.isLive ? [{ date: day.date, eventName: day.eventName ?? null }] : [],
+      hasLiveDay: !!day?.isLive,
+      onConfirm: async () => {
+        await getSyncService().resetHistoryDates([resetTarget.date]);
+      },
+    };
+  }, [resetTarget, selectedYear, historyDaysToDelete, hasLiveDay, eventGroups, days]);
 
   const totalCents = days.reduce((s, d) => s + d.totalCents, 0);
   const totalOrders = days.reduce((s, d) => s + d.orderCount, 0);
@@ -752,6 +798,108 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
             </div>
           </div>
 
+          {/* ── Grouped-by-Einsatz overview ───────────────────────────────────
+              Ebene 1: Einsatz (bzw. "Ohne Einsatz"), Ebene 2: Tage innerhalb
+              dieses Einsatzes. Ergänzt die Monatsübersicht (Buchhaltungssicht)
+              um die einsatzbezogene Sicht, die für sicheres Löschen einzelner
+              Einsätze benötigt wird. */}
+          <div className="rounded-2xl bg-white shadow overflow-hidden" data-testid="year-event-table">
+            <div className="border-b border-black/5 px-5 py-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-black/40">
+                Gruppierung nach Einsatz {selectedYear}
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-black/5 text-left">
+                    <th className="px-5 py-3 font-bold text-black/40">Datum</th>
+                    <th className="px-4 py-3 text-right font-bold text-black/40">Umsatz</th>
+                    <th className="px-4 py-3 text-right font-bold text-black/40">Bar</th>
+                    <th className="px-4 py-3 text-right font-bold text-black/40">Karte</th>
+                    <th className="px-4 py-3 text-right font-bold text-black/40">QR</th>
+                    <th className="px-4 py-3 text-right font-bold text-black/40">Bestellungen</th>
+                    <th className="px-4 py-3 text-right font-bold text-black/40">MwSt</th>
+                    <th className="px-4 py-3 text-right font-bold text-black/40">Netto</th>
+                    <th className="px-3 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {eventGroups.map((group) => (
+                    <Fragment key={`group-${group.eventName ?? "none"}`}>
+                      <tr
+                        data-testid={`year-event-group-${group.eventName ?? "ohne-einsatz"}`}
+                        className="border-b border-black/5 bg-primaq-50/60"
+                      >
+                        <td className="px-5 py-2.5 font-black text-ink">
+                          {group.eventName ?? "Ohne Einsatz"}
+                          {group.hasLiveDay && (
+                            <span className="ml-1.5 rounded-full bg-primaq-100 px-1.5 py-0.5 text-[10px] font-bold text-primaq-700">
+                              läuft
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-black text-ink tabular-nums">{fmt(group.totalCents)}</td>
+                        <td className="px-4 py-2.5 text-right font-bold tabular-nums text-black/60">{fmt(group.cashCents)}</td>
+                        <td className="px-4 py-2.5 text-right font-bold tabular-nums text-black/60">{fmt(group.cardCents)}</td>
+                        <td className="px-4 py-2.5 text-right font-bold tabular-nums text-black/60">{fmt(group.qrCents)}</td>
+                        <td className="px-4 py-2.5 text-right font-bold tabular-nums text-black/60">{group.orderCount}</td>
+                        <td className="px-4 py-2.5 text-right font-bold tabular-nums text-black/60">{fmt(group.vatCents)}</td>
+                        <td className="px-4 py-2.5 text-right font-bold tabular-nums text-black/60">{fmt(group.netCents)}</td>
+                        <td className="px-3 py-2.5 text-right">
+                          {isAdmin && group.days.some((d) => !d.isLive) && (
+                            <button
+                              data-testid={`delete-event-${group.eventName ?? "ohne-einsatz"}`}
+                              onClick={() => setResetTarget({ kind: "event", eventName: group.eventName })}
+                              className="rounded-lg p-1.5 text-black/30 transition-colors hover:bg-red-50 hover:text-red-600"
+                              aria-label={`${group.eventName ?? "Ohne Einsatz"} löschen`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {group.days.map((d) => (
+                        <tr key={d.date} data-testid={`year-day-row-${d.date}`} className="border-b border-black/5">
+                          <td className="px-5 py-2 pl-8 text-ink tabular-nums">{d.date}</td>
+                          <td className="px-4 py-2 text-right font-bold text-ink tabular-nums">{fmt(d.totalCents)}</td>
+                          <td className="px-4 py-2 text-right tabular-nums text-black/60">
+                            {d.cashCents > 0 ? fmt(d.cashCents) : "—"}
+                          </td>
+                          <td className="px-4 py-2 text-right tabular-nums text-black/60">
+                            {d.cardCents > 0 ? fmt(d.cardCents) : "—"}
+                          </td>
+                          <td className="px-4 py-2 text-right tabular-nums text-black/60">
+                            {d.qrCents > 0 ? fmt(d.qrCents) : "—"}
+                          </td>
+                          <td className="px-4 py-2 text-right tabular-nums text-black/60">{d.orderCount}</td>
+                          <td className="px-4 py-2 text-right tabular-nums text-black/60">
+                            {fmt(d.totalCents - calcNetForDay(d, vatRate))}
+                          </td>
+                          <td className="px-4 py-2 text-right tabular-nums text-black/60">
+                            {fmt(calcNetForDay(d, vatRate))}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {isAdmin && !d.isLive && (
+                              <button
+                                data-testid={`delete-day-${d.date}`}
+                                onClick={() => setResetTarget({ kind: "day", date: d.date })}
+                                className="rounded-lg p-1.5 text-black/25 transition-colors hover:bg-red-50 hover:text-red-600"
+                                aria-label={`Tagesabschluss ${d.date} löschen`}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           {/* ── Article statistics ───────────────────────────────────────── */}
           {articles.length > 0 && (
             <div className="rounded-2xl bg-white shadow overflow-hidden">
@@ -844,7 +992,7 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
           </p>
           <button
             data-testid="reset-year-btn"
-            onClick={() => setShowResetDialog(true)}
+            onClick={() => setResetTarget({ kind: "period" })}
             disabled={!hasData}
             className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-700 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -854,23 +1002,13 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
         </div>
       )}
 
-      <ReportResetDialog
-        open={showResetDialog}
-        title={`Jahr ${selectedYear} zurücksetzen`}
-        scopeLabel={`${selectedYear}`}
-        unitLabel="Jahresdaten"
-        historyCount={historyDaysToDelete.length}
-        hasLiveDay={hasLiveDay}
-        onClose={() => setShowResetDialog(false)}
-        onConfirm={async () => {
-          // Only ever delete closed history days — the live, not-yet-closed
-          // day is never a deletable pos_year_history entry; use
-          // "Tagesdaten zurücksetzen" for that.
-          const dates = historyDaysToDelete.map((d) => d.date);
-          await getSyncService().resetHistoryDates(dates);
-          handleResetSuccess();
-        }}
-      />
+      {resetDialogProps && (
+        <ReportResetDialog
+          open={resetTarget !== null}
+          onClose={() => setResetTarget(null)}
+          {...resetDialogProps}
+        />
+      )}
       </>
       )}
     </div>
