@@ -3,7 +3,8 @@
 import { useCallback, useState, useMemo } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Lock, Plus, Trash2 } from "lucide-react";
 import { useAdmin } from "./admin-context";
-import { usePosYearStore } from "./use-pos-year-store";
+import { useReportData } from "./use-report-data";
+import { ReportEventDebug } from "./report-event-debug";
 import { ReportResetDialog } from "./report-reset-dialog";
 import { getFlavorName, getItemSizeName } from "./pos-config";
 import { usePosVatStore, calcNetForDay, effectiveVatRate } from "./use-pos-vat-store";
@@ -550,7 +551,7 @@ function EventPlanTab() {
 
 export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }) {
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
-  const { history, hydrated } = usePosYearStore();
+  const { days: history, hydrated, activeEventName, todayOrderCount } = useReportData();
   const { vatRate, hydrated: vatHydrated } = usePosVatStore();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
@@ -821,6 +822,15 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
         </p>
       )}
 
+      {isAdmin && (
+        <ReportEventDebug
+          visibleDays={days}
+          activeEventName={activeEventName}
+          todayOrderCount={todayOrderCount}
+          rangeLabel={`${selectedYear}`}
+        />
+      )}
+
       {/* ── Jahresdaten zurücksetzen ─────────────────────────────────────────── */}
       {isAdmin && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
@@ -848,7 +858,9 @@ export function JahresabschlussClient({ guestAccess }: { guestAccess?: boolean }
         scopeLabel={`${selectedYear} (${days.length} ${days.length === 1 ? "Tag" : "Tage"})`}
         onClose={() => setShowResetDialog(false)}
         onConfirm={async () => {
-          await getSyncService().resetHistoryDates(days.map((d) => d.date));
+          // Exclude today's still-open live day — use "Tagesdaten zurücksetzen" for that.
+          const dates = days.filter((d) => !d.isLive).map((d) => d.date);
+          await getSyncService().resetHistoryDates(dates);
           handleResetSuccess();
         }}
       />

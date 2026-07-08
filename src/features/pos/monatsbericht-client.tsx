@@ -3,11 +3,11 @@
 import { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Download, Lock, Trash2 } from "lucide-react";
 import { useAdmin } from "./admin-context";
-import { usePosYearStore } from "./use-pos-year-store";
+import { useReportData, type ReportDay } from "./use-report-data";
+import { ReportEventDebug } from "./report-event-debug";
 import { usePosVatStore, calcNetForDay } from "./use-pos-vat-store";
 import { ReportResetDialog } from "./report-reset-dialog";
 import { getSyncService } from "@/lib/sync/sync-service";
-import type { DailySummary } from "./pos-types";
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ function fmtNum(cents: number): string {
 
 // ── Data helpers ──────────────────────────────────────────────────────────────
 
-function daysOfMonth(history: DailySummary[], year: number, month: number): DailySummary[] {
+function daysOfMonth(history: ReportDay[], year: number, month: number): ReportDay[] {
   const prefix = `${year}-${String(month).padStart(2, "0")}`;
   return history.filter((d) => d.date.startsWith(prefix)).sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -40,7 +40,7 @@ function weekdayLabel(dateStr: string): string {
 
 // ── CSV export ────────────────────────────────────────────────────────────────
 
-function buildMonthCsv(days: DailySummary[], year: number, month: number, vatRate: number): string {
+function buildMonthCsv(days: ReportDay[], year: number, month: number, vatRate: number): string {
   const monthLabel = MONTHS[month - 1];
   const vatLabel = `${vatRate} %`;
   const rows: string[] = [
@@ -78,7 +78,7 @@ function triggerDownload(content: string, filename: string) {
 
 export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) {
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
-  const { history, hydrated } = usePosYearStore();
+  const { days: history, hydrated, activeEventName, todayOrderCount } = useReportData();
   const { vatRate, hydrated: vatHydrated } = usePosVatStore();
 
   const today = new Date();
@@ -209,7 +209,20 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
                   >
                     <td className="px-5 py-3 font-semibold text-ink tabular-nums">{d.date}</td>
                     <td className="px-4 py-3 text-black/60">{weekdayLabel(d.date)}</td>
-                    <td className="px-4 py-3 text-sm text-black/60">{d.eventName ?? "—"}</td>
+                    <td className="px-4 py-3 text-sm text-black/60">
+                      {d.eventName ? (
+                        <>
+                          {d.eventName}
+                          {d.isLive && (
+                            <span className="ml-1.5 rounded-full bg-primaq-100 px-1.5 py-0.5 text-[10px] font-bold text-primaq-700">
+                              läuft
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        "Ohne Einsatz"
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right font-bold text-ink tabular-nums">{fmt(d.totalCents)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-black/60">
                       {d.cashCents > 0 ? fmt(d.cashCents) : "—"}
@@ -244,6 +257,15 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
             Tagesdaten werden beim Tagesabschluss automatisch gespeichert.
           </p>
         </div>
+      )}
+
+      {isAdmin && (
+        <ReportEventDebug
+          visibleDays={days}
+          activeEventName={activeEventName}
+          todayOrderCount={todayOrderCount}
+          rangeLabel={`${monthLabel} ${year}`}
+        />
       )}
 
       {/* ── CSV export + Reset ────────────────────────────────────────────── */}
@@ -281,7 +303,9 @@ export function MonatsberichtClient({ guestAccess }: { guestAccess?: boolean }) 
         scopeLabel={`${monthLabel} ${year} (${days.length} ${days.length === 1 ? "Tag" : "Tage"})`}
         onClose={() => setResetOpen(false)}
         onConfirm={async () => {
-          await getSyncService().resetHistoryDates(days.map((d) => d.date));
+          // Exclude today's still-open live day — use "Tagesdaten zurücksetzen" for that.
+          const dates = days.filter((d) => !d.isLive).map((d) => d.date);
+          await getSyncService().resetHistoryDates(dates);
         }}
       />
     </div>

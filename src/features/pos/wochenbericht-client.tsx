@@ -3,11 +3,11 @@
 import { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Download, Lock, Trash2 } from "lucide-react";
 import { useAdmin } from "./admin-context";
-import { usePosYearStore } from "./use-pos-year-store";
+import { useReportData, type ReportDay } from "./use-report-data";
+import { ReportEventDebug } from "./report-event-debug";
 import { usePosVatStore, calcNetForDay } from "./use-pos-vat-store";
 import { ReportResetDialog } from "./report-reset-dialog";
 import { getSyncService } from "@/lib/sync/sync-service";
-import type { DailySummary } from "./pos-types";
 
 // ── ISO week arithmetic ───────────────────────────────────────────────────────
 
@@ -50,10 +50,10 @@ function fmtNum(cents: number): string {
 type WeekDay = {
   dateStr: string;      // YYYY-MM-DD
   label: string;        // "Montag", "Dienstag", …
-  summary: DailySummary | null;
+  summary: ReportDay | null;
 };
 
-function buildWeekDays(history: DailySummary[], isoYear: number, isoWeek: number): WeekDay[] {
+function buildWeekDays(history: ReportDay[], isoYear: number, isoWeek: number): WeekDay[] {
   const monday = mondayOfIsoWeek(isoYear, isoWeek);
   return WEEKDAYS.map((label, i) => {
     const d = new Date(monday);
@@ -109,7 +109,7 @@ function triggerDownload(content: string, filename: string) {
 
 export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) {
   const { isAdmin, hydrated: adminHydrated } = useAdmin();
-  const { history, hydrated } = usePosYearStore();
+  const { days: history, hydrated, activeEventName, todayOrderCount } = useReportData();
   const { vatRate, hydrated: vatHydrated } = usePosVatStore();
   const [resetOpen, setResetOpen] = useState(false);
 
@@ -266,7 +266,18 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
                   <td className="px-5 py-3 font-semibold text-ink tabular-nums">{d.dateStr}</td>
                   <td className="px-4 py-3 text-black/60">{d.label}</td>
                   <td className="px-4 py-3 text-sm text-black/60">
-                    {d.summary?.eventName ?? "—"}
+                    {d.summary
+                      ? d.summary.eventName
+                        ? <>
+                            {d.summary.eventName}
+                            {d.summary.isLive && (
+                              <span className="ml-1.5 rounded-full bg-primaq-100 px-1.5 py-0.5 text-[10px] font-bold text-primaq-700">
+                                läuft
+                              </span>
+                            )}
+                          </>
+                        : "Ohne Einsatz"
+                      : "—"}
                   </td>
                   <td className="px-4 py-3 text-right font-bold text-ink tabular-nums">
                     {d.summary ? fmt(d.summary.totalCents) : "—"}
@@ -306,6 +317,15 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
         </p>
       )}
 
+      {isAdmin && (
+        <ReportEventDebug
+          visibleDays={weekDays.flatMap((d) => (d.summary ? [d.summary] : []))}
+          activeEventName={activeEventName}
+          todayOrderCount={todayOrderCount}
+          rangeLabel={`${kw} ${isoYear}`}
+        />
+      )}
+
       {/* ── CSV export + Reset ────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-3">
         <button
@@ -341,7 +361,9 @@ export function WochenberichtClient({ guestAccess }: { guestAccess?: boolean }) 
         scopeLabel={`${kw} ${isoYear} (${dateRangeLabel})`}
         onClose={() => setResetOpen(false)}
         onConfirm={async () => {
-          const dates = weekDays.map((d) => d.dateStr);
+          // Exclude today's still-open live day — it has no pos_year_history
+          // entry to reset yet; use "Tagesdaten zurücksetzen" for that.
+          const dates = weekDays.filter((d) => !d.summary?.isLive).map((d) => d.dateStr);
           await getSyncService().resetHistoryDates(dates);
         }}
       />
