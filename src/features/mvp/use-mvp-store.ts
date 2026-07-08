@@ -86,6 +86,12 @@ const inventoryLocalAtKey = "primaq-inventory-local-at";
 // Analog zu machinesLocalAtKey, aber für Settings-Daten (stockFlavors, Aromen, Rezepte …).
 // Schützt vor Race: Sorte anlegen/löschen → Reload vor Cloud-Sync-Ende → alte Cloud überschreibt.
 const settingsLocalAtKey = "primaq-settings-local-at";
+// Analog zu machinesLocalAtKey, aber für den aktiven Einsatz (activeShift).
+// Schützt vor der Race Condition, die den gemeldeten Bug verursacht hat: Einsatz
+// beenden/löschen → Reload bevor der Cloud-Sync abgeschlossen ist → loadShiftStateFromCloud
+// liefert den noch nicht aktualisierten (alten, weiterhin "aktiven") Stand zurück → der
+// bereits beendete Einsatz erscheint nach dem App-Neustart wieder als aktueller Einsatz.
+const shiftLocalAtKey = "primaq-shift-local-at";
 
 // Verhindert, dass persistState während eines Resets (factoryReset/resetSalesData)
 // alten State in localStorage schreibt. Da mehrere Komponenten useMvpStore() aufrufen,
@@ -107,7 +113,8 @@ export const ALL_PRIMAQ_STORAGE_KEYS = [
   completedOrdersStorageKey,
   machinesLocalAtKey,
   inventoryLocalAtKey,
-  settingsLocalAtKey
+  settingsLocalAtKey,
+  shiftLocalAtKey
 ] as const;
 
 // Löscht alle PrimaQ localStorage-Einträge (bekannte Keys + alle "primaq-"-Prefixed Keys).
@@ -1867,6 +1874,8 @@ function createSalesResetState(current: MvpState): MvpState {
 export function useMvpStore() {
   const [state, setState] = useState<MvpState>(initialState);
   const [hydrated, setHydrated] = useState(false);
+  // Debug-Info für das Dashboard: woher activeShift zuletzt tatsächlich übernommen wurde.
+  const [activeShiftSource, setActiveShiftSource] = useState<"localStorage" | "supabase">("localStorage");
   const stateRef = useRef(state);
   stateRef.current = state;
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
@@ -1940,14 +1949,38 @@ export function useMvpStore() {
         return;
       }
 
-      setState((current) => ({
-        ...current,
-        activeShift: cloudShift.activeShift ?? current.activeShift,
-        consumptionEntries: cloudShift.consumptionEntries ?? current.consumptionEntries,
-        mixStocks: cloudShift.mixStocks ?? current.mixStocks,
-        mixStockMovements: cloudShift.mixStockMovements ?? current.mixStockMovements,
-        dayReport: cloudShift.dayReport ?? current.dayReport
-      }));
+      try {
+        // Lokaler Einsatz-Stand gewinnt, wenn er neuer als der Cloud-Stand ist —
+        // schützt vor der Race Condition, die den "alter Einsatz erscheint wieder"-Bug
+        // verursacht hat: Einsatz beenden/löschen setzt activeShift lokal sofort auf
+        // null, aber der Cloud-Sync dafür läuft fire-and-forget im Hintergrund. Wird
+        // die App vorher geschlossen/neu geladen, liefert Supabase noch den alten,
+        // weiterhin "aktiven" Einsatz zurück — ohne diese Prüfung würde er hier
+        // fälschlich reaktiviert.
+        const shiftLocalAt = window.localStorage.getItem(shiftLocalAtKey);
+        const cloudShiftAt = cloudShift.shiftWrittenAt;
+        const skipShift = !!(shiftLocalAt && (!cloudShiftAt || cloudShiftAt <= shiftLocalAt));
+
+        if (skipShift) {
+          return;
+        }
+
+        setState((current) => ({
+          ...current,
+          activeShift: cloudShift.activeShift ?? current.activeShift,
+          consumptionEntries: cloudShift.consumptionEntries ?? current.consumptionEntries,
+          mixStocks: cloudShift.mixStocks ?? current.mixStocks,
+          mixStockMovements: cloudShift.mixStockMovements ?? current.mixStockMovements,
+          dayReport: cloudShift.dayReport ?? current.dayReport
+        }));
+        if (cloudShift.activeShift !== undefined) {
+          setActiveShiftSource("supabase");
+        }
+      } catch (err) {
+        // Ein defekter/unerwarteter Cloud-Payload darf die App niemals zum Absturz
+        // bringen — im Zweifel bleibt der bereits gesetzte lokale Stand erhalten.
+        console.warn("Fehler beim Verarbeiten des Cloud-Einsatz-Stands", err);
+      }
     });
 
     void loadSalesStateFromCloud().then((cloudSales) => {
@@ -2227,6 +2260,13 @@ export function useMvpStore() {
       employees: formData.employees.map((employee) => employee.trim()).filter(Boolean).slice(0, 4),
       createdAt: new Date().toISOString()
     };
+
+    // Neu gestarteter Einsatz muss über einen stale Cloud-Stand gewinnen (z. B. wenn
+    // ein anderes Gerät zuletzt einen älteren/keinen Einsatz synchronisiert hat).
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(shiftLocalAtKey, new Date().toISOString());
+    }
+    setActiveShiftSource("localStorage");
 
     setState((current) => {
       const now = new Date().toISOString();
@@ -3882,7 +3922,12 @@ export function useMvpStore() {
     const now = new Date().toISOString();
     if (typeof window !== "undefined") {
       window.localStorage.setItem(inventoryLocalAtKey, now);
+      // activeShift wird unten auf null gesetzt — muss über einen noch nicht
+      // synchronisierten (weiterhin "aktiven") Cloud-Stand gewinnen, siehe
+      // shiftLocalAtKey-Kommentar weiter oben.
+      window.localStorage.setItem(shiftLocalAtKey, now);
     }
+    setActiveShiftSource("localStorage");
     setState((current) => {
       const now = new Date().toISOString();
       const nextGeneralStock = { ...current.generalStock };
@@ -4010,6 +4055,13 @@ export function useMvpStore() {
   }, []);
 
   const deleteShift = useCallback((shiftId: string) => {
+    if (stateRef.current.activeShift?.id === shiftId && typeof window !== "undefined") {
+      // activeShift wird unten auf null gesetzt — muss über einen noch nicht
+      // synchronisierten (weiterhin "aktiven") Cloud-Stand gewinnen, siehe
+      // shiftLocalAtKey-Kommentar weiter oben.
+      window.localStorage.setItem(shiftLocalAtKey, new Date().toISOString());
+      setActiveShiftSource("localStorage");
+    }
     setState((current) => {
       const activeDeleted = current.activeShift?.id === shiftId;
 
@@ -5002,6 +5054,7 @@ export function useMvpStore() {
   return {
     ...state,
     hydrated,
+    activeShiftSource,
     totals,
     inventoryReport,
     taxReport,

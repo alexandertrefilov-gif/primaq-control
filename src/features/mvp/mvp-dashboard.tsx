@@ -64,6 +64,7 @@ function mixLitersByMachine(
 export function MvpDashboard() {
   const {
     activeShift,
+    activeShiftSource,
     totals,
     dayReport,
     hydrated,
@@ -96,22 +97,59 @@ export function MvpDashboard() {
               Aktueller Einsatz
             </p>
             <h2 className="mt-0.5 truncate text-xl font-black text-ink">
-              {activeShift ? activeShift.eventName : "Kein Einsatz gestartet"}
+              {activeShift ? activeShift.eventName : "Kein aktiver Einsatz"}
             </h2>
             <p className="mt-1 text-sm text-black/55">
               {hydrated && activeShift
                 ? `${activeShift.date} · ${salesAreaLabels[activeShift.salesArea]}`
-                : "Starte zuerst einen Einsatz für den Wagen."}
+                : "Starte einen neuen Einsatz, um mit dem Verkauf zu beginnen."}
             </p>
           </div>
           <IceCreamBowl className="h-7 w-7 shrink-0 text-primaq-600" />
         </div>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <QuickLink href="/einsatz" label="Einsatz" />
-          <QuickLink href="/verkauf" label="Verkauf" />
-          <QuickLink href="/tagesabschluss" label="Abschluss" />
-        </div>
+        {activeShift ? (
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <QuickLink href="/einsatz" label="Einsatz" />
+            <QuickLink href="/verkauf" label="Verkauf" />
+            <QuickLink href="/tagesabschluss" label="Abschluss" />
+          </div>
+        ) : (
+          <Link
+            href="/einsatz"
+            data-testid="start-new-shift-button"
+            className="mt-3 flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primaq-600 px-4 text-sm font-bold text-white"
+          >
+            Neuen Einsatz starten
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        )}
       </section>
+
+      {/* ── Debug: Einsatz-Zuordnung ─────────────────────────────
+          Macht die "currentEvent"-Herkunft direkt sichtbar, damit ein Fall wie
+          "alter Einsatz erscheint nach App-Neustart wieder" sofort erkennbar ist,
+          statt geraten werden zu müssen. */}
+      {hydrated && (
+        <div
+          data-testid="active-shift-debug"
+          className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800"
+        >
+          <p className="mb-1.5 font-bold uppercase tracking-widest text-amber-600">
+            Debug: Aktiver Einsatz
+          </p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+            <span>
+              currentEventId: <strong>{activeShift?.id ?? "–"}</strong>
+            </span>
+            <span>
+              currentEventStatus: <strong>{activeShift ? "active" : "none"}</strong>
+            </span>
+            <span>
+              currentEventSource: <strong>{activeShiftSource}</strong>
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── Cockpit-Grid (4 kompakte Karten) ───────────────────── */}
       {hydrated ? (
